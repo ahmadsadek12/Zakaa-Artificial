@@ -1,5 +1,7 @@
 # Environment variables
 .env
+.env.local
+.env.*.local
 
 # Node modules
 node_modules/
@@ -17,4 +19,9 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Database
+*.sql.backup
+*.db
+*.sqlite
 
