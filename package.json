@@ -1,0 +1,19 @@
+{
+  "name": "zakaa-database",
+  "version": "1.0.0",
+  "description": "Database setup for Zakaa application",
+  "main": "database/init.js",
+  "scripts": {
+    "init": "node database/init.js",
+    "mongodb-init": "node database/mongodb_init.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "mysql2": "^3.6.5",
+    "mongodb": "^6.3.0"
+  }
+}
+
