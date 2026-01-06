@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS users (
   last_name VARCHAR(100),
   
   -- Subscription fields (for businesses)
-  subscription_type ENUM('free', 'basic', 'premium', 'enterprise') DEFAULT 'free',
+  subscription_type ENUM('standard', 'premium') DEFAULT 'standard',
   subscription_price DECIMAL(10,2) DEFAULT 0,
   
   -- Location reference

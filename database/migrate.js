@@ -78,7 +78,7 @@ async function runMigration() {
     if (!(await columnExists(connection, 'users', 'subscription_type'))) {
       await connection.query(`
         ALTER TABLE users 
-        ADD COLUMN subscription_type ENUM('free', 'basic', 'premium', 'enterprise') DEFAULT 'free' AFTER last_name
+        ADD COLUMN subscription_type ENUM('standard', 'premium') DEFAULT 'standard' AFTER last_name
       `);
       console.log('✓ Added subscription_type to users');
     }
