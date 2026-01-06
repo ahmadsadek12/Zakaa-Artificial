@@ -5,7 +5,8 @@
   "main": "database/init.js",
   "scripts": {
     "init": "node database/init.js",
-    "mongodb-init": "node database/mongodb_init.js"
+    "mongodb-init": "node database/mongodb_init.js",
+    "migrate": "node database/migrate.js"
   },
   "keywords": [],
   "author": "",
