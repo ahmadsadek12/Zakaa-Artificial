@@ -36,7 +36,7 @@ function tenantIsolation(req, res, next) {
  * Verify that resource belongs to the business
  * Use this in routes to ensure business users can only access their own resources
  */
-async function verifyBusinessOwnership(tableName, resourceId, businessIdField = 'business_id') {
+async function verifyBusinessOwnership(tableName, resourceId, businessId, businessIdField = 'business_id') {
   const resources = await queryMySQL(
     `SELECT ${businessIdField} FROM ${tableName} WHERE id = ? LIMIT 1`,
     [resourceId]
@@ -46,7 +46,7 @@ async function verifyBusinessOwnership(tableName, resourceId, businessIdField = 
     return false;
   }
   
-  return resources[0][businessIdField] === resourceId; // Wait, this is wrong. Let me fix it.
+  return resources[0][businessIdField] === businessId;
 }
 
 /**

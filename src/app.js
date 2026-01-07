@@ -14,6 +14,12 @@ const healthRoutes = require('./routes/health');
 const authRoutes = require('./routes/api/auth');
 const businessRoutes = require('./routes/api/businesses');
 const branchRoutes = require('./routes/api/branches');
+const menuRoutes = require('./routes/api/menus');
+const itemRoutes = require('./routes/api/items');
+const policyRoutes = require('./routes/api/policies');
+const openingHoursRoutes = require('./routes/api/openingHours');
+const orderRoutes = require('./routes/api/orders');
+const analyticsRoutes = require('./routes/api/analytics');
 const webhookRoutes = require('./routes/webhook/whatsapp');
 
 const app = express();
@@ -63,13 +69,13 @@ app.use('/health', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/businesses', businessRoutes);
 app.use('/api/branches', branchRoutes);
-// app.use('/api/menus', menuRoutes);
-// app.use('/api/items', itemRoutes);
-// app.use('/api/orders', orderRoutes);
-// app.use('/api/policies', policyRoutes);
-// app.use('/api/opening-hours', openingHoursRoutes);
-// app.use('/api/analytics', analyticsRoutes);
-// app.use('/webhook', webhookRoutes);
+app.use('/api/menus', menuRoutes);
+app.use('/api/items', itemRoutes);
+app.use('/api/policies', policyRoutes);
+app.use('/api/opening-hours', openingHoursRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/webhook/whatsapp', webhookRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

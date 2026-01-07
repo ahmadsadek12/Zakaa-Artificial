@@ -1,0 +1,157 @@
+// Opening Hours Routes
+// Opening hours CRUD operations
+
+const express = require('express');
+const router = express.Router();
+const { body, validationResult } = require('express-validator');
+const { authenticate, requireUserType } = require('../../middleware/auth');
+const { tenantIsolation, verifyOwnership } = require('../../middleware/tenant');
+const { asyncHandler } = require('../../middleware/errorHandler');
+const openingHoursRepository = require('../../repositories/openingHoursRepository');
+const logger = require('../../utils/logger');
+const CONSTANTS = require('../../config/constants');
+
+// All routes require authentication and business/admin access
+router.use(authenticate);
+router.use(requireUserType(CONSTANTS.USER_TYPES.ADMIN, CONSTANTS.USER_TYPES.BUSINESS));
+router.use(tenantIsolation);
+
+/**
+ * Get opening hours
+ * GET /api/opening-hours?ownerType=business&ownerId=
+ */
+router.get('/', asyncHandler(async (req, res) => {
+  const { ownerType, ownerId } = req.query;
+  
+  // Verify ownership
+  if (ownerType === 'business' && req.user.userType !== 'admin' && ownerId !== req.businessId) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Access denied' }
+    });
+  }
+  
+  if (ownerType === 'branch' && req.user.userType !== 'admin') {
+    const isOwner = await verifyOwnership('branches', ownerId, req.businessId);
+    if (!isOwner) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Access denied' }
+      });
+    }
+  }
+  
+  if (!ownerType || !ownerId) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'ownerType and ownerId are required' }
+    });
+  }
+  
+  const hours = await openingHoursRepository.findByOwner(ownerType, ownerId);
+  
+  res.json({
+    success: true,
+    data: { openingHours: hours },
+    count: hours.length
+  });
+}));
+
+/**
+ * Create or update opening hours
+ * POST /api/opening-hours
+ */
+router.post('/', [
+  body('ownerType').isIn(['business', 'branch']).withMessage('Invalid owner type'),
+  body('ownerId').isUUID().withMessage('ownerId must be a valid UUID'),
+  body('hours').isObject().withMessage('hours must be an object'),
+  body('hours.monday').optional().isObject(),
+  body('hours.tuesday').optional().isObject(),
+  body('hours.wednesday').optional().isObject(),
+  body('hours.thursday').optional().isObject(),
+  body('hours.friday').optional().isObject(),
+  body('hours.saturday').optional().isObject(),
+  body('hours.sunday').optional().isObject()
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+  
+  const { ownerType, ownerId, hours } = req.body;
+  
+  // Verify ownership
+  if (ownerType === 'business' && req.user.userType !== 'admin' && ownerId !== req.businessId) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Access denied' }
+    });
+  }
+  
+  if (ownerType === 'branch' && req.user.userType !== 'admin') {
+    const isOwner = await verifyOwnership('branches', ownerId, req.businessId);
+    if (!isOwner) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Access denied' }
+      });
+    }
+  }
+  
+  const openingHours = await openingHoursRepository.upsert(ownerType, ownerId, hours);
+  
+  logger.info(`Opening hours updated for ${ownerType}: ${ownerId}`);
+  
+  res.json({
+    success: true,
+    data: { openingHours },
+    count: openingHours.length
+  });
+}));
+
+/**
+ * Delete opening hours
+ * DELETE /api/opening-hours?ownerType=business&ownerId=
+ */
+router.delete('/', asyncHandler(async (req, res) => {
+  const { ownerType, ownerId } = req.query;
+  
+  // Verify ownership
+  if (ownerType === 'business' && req.user.userType !== 'admin' && ownerId !== req.businessId) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Access denied' }
+    });
+  }
+  
+  if (ownerType === 'branch' && req.user.userType !== 'admin') {
+    const isOwner = await verifyOwnership('branches', ownerId, req.businessId);
+    if (!isOwner) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Access denied' }
+      });
+    }
+  }
+  
+  if (!ownerType || !ownerId) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'ownerType and ownerId are required' }
+    });
+  }
+  
+  await openingHoursRepository.deleteByOwner(ownerType, ownerId);
+  
+  logger.info(`Opening hours deleted for ${ownerType}: ${ownerId}`);
+  
+  res.json({
+    success: true,
+    message: 'Opening hours deleted successfully'
+  });
+}));
+
+module.exports = router;

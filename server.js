@@ -6,6 +6,7 @@ const app = require('./src/app');
 const logger = require('./src/utils/logger');
 const { connectMongoDB, getMySQLPool } = require('./src/config/database');
 const CONSTANTS = require('./src/config/constants');
+const { startArchiveJob } = require('./src/jobs/archiveJob');
 
 const PORT = CONSTANTS.PORT;
 
@@ -30,6 +31,10 @@ async function startServer() {
       logger.info(`Server running on port ${PORT}`);
       logger.info(`Environment: ${CONSTANTS.NODE_ENV}`);
       logger.info(`API Base URL: ${CONSTANTS.API_BASE_URL}`);
+      
+      // Start archive job
+      startArchiveJob();
+      logger.info('Archive job started');
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
