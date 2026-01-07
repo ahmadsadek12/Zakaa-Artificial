@@ -144,13 +144,14 @@ CREATE TABLE IF NOT EXISTS orders (
   customer_name VARCHAR(255) NULL,
   
   status ENUM(
+    'cart',
     'pending',
     'accepted',
     'preparing',
     'ready',
     'completed',
     'cancelled'
-  ) DEFAULT 'pending',
+  ) DEFAULT 'cart',
   
   subtotal DECIMAL(10,2) NOT NULL,
   delivery_price DECIMAL(10,2) DEFAULT 0,
@@ -197,6 +198,8 @@ CREATE TABLE IF NOT EXISTS order_items (
   
   quantity INT NOT NULL DEFAULT 1,
   price_at_time DECIMAL(10,2) NOT NULL,
+  name_at_time VARCHAR(255) NOT NULL,
+  notes TEXT NULL,
   
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
   FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE RESTRICT,
@@ -204,3 +207,15 @@ CREATE TABLE IF NOT EXISTS order_items (
   INDEX idx_item_id (item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Order Status History Table (Track order status changes)
+CREATE TABLE IF NOT EXISTS order_status_history (
+  id CHAR(36) PRIMARY KEY,
+  order_id CHAR(36) NOT NULL,
+  status ENUM('pending','accepted','preparing','ready','completed','cancelled') NOT NULL,
+  changed_by VARCHAR(255) DEFAULT 'system',
+  changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  
+  FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+  INDEX idx_order_id (order_id),
+  INDEX idx_changed_at (changed_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

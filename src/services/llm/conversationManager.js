@@ -152,7 +152,7 @@ function generateTimeSlots(startTime, endTime) {
 }
 
 /**
- * Process chatbot response and create order if needed
+ * Process chatbot response and confirm order if needed
  */
 async function processChatbotResponse({
   business,
@@ -169,40 +169,54 @@ async function processChatbotResponse({
     const orderKeywords = ['order confirmed', 'order placed', 'order created', 'thank you for your order'];
     
     if (orderKeywords.some(keyword => lowerResponse.includes(keyword))) {
-      // Create order from cart
+      // Confirm cart (change status from 'cart' to 'pending')
+      // Cart is already an order in the orders table, just need to update status
       if (cart && cart.items && cart.items.length > 0) {
-        const order = await orderService.createOrder({
-          businessId: business.id,
-          branchId: branch?.id || business.id,
-          customerPhoneNumber,
-          whatsappUserId: customerPhoneNumber,
-          languageUsed: language || 'arabic',
-          orderSource: 'whatsapp',
-          deliveryType: cart.delivery_type || 'takeaway',
-          items: cart.items.map(item => ({
-            itemId: item.item_id,
-            quantity: item.quantity,
-            name: item.name,
-            price: item.price,
-            notes: item.notes
-          })),
-          subtotal: cart.subtotal,
-          deliveryPrice: cart.delivery_price || 0,
-          total: cart.total,
-          notes: cart.notes,
-          scheduledFor: cart.scheduled_for ? new Date(cart.scheduled_for) : null,
-          customerName: cart.customer_name
-        });
+        // Update order with missing fields if needed
+        const { queryMySQL, getMySQLConnection } = require('../../config/database');
+        const connection = await getMySQLConnection();
         
-        // Mark cart as completed
-        await cartManager.completeCart(business.id, branch?.id || business.id, customerPhoneNumber);
+        try {
+          await connection.beginTransaction();
+          
+          // Update order with customer info if not set
+          await connection.query(`
+            UPDATE orders 
+            SET 
+              whatsapp_user_id = COALESCE(?, whatsapp_user_id),
+              language_used = COALESCE(?, language_used),
+              order_source = COALESCE(order_source, 'whatsapp'),
+              customer_name = COALESCE(?, customer_name),
+              notes = COALESCE(?, notes),
+              scheduled_for = COALESCE(?, scheduled_for),
+              updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND status = 'cart'
+          `, [
+            customerPhoneNumber,
+            language || 'arabic',
+            cart.customer_name,
+            cart.notes,
+            cart.scheduled_for ? new Date(cart.scheduled_for) : null,
+            cart.id
+          ]);
+          
+          await connection.commit();
+        } catch (error) {
+          await connection.rollback();
+          throw error;
+        } finally {
+          connection.release();
+        }
         
-        logger.info(`Order created from chatbot: ${order.id}`);
+        // Confirm cart (change status to 'pending')
+        const order = await cartManager.confirmCart(business.id, branch?.id || business.id, customerPhoneNumber);
+        
+        logger.info(`Cart confirmed as order: ${cart.id}`);
         
         return {
           orderCreated: true,
-          orderId: order.id,
-          orderNumber: order.id.substring(0, 8).toUpperCase()
+          orderId: cart.id,
+          orderNumber: cart.id.substring(0, 8).toUpperCase()
         };
       }
     }
