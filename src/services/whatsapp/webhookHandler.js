@@ -1,0 +1,140 @@
+// WhatsApp Webhook Handler
+// Process incoming WhatsApp webhooks
+
+const logger = require('../../utils/logger');
+const contextResolver = require('./contextResolver');
+const chatbotService = require('../llm/chatbot');
+const messageSender = require('./messageSender');
+
+/**
+ * Process incoming webhook
+ */
+async function processWebhook(webhookData) {
+  try {
+    // Extract entry data
+    if (!webhookData.entry || webhookData.entry.length === 0) {
+      logger.warn('Empty webhook entry');
+      return;
+    }
+    
+    for (const entry of webhookData.entry) {
+      if (!entry.changes || entry.changes.length === 0) {
+        continue;
+      }
+      
+      for (const change of entry.changes) {
+        if (change.value && change.value.messages) {
+          // Process incoming messages
+          for (const message of change.value.messages) {
+            await processMessage(message, change.value);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    logger.error('Error in processWebhook:', error);
+    throw error;
+  }
+}
+
+/**
+ * Process individual message
+ */
+async function processMessage(message, value) {
+  try {
+    // Resolve business/branch context from phone number ID
+    const context = await contextResolver.resolveContext(value.metadata?.phone_number_id);
+    
+    if (!context) {
+      logger.warn('Could not resolve context for message', { phoneNumberId: value.metadata?.phone_number_id });
+      return;
+    }
+    
+    const { business, branch } = context;
+    
+    // Extract message details
+    const from = message.from;
+    const messageId = message.id;
+    const messageType = message.type;
+    const timestamp = parseInt(message.timestamp);
+    const text = message.text?.body || '';
+    
+    // Log message to MongoDB
+    await logMessage({
+      businessId: business.id,
+      branchId: branch?.id,
+      customerPhoneNumber: from,
+      whatsappUserId: from,
+      direction: 'inbound',
+      channel: 'whatsapp',
+      messageType,
+      text,
+      metaMessageId: messageId,
+      timestamp: new Date(timestamp * 1000)
+    });
+    
+    // Get LLM response
+    const response = await chatbotService.handleMessage({
+      business,
+      branch,
+      customerPhoneNumber: from,
+      message: text,
+      messageType,
+      messageId
+    });
+    
+    // Send response via WhatsApp
+    if (response) {
+      await messageSender.sendMessage({
+        phoneNumberId: branch?.whatsapp_phone_number_id || business.whatsapp_phone_number_id,
+        accessToken: branch?.whatsapp_access_token_encrypted || business.whatsapp_access_token_encrypted,
+        to: from,
+        message: response.text,
+        messageType: 'text'
+      });
+      
+      // Log outbound message
+      await logMessage({
+        businessId: business.id,
+        branchId: branch?.id,
+        customerPhoneNumber: from,
+        whatsappUserId: from,
+        direction: 'outbound',
+        channel: 'whatsapp',
+        messageType: 'text',
+        text: response.text,
+        metaMessageId: response.messageId,
+        timestamp: new Date(),
+        llmUsed: true
+      });
+    }
+  } catch (error) {
+    logger.error('Error processing message:', error);
+    throw error;
+  }
+}
+
+/**
+ * Log message to MongoDB
+ */
+async function logMessage(messageData) {
+  try {
+    const { getMongoCollection } = require('../../config/database');
+    const messageLogs = await getMongoCollection('message_logs');
+    
+    await messageLogs.insertOne({
+      _id: require('../../utils/uuid').generateUUID(),
+      ...messageData,
+      timestamp: messageData.timestamp || new Date()
+    });
+  } catch (error) {
+    logger.error('Error logging message:', error);
+    // Don't throw - logging is non-critical
+  }
+}
+
+module.exports = {
+  processWebhook,
+  processMessage,
+  logMessage
+};
