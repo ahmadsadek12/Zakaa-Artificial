@@ -132,14 +132,22 @@ CREATE TABLE IF NOT EXISTS item_ingredients (
 -- Orders Table (Transactional, Short-Lived)
 CREATE TABLE IF NOT EXISTS orders (
   id CHAR(36) PRIMARY KEY,
-  customer_id CHAR(36) NOT NULL,
+  customer_id CHAR(36) NULL,
   business_id CHAR(36) NOT NULL,
   branch_id CHAR(36) NOT NULL,
+  
+  -- Customer information (for WhatsApp orders, customer_id may be null)
+  customer_phone_number VARCHAR(20) NOT NULL,
+  whatsapp_user_id VARCHAR(255) NULL,
+  language_used ENUM('arabic','arabizi','english','french') NULL,
+  order_source ENUM('whatsapp') DEFAULT 'whatsapp',
+  customer_name VARCHAR(255) NULL,
   
   status ENUM(
     'pending',
     'accepted',
     'preparing',
+    'ready',
     'completed',
     'cancelled'
   ) DEFAULT 'pending',
@@ -150,18 +158,35 @@ CREATE TABLE IF NOT EXISTS orders (
   
   delivery_type ENUM('takeaway', 'delivery', 'on_site') NOT NULL,
   
+  -- Additional order details
+  notes TEXT NULL,
+  scheduled_for TIMESTAMP NULL,
+  
+  -- Payment information
+  payment_method ENUM('cash','card','wallet','unknown') DEFAULT 'unknown',
+  payment_status ENUM('unpaid','paid','refunded') DEFAULT 'unpaid',
+  
+  -- Delivery address (optional, for delivery orders)
+  delivery_address_location_id CHAR(36) NULL,
+  
+  -- Timestamps
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   completed_at TIMESTAMP NULL,
+  cancelled_at TIMESTAMP NULL,
   
   FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE RESTRICT,
   FOREIGN KEY (business_id) REFERENCES users(id) ON DELETE RESTRICT,
   FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE RESTRICT,
+  FOREIGN KEY (delivery_address_location_id) REFERENCES locations(id) ON DELETE SET NULL,
   INDEX idx_customer_id (customer_id),
   INDEX idx_business_id (business_id),
   INDEX idx_branch_id (branch_id),
+  INDEX idx_customer_phone_number (customer_phone_number),
   INDEX idx_status (status),
   INDEX idx_created_at (created_at),
-  INDEX idx_completed_at (completed_at)
+  INDEX idx_completed_at (completed_at),
+  INDEX idx_customer_created (customer_phone_number, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Order Items Table (Many-to-Many with Price Snapshots)
