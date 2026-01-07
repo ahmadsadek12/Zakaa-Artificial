@@ -15,15 +15,29 @@ async function initializeMongoDB() {
     console.log('Connected to MongoDB');
     
     const db = client.db(DB_NAME);
-    const collection = db.collection('order_logs');
     
-    // Create indexes for better query performance
-    await collection.createIndex({ order_id: 1 }, { unique: true });
-    await collection.createIndex({ business_id: 1 });
-    await collection.createIndex({ customer_id: 1 });
-    await collection.createIndex({ archived_at: 1 });
-    await collection.createIndex({ 'status_timeline.status': 1 });
-    await collection.createIndex({ created_at: 1 });
+    // Initialize order_logs collection
+    const orderLogs = db.collection('order_logs');
+    await orderLogs.createIndex({ order_id: 1 }, { unique: true });
+    await orderLogs.createIndex({ business_id: 1 });
+    await orderLogs.createIndex({ customer_phone_number: 1 });
+    await orderLogs.createIndex({ archived_at: 1 });
+    await orderLogs.createIndex({ 'status_timeline.status': 1 });
+    await orderLogs.createIndex({ created_at: 1 });
+    
+    // Initialize carts collection
+    const carts = db.collection('carts');
+    await carts.createIndex({ business_id: 1, branch_id: 1, customer_phone_number: 1, status: 1 });
+    await carts.createIndex({ customer_phone_number: 1, status: 1 });
+    await carts.createIndex({ updated_at: 1 });
+    
+    // Initialize message_logs collection
+    const messageLogs = db.collection('message_logs');
+    await messageLogs.createIndex({ business_id: 1, branch_id: 1, customer_phone_number: 1 });
+    await messageLogs.createIndex({ customer_phone_number: 1, timestamp: -1 });
+    await messageLogs.createIndex({ timestamp: -1 });
+    await messageLogs.createIndex({ direction: 1 });
+    await messageLogs.createIndex({ order_id: 1 });
     
     console.log('MongoDB indexes created successfully');
     

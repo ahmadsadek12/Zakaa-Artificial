@@ -5,6 +5,8 @@ const logger = require('../../utils/logger');
 const contextResolver = require('./contextResolver');
 const chatbotService = require('../llm/chatbot');
 const messageSender = require('./messageSender');
+const cartManager = require('../llm/cartManager');
+const { generateUUID } = require('../../utils/uuid');
 
 /**
  * Process incoming webhook
@@ -73,23 +75,41 @@ async function processMessage(message, value) {
       timestamp: new Date(timestamp * 1000)
     });
     
-    // Get LLM response
+    // Get LLM response with full conversation context
     const response = await chatbotService.handleMessage({
       business,
       branch,
       customerPhoneNumber: from,
       message: text,
       messageType,
-      messageId
+      messageId,
+      whatsappUserId: from
     });
     
     // Send response via WhatsApp
-    if (response) {
+    if (response && response.text) {
+      // Build response message
+      let responseMessage = response.text;
+      
+      // Add cart summary if cart exists and has items
+      if (response.cart && response.cart.items && response.cart.items.length > 0) {
+        const cartSummary = cartManager.getCartSummary(response.cart);
+        // Add cart summary if not already included in response
+        if (!responseMessage.toLowerCase().includes('cart') && !responseMessage.toLowerCase().includes('total:')) {
+          responseMessage += `\n\n${cartSummary}`;
+        }
+      }
+      
+      // Add order confirmation message if order was created
+      if (response.orderCreated && response.orderId) {
+        responseMessage += `\n\n✅ Your order has been placed! Order #${response.orderId.substring(0, 8).toUpperCase()}`;
+      }
+      
       await messageSender.sendMessage({
         phoneNumberId: branch?.whatsapp_phone_number_id || business.whatsapp_phone_number_id,
         accessToken: branch?.whatsapp_access_token_encrypted || business.whatsapp_access_token_encrypted,
         to: from,
-        message: response.text,
+        message: responseMessage,
         messageType: 'text'
       });
       
@@ -102,10 +122,14 @@ async function processMessage(message, value) {
         direction: 'outbound',
         channel: 'whatsapp',
         messageType: 'text',
-        text: response.text,
-        metaMessageId: response.messageId,
+        text: responseMessage,
+        metaMessageId: response.messageId || generateUUID(),
         timestamp: new Date(),
-        llmUsed: true
+        llmUsed: true,
+        tokensIn: response.tokensIn || null,
+        tokensOut: response.tokensOut || null,
+        orderCreated: response.orderCreated || false,
+        orderId: response.orderId || null
       });
     }
   } catch (error) {
