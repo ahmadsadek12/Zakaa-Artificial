@@ -1,9 +1,10 @@
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from './Layout'
 
 export default function PrivateRoute({ children }) {
   const { user, loading } = useAuth()
+  const location = useLocation()
 
   if (loading) {
     return (
@@ -15,6 +16,16 @@ export default function PrivateRoute({ children }) {
 
   if (!user) {
     return <Navigate to="/login" replace />
+  }
+
+  // Redirect admin users to admin dashboard if they try to access business routes
+  if (user.userType === 'admin' && !location.pathname.startsWith('/admin')) {
+    return <Navigate to="/admin" replace />
+  }
+
+  // Redirect business users to business dashboard if they try to access admin routes
+  if (user.userType !== 'admin' && location.pathname.startsWith('/admin')) {
+    return <Navigate to="/" replace />
   }
 
   return <Layout>{children}</Layout>

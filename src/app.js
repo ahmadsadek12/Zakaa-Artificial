@@ -12,6 +12,8 @@ const CONSTANTS = require('./config/constants');
 // Import routes
 const healthRoutes = require('./routes/health');
 const authRoutes = require('./routes/api/auth');
+const adminRoutes = require('./routes/api/admin');
+const adminProfileRoutes = require('./routes/api/adminProfile');
 const businessRoutes = require('./routes/api/businesses');
 const branchRoutes = require('./routes/api/branches');
 const menuRoutes = require('./routes/api/menus');
@@ -30,6 +32,10 @@ const app = express();
 
 // Security middleware
 app.use(helmet());
+
+// Additional security headers
+const { secureHeaders } = require('./middleware/security');
+app.use(secureHeaders);
 
 // CORS configuration
 app.use(cors({
@@ -108,6 +114,8 @@ if (CONSTANTS.NODE_ENV !== 'production' || process.env.ENABLE_API_DOCS === 'true
 
 // API routes
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/admin', adminProfileRoutes);
 app.use('/api/businesses', businessRoutes);
 app.use('/api/branches', branchRoutes);
 app.use('/api/menus', menuRoutes);

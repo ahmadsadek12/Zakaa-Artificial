@@ -12,6 +12,11 @@ import Items from './pages/Items'
 import Scheduled from './pages/Scheduled'
 import Settings from './pages/Settings'
 import Analytics from './pages/Analytics'
+import AdminDashboard from './pages/admin/AdminDashboard'
+import AdminBusinesses from './pages/admin/AdminBusinesses'
+import AdminBusinessDetail from './pages/admin/AdminBusinessDetail'
+import AdminBranches from './pages/admin/AdminBranches'
+import AdminProfile from './pages/admin/AdminProfile'
 
 function App() {
   return (
@@ -20,6 +25,8 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          
+          {/* Business Routes */}
           <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/orders" element={<PrivateRoute><Orders /></PrivateRoute>} />
           <Route path="/carts" element={<PrivateRoute><Carts /></PrivateRoute>} />
@@ -29,6 +36,14 @@ function App() {
           <Route path="/scheduled" element={<PrivateRoute><Scheduled /></PrivateRoute>} />
           <Route path="/analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
           <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+          
+          {/* Admin Routes */}
+          <Route path="/admin" element={<PrivateRoute><AdminDashboard /></PrivateRoute>} />
+          <Route path="/admin/businesses" element={<PrivateRoute><AdminBusinesses /></PrivateRoute>} />
+          <Route path="/admin/businesses/:id" element={<PrivateRoute><AdminBusinessDetail /></PrivateRoute>} />
+          <Route path="/admin/branches" element={<PrivateRoute><AdminBranches /></PrivateRoute>} />
+          <Route path="/admin/profile" element={<PrivateRoute><AdminProfile /></PrivateRoute>} />
+          
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>

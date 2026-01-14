@@ -12,7 +12,9 @@ import {
   Settings,
   LogOut,
   Menu,
-  X
+  X,
+  Shield,
+  Building2
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -27,7 +29,16 @@ export default function Layout({ children }) {
     navigate('/login')
   }
 
-  const navItems = [
+  // Admin navigation items
+  const adminNavItems = [
+    { path: '/admin', icon: Shield, label: 'Admin Dashboard' },
+    { path: '/admin/businesses', icon: Building2, label: 'Businesses' },
+    { path: '/admin/branches', icon: Store, label: 'All Branches' },
+    { path: '/admin/profile', icon: Settings, label: 'My Profile' },
+  ]
+
+  // Business navigation items
+  const businessNavItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/orders', icon: ShoppingCart, label: 'Orders' },
     { path: '/carts', icon: ShoppingBag, label: 'Carts' },
@@ -38,6 +49,8 @@ export default function Layout({ children }) {
     { path: '/analytics', icon: BarChart3, label: 'Analytics' },
     { path: '/settings', icon: Settings, label: 'Settings' },
   ]
+
+  const navItems = user?.userType === 'admin' ? adminNavItems : businessNavItems
 
   const isActive = (path) => location.pathname === path
 
@@ -106,8 +119,8 @@ export default function Layout({ children }) {
                 <p className="text-sm font-medium text-gray-900 truncate">
                   {user?.business_name || user?.email}
                 </p>
-                <p className="text-xs text-gray-500 truncate">
-                  {user?.subscription_type === 'premium' ? 'Premium' : 'Standard'}
+                <p className="text-xs text-gray-500 truncate capitalize">
+                  {user?.userType === 'admin' ? 'Admin' : user?.subscription_type === 'premium' ? 'Premium' : 'Standard'}
                 </p>
               </div>
             </div>
