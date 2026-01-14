@@ -8,13 +8,13 @@ const { authenticate, requireUserType } = require('../../middleware/auth');
 const { tenantIsolation } = require('../../middleware/tenant');
 const { asyncHandler } = require('../../middleware/errorHandler');
 const userRepository = require('../../repositories/userRepository');
-const { encryptToken, decryptToken } = require('../../utils/encryption');
+const { encryptToken, decryptToken } = require('../../../utils/encryption');
 const logger = require('../../utils/logger');
 const CONSTANTS = require('../../config/constants');
 
-// All routes require authentication and business/admin access
+// All routes require authentication and business/admin/branch access
 router.use(authenticate);
-router.use(requireUserType(CONSTANTS.USER_TYPES.ADMIN, CONSTANTS.USER_TYPES.BUSINESS));
+router.use(requireUserType(CONSTANTS.USER_TYPES.ADMIN, CONSTANTS.USER_TYPES.BUSINESS, CONSTANTS.USER_TYPES.BRANCH));
 router.use(tenantIsolation);
 
 /**
@@ -54,11 +54,20 @@ router.get('/me', asyncHandler(async (req, res) => {
  */
 router.put('/me', [
   body('businessName').optional().notEmpty().withMessage('Business name cannot be empty'),
-  body('businessType').optional().isIn(['restaurant', 'sports_court', 'salon', 'other']).withMessage('Invalid business type'),
-  body('email').optional().isEmail().withMessage('Valid email required'),
-  body('contactPhoneNumber').optional().isMobilePhone().withMessage('Valid phone number required'),
+  body('businessType').optional().isIn(['f & b', 'services', 'products']).withMessage('Invalid business type'),
+  body('email').optional({ checkFalsy: true }).isEmail().withMessage('Valid email required'),
+  body('contactPhoneNumber').optional({ checkFalsy: true }).isString().withMessage('Contact phone must be a string'),
   body('defaultLanguage').optional().isIn(['arabic', 'arabizi', 'english', 'french']).withMessage('Invalid language'),
-  body('timezone').optional().notEmpty().withMessage('Timezone cannot be empty')
+  body('languages').optional().isArray().withMessage('Languages must be an array'),
+  body('timezone').optional().notEmpty().withMessage('Timezone cannot be empty'),
+  body('businessDescription').optional({ checkFalsy: true }).isString(),
+  body('locationLatitude').optional({ checkFalsy: true }).isDecimal().withMessage('Latitude must be a valid decimal'),
+  body('locationLongitude').optional({ checkFalsy: true }).isDecimal().withMessage('Longitude must be a valid decimal'),
+  body('deliveryRadiusKm').optional({ checkFalsy: true }).isDecimal({ min: 0 }).withMessage('Delivery radius must be positive'),
+  body('whatsappPhoneNumberId').optional({ checkFalsy: true }).isString(),
+  body('whatsappBusinessAccountId').optional({ checkFalsy: true }).isString(),
+  body('telegramBotToken').optional({ checkFalsy: true }).isString(),
+  body('chatbotEnabled').optional().isBoolean().withMessage('Chatbot enabled must be true or false')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -71,8 +80,11 @@ router.put('/me', [
   const updateData = {};
   const allowedFields = [
     'businessName', 'businessType', 'email', 'contactPhoneNumber',
-    'defaultLanguage', 'timezone', 'allowScheduledOrders', 'allowDelivery',
-    'allowTakeaway', 'allowOnSite'
+    'defaultLanguage', 'languages', 'timezone', 'businessDescription',
+    'locationLatitude', 'locationLongitude', 'deliveryRadiusKm',
+    'whatsappPhoneNumberId', 'whatsappBusinessAccountId', 'telegramBotToken',
+    'allowScheduledOrders', 'allowDelivery', 'allowTakeaway', 'allowOnSite',
+    'chatbotEnabled'
   ];
   
   for (const field of allowedFields) {
@@ -81,10 +93,32 @@ router.put('/me', [
     }
   }
   
+  logger.info('Update data received:', { updateData, chatbotEnabled: updateData.chatbotEnabled, type: typeof updateData.chatbotEnabled });
+  
   const updatedUser = await userRepository.update(req.user.id, updateData);
   delete updatedUser.password_hash;
   
-  logger.info(`Business profile updated: ${req.user.id}`);
+  // Convert MySQL boolean (tinyint) fields to proper JavaScript booleans
+  if (updatedUser.chatbot_enabled !== undefined) {
+    updatedUser.chatbot_enabled = Boolean(updatedUser.chatbot_enabled);
+  }
+  if (updatedUser.is_active !== undefined) {
+    updatedUser.is_active = Boolean(updatedUser.is_active);
+  }
+  if (updatedUser.allow_scheduled_orders !== undefined) {
+    updatedUser.allow_scheduled_orders = Boolean(updatedUser.allow_scheduled_orders);
+  }
+  if (updatedUser.allow_delivery !== undefined) {
+    updatedUser.allow_delivery = Boolean(updatedUser.allow_delivery);
+  }
+  if (updatedUser.allow_takeaway !== undefined) {
+    updatedUser.allow_takeaway = Boolean(updatedUser.allow_takeaway);
+  }
+  if (updatedUser.allow_on_site !== undefined) {
+    updatedUser.allow_on_site = Boolean(updatedUser.allow_on_site);
+  }
+  
+  logger.info(`Business profile updated: ${req.user.id}`, { chatbot_enabled: updatedUser.chatbot_enabled });
   
   res.json({
     success: true,
@@ -240,6 +274,340 @@ router.get('/me/whatsapp/status', asyncHandler(async (req, res) => {
       whatsappPhoneNumber: user.whatsapp_phone_number || null,
       whatsappPhoneNumberId: user.whatsapp_phone_number_id || null
     }
+  });
+}));
+
+/**
+ * List all branch users for current business
+ * GET /api/businesses/me/branches
+ */
+router.get('/me/branches', asyncHandler(async (req, res) => {
+  // Only business users (not branch users) can list branches
+  if (req.isBranchUser) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Only business users can list branches' }
+    });
+  }
+  
+  if (!req.businessId) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Business ID not found' }
+    });
+  }
+  
+  try {
+    // Query users table for branch users
+    const { queryMySQL } = require('../../config/database');
+    const branches = await queryMySQL(`
+      SELECT 
+        u.id, u.email, u.business_name as branch_name, u.contact_phone_number,
+        u.whatsapp_phone_number, u.whatsapp_phone_number_id, u.is_active,
+        u.created_at,
+        l.id as location_id, l.city, l.street, l.building, l.floor, l.notes as location_notes,
+        l.latitude, l.longitude
+      FROM users u
+      LEFT JOIN locations l ON u.location_id = l.id
+      WHERE u.user_type = 'branch' 
+        AND u.parent_user_id = ?
+        AND u.deleted_at IS NULL
+      ORDER BY u.created_at DESC
+    `, [req.businessId]);
+    
+    // Remove password_hash if present and format response
+    const formattedBranches = (branches || []).map(branch => {
+      const formatted = { ...branch };
+      delete formatted.password_hash;
+      return formatted;
+    });
+    
+    res.json({
+      success: true,
+      data: { branches: formattedBranches },
+      count: formattedBranches.length
+    });
+  } catch (error) {
+    logger.error('Error fetching branches:', error);
+    throw error;
+  }
+}));
+
+/**
+ * Create branch user
+ * POST /api/businesses/me/branches
+ */
+router.post('/me/branches', [
+  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('password').notEmpty().isLength({ min: 8 }).withMessage('Password is required (minimum 8 characters)'),
+  body('branchName').notEmpty().trim().withMessage('Branch name is required'),
+  body('location').isObject().withMessage('Location is required'),
+  body('location.city').notEmpty().trim().withMessage('City is required'),
+  body('location.street').notEmpty().trim().withMessage('Street is required'),
+  body('contactPhoneNumber').optional({ checkFalsy: true }).isMobilePhone().withMessage('Valid phone number required'),
+  body('whatsappPhoneNumber').optional({ checkFalsy: true }).isMobilePhone().withMessage('Valid WhatsApp phone number required')
+], asyncHandler(async (req, res) => {
+  // Only business users (not branch users) can create branches
+  if (req.isBranchUser) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Only business users can create branches' }
+    });
+  }
+  
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { 
+        message: 'Validation failed', 
+        errors: errors.array().map(e => ({
+          field: e.path || e.param,
+          message: e.msg,
+          value: e.value
+        }))
+      }
+    });
+  }
+  
+  const { email, password, branchName, contactPhoneNumber, whatsappPhoneNumber, whatsappPhoneNumberId, whatsappAccessToken, location } = req.body;
+  
+  // Validate location object exists and has required fields
+  if (!location || !location.city || !location.street) {
+    return res.status(400).json({
+      success: false,
+      error: { 
+        message: 'Validation failed',
+        errors: [
+          { field: 'location.city', message: location?.city ? '' : 'City is required' },
+          { field: 'location.street', message: location?.street ? '' : 'Street is required' }
+        ].filter(e => e.message)
+      }
+    });
+  }
+  
+  // Check if email is already in use
+  const existingUser = await userRepository.findByEmail(email);
+  if (existingUser) {
+    return res.status(409).json({
+      success: false,
+      error: { message: 'Email is already in use' }
+    });
+  }
+  
+  // Check if WhatsApp phone number ID is already used
+  if (whatsappPhoneNumberId) {
+    const existingBranch = await userRepository.findByWhatsAppPhoneId(whatsappPhoneNumberId);
+    if (existingBranch) {
+      return res.status(409).json({
+        success: false,
+        error: { message: 'WhatsApp phone number ID already in use' }
+      });
+    }
+  }
+  
+  // Encrypt WhatsApp token if provided
+  const encryptedToken = whatsappAccessToken ? encryptToken(whatsappAccessToken) : null;
+  
+  // Create branch user in users table
+  const branch = await userRepository.createBranchUser(req.businessId, {
+    email,
+    password,
+    branchName,
+    location,
+    contactPhoneNumber: contactPhoneNumber || null,
+    whatsappPhoneNumber: whatsappPhoneNumber || null,
+    whatsappPhoneNumberId: whatsappPhoneNumberId || null,
+    whatsappAccessTokenEncrypted: encryptedToken,
+    isActive: true
+  });
+  
+  logger.info(`Branch user created: ${branch.id} (${branch.email}) for business: ${req.businessId}`);
+  
+  res.status(201).json({
+    success: true,
+    data: { branch }
+  });
+}));
+
+/**
+ * Update branch user
+ * PUT /api/businesses/me/branches/:id
+ */
+router.put('/me/branches/:id', [
+  body('email').optional().isEmail().normalizeEmail().withMessage('Valid email required'),
+  body('password').optional().isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+  body('branchName').optional().notEmpty().withMessage('Branch name cannot be empty'),
+  body('contactPhoneNumber').optional().isMobilePhone().withMessage('Valid phone number required')
+], asyncHandler(async (req, res) => {
+  // Only business users (not branch users) can update branches
+  if (req.isBranchUser) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Only business users can update branches' }
+    });
+  }
+  
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+  
+  // Verify branch belongs to business (query users table)
+  const branch = await userRepository.findById(req.params.id);
+  if (!branch || branch.user_type !== 'branch' || branch.parent_user_id !== req.businessId || branch.deleted_at) {
+    return res.status(404).json({
+      success: false,
+      error: { message: 'Branch not found' }
+    });
+  }
+  
+  const { email, password, branchName, contactPhoneNumber, whatsappPhoneNumber, whatsappPhoneNumberId, whatsappAccessToken, location, isActive } = req.body;
+  
+  // Check if email change conflicts
+  if (email && email !== branch.email) {
+    const existingUser = await userRepository.findByEmail(email);
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        error: { message: 'Email is already in use' }
+      });
+    }
+  }
+  
+  // Check if WhatsApp phone number ID change conflicts
+  if (whatsappPhoneNumberId && whatsappPhoneNumberId !== branch.whatsapp_phone_number_id) {
+    const existingBranch = await userRepository.findByWhatsAppPhoneId(whatsappPhoneNumberId);
+    if (existingBranch && existingBranch.id !== req.params.id) {
+      return res.status(409).json({
+        success: false,
+        error: { message: 'WhatsApp phone number ID already in use' }
+      });
+    }
+  }
+  
+  // Handle location update/create
+  const { queryMySQL, getMySQLConnection } = require('../../config/database');
+  const { generateUUID } = require('../../utils/uuid');
+  const connection = await getMySQLConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    let locationId = branch.location_id;
+    if (location !== undefined) {
+      if (locationId) {
+        // Update existing location
+        await connection.query(`
+          UPDATE locations 
+          SET city = ?, street = ?, building = ?, floor = ?, notes = ?, 
+              latitude = ?, longitude = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `, [
+          location.city,
+          location.street,
+          location.building || null,
+          location.floor || null,
+          location.notes || null,
+          location.latitude || null,
+          location.longitude || null,
+          locationId
+        ]);
+      } else {
+        // Create new location
+        locationId = generateUUID();
+        await connection.query(`
+          INSERT INTO locations (id, city, street, building, floor, notes, latitude, longitude, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        `, [
+          locationId,
+          location.city,
+          location.street,
+          location.building || null,
+          location.floor || null,
+          location.notes || null,
+          location.latitude || null,
+          location.longitude || null
+        ]);
+      }
+    }
+    
+    // Prepare update data
+    const updateData = {};
+    if (email !== undefined) updateData.email = email;
+    if (branchName !== undefined) updateData.businessName = branchName;
+    if (contactPhoneNumber !== undefined) updateData.contactPhoneNumber = contactPhoneNumber;
+    if (whatsappPhoneNumber !== undefined) updateData.whatsappPhoneNumber = whatsappPhoneNumber;
+    if (whatsappPhoneNumberId !== undefined) updateData.whatsappPhoneNumberId = whatsappPhoneNumberId;
+    if (whatsappAccessToken !== undefined) {
+      updateData.whatsappAccessTokenEncrypted = encryptToken(whatsappAccessToken);
+    }
+    if (location !== undefined) updateData.locationId = locationId;
+    if (isActive !== undefined) updateData.isActive = isActive;
+    
+    // Update user record
+    if (Object.keys(updateData).length > 0) {
+      await userRepository.update(req.params.id, updateData);
+    }
+    
+    // Update password if provided
+    if (password) {
+      await userRepository.updatePassword(req.params.id, password);
+    }
+    
+    await connection.commit();
+    
+    // Return updated branch
+    const updatedBranch = await userRepository.findById(req.params.id);
+    delete updatedBranch.password_hash;
+    
+    logger.info(`Branch user updated: ${req.params.id} for business: ${req.businessId}`);
+    
+    res.json({
+      success: true,
+      data: { branch: updatedBranch }
+    });
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}));
+
+/**
+ * Delete branch user
+ * DELETE /api/businesses/me/branches/:id
+ */
+router.delete('/me/branches/:id', asyncHandler(async (req, res) => {
+  // Only business users (not branch users) can delete branches
+  if (req.isBranchUser) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Only business users can delete branches' }
+    });
+  }
+  
+  // Verify branch belongs to business (query users table)
+  const branch = await userRepository.findById(req.params.id);
+  if (!branch || branch.user_type !== 'branch' || branch.parent_user_id !== req.businessId || branch.deleted_at) {
+    return res.status(404).json({
+      success: false,
+      error: { message: 'Branch not found' }
+    });
+  }
+  
+  // Soft delete branch user (mark as deleted and inactive)
+  await userRepository.softDelete(req.params.id);
+  
+  logger.info(`Branch user deleted: ${req.params.id} for business: ${req.businessId}`);
+  
+  res.json({
+    success: true,
+    message: 'Branch deleted successfully'
   });
 }));
 

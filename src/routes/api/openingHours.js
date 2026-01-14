@@ -11,9 +11,9 @@ const openingHoursRepository = require('../../repositories/openingHoursRepositor
 const logger = require('../../utils/logger');
 const CONSTANTS = require('../../config/constants');
 
-// All routes require authentication and business/admin access
+// All routes require authentication and business/admin/branch access
 router.use(authenticate);
-router.use(requireUserType(CONSTANTS.USER_TYPES.ADMIN, CONSTANTS.USER_TYPES.BUSINESS));
+router.use(requireUserType(CONSTANTS.USER_TYPES.ADMIN, CONSTANTS.USER_TYPES.BUSINESS, CONSTANTS.USER_TYPES.BRANCH));
 router.use(tenantIsolation);
 
 /**
@@ -32,11 +32,25 @@ router.get('/', asyncHandler(async (req, res) => {
   }
   
   if (ownerType === 'branch' && req.user.userType !== 'admin') {
-    const isOwner = await verifyOwnership('branches', ownerId, req.businessId);
-    if (!isOwner) {
+    const { queryMySQL } = require('../../config/database');
+    const branches = await queryMySQL(
+      `SELECT parent_user_id FROM users WHERE id = ? AND user_type = 'branch' AND is_active = true AND deleted_at IS NULL`,
+      [ownerId]
+    );
+    
+    if (!branches || branches.length === 0) {
       return res.status(403).json({
         success: false,
-        error: { message: 'Access denied' }
+        error: { message: 'Access denied: Branch not found' }
+      });
+    }
+    
+    const branch = branches[0];
+    // Verify branch belongs to the business
+    if (branch.parent_user_id !== req.businessId) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Access denied: Branch does not belong to your business' }
       });
     }
   }
@@ -92,11 +106,25 @@ router.post('/', [
   }
   
   if (ownerType === 'branch' && req.user.userType !== 'admin') {
-    const isOwner = await verifyOwnership('branches', ownerId, req.businessId);
-    if (!isOwner) {
+    const { queryMySQL } = require('../../config/database');
+    const branches = await queryMySQL(
+      `SELECT parent_user_id FROM users WHERE id = ? AND user_type = 'branch' AND is_active = true AND deleted_at IS NULL`,
+      [ownerId]
+    );
+    
+    if (!branches || branches.length === 0) {
       return res.status(403).json({
         success: false,
-        error: { message: 'Access denied' }
+        error: { message: 'Access denied: Branch not found' }
+      });
+    }
+    
+    const branch = branches[0];
+    // Verify branch belongs to the business
+    if (branch.parent_user_id !== req.businessId) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Access denied: Branch does not belong to your business' }
       });
     }
   }
@@ -128,11 +156,25 @@ router.delete('/', asyncHandler(async (req, res) => {
   }
   
   if (ownerType === 'branch' && req.user.userType !== 'admin') {
-    const isOwner = await verifyOwnership('branches', ownerId, req.businessId);
-    if (!isOwner) {
+    const { queryMySQL } = require('../../config/database');
+    const branches = await queryMySQL(
+      `SELECT parent_user_id FROM users WHERE id = ? AND user_type = 'branch' AND is_active = true AND deleted_at IS NULL`,
+      [ownerId]
+    );
+    
+    if (!branches || branches.length === 0) {
       return res.status(403).json({
         success: false,
-        error: { message: 'Access denied' }
+        error: { message: 'Access denied: Branch not found' }
+      });
+    }
+    
+    const branch = branches[0];
+    // Verify branch belongs to the business
+    if (branch.parent_user_id !== req.businessId) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Access denied: Branch does not belong to your business' }
       });
     }
   }

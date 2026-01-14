@@ -16,14 +16,15 @@ const logger = require('../../utils/logger');
 const CONSTANTS = require('../../config/constants');
 const { generateUUID } = require('../../utils/uuid');
 
-// All routes require authentication and business/admin access
+// All routes require authentication and business/admin/branch access
 router.use(authenticate);
-router.use(requireUserType(CONSTANTS.USER_TYPES.ADMIN, CONSTANTS.USER_TYPES.BUSINESS));
+router.use(requireUserType(CONSTANTS.USER_TYPES.ADMIN, CONSTANTS.USER_TYPES.BUSINESS, CONSTANTS.USER_TYPES.BRANCH));
 router.use(tenantIsolation);
 
-// Configure multer for S3 upload
+// Configure multer for S3 upload (or memory storage if S3 not configured)
+// Supports images (multiple) and PDFs (single)
 const upload = multer({
-  storage: multerS3({
+  storage: s3 ? multerS3({
     s3: s3,
     bucket: S3_CONFIG.bucket,
     acl: 'public-read',
@@ -32,15 +33,16 @@ const upload = multer({
       const fileName = `${generateUUID()}-${file.originalname}`;
       cb(null, `${folder}/${fileName}`);
     }
-  }),
+  }) : multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB
+    fileSize: 10 * 1024 * 1024 // 10MB (larger for PDFs)
   },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
+    // Allow images and PDFs
+    if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
       cb(null, true);
     } else {
-      cb(new Error('Only image files are allowed'));
+      cb(new Error('Only image files and PDFs are allowed'));
     }
   }
 });
@@ -86,11 +88,16 @@ router.get('/:id', requireOwnership('menus'), asyncHandler(async (req, res) => {
 /**
  * Create menu
  * POST /api/menus
+ * Supports: PDF (menuPdf), multiple images (menuImages), link (menuLink), name, isActive
  */
-router.post('/', [
-  body('name').notEmpty().withMessage('Menu name required'),
-  body('isShared').optional().isBoolean().withMessage('isShared must be boolean')
-], upload.single('menuImage'), asyncHandler(async (req, res) => {
+router.post('/', upload.fields([
+  { name: 'menuPdf', maxCount: 1 },
+  { name: 'menuImages', maxCount: 10 }
+]), [
+  body('name').trim().notEmpty().withMessage('Menu name required'),
+  body('menuLink').optional().isURL().withMessage('Menu link must be a valid URL'),
+  body('isActive').optional().isBoolean().withMessage('isActive must be boolean')
+], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({
@@ -99,15 +106,49 @@ router.post('/', [
     });
   }
   
-  const { name, description, isShared, isActive } = req.body;
-  const menuImageUrl = req.file ? req.file.location : null;
+  const { name, description, menuLink, isActive } = req.body;
+  
+  // Handle PDF upload (single file)
+  let menuPdfUrl = null;
+  if (req.files && req.files.menuPdf && req.files.menuPdf[0]) {
+    const pdfFile = req.files.menuPdf[0];
+    if (pdfFile.location) {
+      menuPdfUrl = pdfFile.location;
+    } else if (pdfFile.buffer && s3) {
+      try {
+        const fileName = `${generateUUID()}-${pdfFile.originalname}`;
+        menuPdfUrl = await uploadToS3(pdfFile.buffer, fileName, pdfFile.mimetype, 'menus');
+      } catch (error) {
+        logger.warn('S3 PDF upload failed, skipping PDF:', error.message);
+      }
+    }
+  }
+  
+  // Handle multiple image uploads
+  let menuImageUrls = [];
+  if (req.files && req.files.menuImages && req.files.menuImages.length > 0) {
+    for (const imageFile of req.files.menuImages) {
+      if (imageFile.location) {
+        menuImageUrls.push(imageFile.location);
+      } else if (imageFile.buffer && s3) {
+        try {
+          const fileName = `${generateUUID()}-${imageFile.originalname}`;
+          const imageUrl = await uploadToS3(imageFile.buffer, fileName, imageFile.mimetype, 'menus');
+          menuImageUrls.push(imageUrl);
+        } catch (error) {
+          logger.warn('S3 image upload failed, skipping image:', error.message);
+        }
+      }
+    }
+  }
   
   const menu = await menuRepository.create({
     businessId: req.businessId,
     name,
-    description,
-    isShared: isShared === 'true' || isShared === true,
-    menuImageUrl,
+    description: description || null,
+    menuPdfUrl: menuPdfUrl || null,
+    menuImageUrls: menuImageUrls.length > 0 ? menuImageUrls : null,
+    menuLink: menuLink || null,
     isActive: isActive !== undefined ? (isActive === 'true' || isActive === true) : true
   });
   
@@ -122,10 +163,25 @@ router.post('/', [
 /**
  * Update menu
  * PUT /api/menus/:id
+ * Supports: PDF (menuPdf), multiple images (menuImages), link (menuLink), name, isActive
  */
-router.put('/:id', requireOwnership('menus'), [
-  body('name').optional().notEmpty().withMessage('Menu name cannot be empty')
-], upload.single('menuImage'), asyncHandler(async (req, res) => {
+router.put('/:id', requireOwnership('menus'), upload.fields([
+  { name: 'menuPdf', maxCount: 1 },
+  { name: 'menuImages', maxCount: 10 }
+]), [
+  body('name').optional().trim().notEmpty().withMessage('Menu name cannot be empty'),
+  body('menuLink').optional().isURL().withMessage('Menu link must be a valid URL'),
+  body('isActive').optional().isBoolean().withMessage('isActive must be boolean')
+], asyncHandler(async (req, res) => {
+  // Parse existingImageUrls from JSON string if it's a string (FormData sends it as JSON string)
+  if (req.body.existingImageUrls && typeof req.body.existingImageUrls === 'string') {
+    try {
+      req.body.existingImageUrls = JSON.parse(req.body.existingImageUrls);
+    } catch (e) {
+      req.body.existingImageUrls = [];
+    }
+  }
+  
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({
@@ -135,16 +191,75 @@ router.put('/:id', requireOwnership('menus'), [
   }
   
   const updateData = {};
-  const { name, description, isShared, isActive } = req.body;
+  const { name, description, menuLink, isActive, existingImageUrls } = req.body;
   
   if (name !== undefined) updateData.name = name;
   if (description !== undefined) updateData.description = description;
-  if (isShared !== undefined) updateData.isShared = isShared === 'true' || isShared === true;
+  if (menuLink !== undefined) updateData.menuLink = menuLink;
   if (isActive !== undefined) updateData.isActive = isActive === 'true' || isActive === true;
   
-  // Handle image upload
-  if (req.file) {
-    updateData.menuImageUrl = req.file.location;
+  // Handle PDF upload (single file)
+  if (req.files && req.files.menuPdf && req.files.menuPdf[0]) {
+    const pdfFile = req.files.menuPdf[0];
+    if (pdfFile.location) {
+      updateData.menuPdfUrl = pdfFile.location;
+    } else if (pdfFile.buffer && s3) {
+      try {
+        const fileName = `${generateUUID()}-${pdfFile.originalname}`;
+        updateData.menuPdfUrl = await uploadToS3(pdfFile.buffer, fileName, pdfFile.mimetype, 'menus');
+      } catch (error) {
+        logger.warn('S3 PDF upload failed, skipping PDF update:', error.message);
+      }
+    }
+  }
+  
+  // Handle multiple image uploads
+  // Merge existing images (that user wants to keep) with new images
+  let finalImageUrls = [];
+  
+  // Parse existing image URLs that user wants to keep
+  if (existingImageUrls !== undefined) {
+    try {
+      const existingUrls = Array.isArray(existingImageUrls) ? existingImageUrls : [];
+      finalImageUrls = [...existingUrls];
+    } catch (error) {
+      logger.warn('Error parsing existing image URLs:', error.message);
+    }
+  } else {
+    // If existingImageUrls not provided, get from database (preserve all existing)
+    const existingMenu = await menuRepository.findById(req.params.id, req.businessId);
+    if (existingMenu && existingMenu.menu_image_urls) {
+      try {
+        const existingUrls = typeof existingMenu.menu_image_urls === 'string'
+          ? JSON.parse(existingMenu.menu_image_urls)
+          : existingMenu.menu_image_urls;
+        finalImageUrls = Array.isArray(existingUrls) ? [...existingUrls] : [];
+      } catch (error) {
+        logger.warn('Error parsing existing menu images:', error.message);
+      }
+    }
+  }
+  
+  // Add new uploaded images
+  if (req.files && req.files.menuImages && req.files.menuImages.length > 0) {
+    for (const imageFile of req.files.menuImages) {
+      if (imageFile.location) {
+        finalImageUrls.push(imageFile.location);
+      } else if (imageFile.buffer && s3) {
+        try {
+          const fileName = `${generateUUID()}-${imageFile.originalname}`;
+          const imageUrl = await uploadToS3(imageFile.buffer, fileName, imageFile.mimetype, 'menus');
+          finalImageUrls.push(imageUrl);
+        } catch (error) {
+          logger.warn('S3 image upload failed, skipping image:', error.message);
+        }
+      }
+    }
+    // Update with merged list (existing + new)
+    updateData.menuImageUrls = finalImageUrls;
+  } else if (existingImageUrls !== undefined) {
+    // If no new images but existingImageUrls was provided (user removed some), update with kept images only
+    updateData.menuImageUrls = finalImageUrls;
   }
   
   const updatedMenu = await menuRepository.update(req.params.id, req.businessId, updateData);

@@ -7,18 +7,79 @@ const logger = require('../../utils/logger');
 
 /**
  * Get or create cart (order with status 'cart') for customer
+ * @param {string} businessId - Business user ID
+ * @param {string} branchId - Branch user ID or business user ID (actually userId, kept name for compatibility)
+ * @param {string} customerPhoneNumber - Customer phone number
  */
 async function getCart(businessId, branchId, customerPhoneNumber) {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:14',message:'getCart entry',data:{businessId,branchId,customerPhoneNumber},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
+  // If branchId is not provided or is same as businessId, try to find a branch for this business
+  let actualBranchId = branchId;
+  if (!actualBranchId || actualBranchId === businessId) {
+    try {
+      const branches = await queryMySQL(
+        `SELECT id FROM users WHERE parent_user_id = ? AND user_type = 'branch' AND is_active = true AND deleted_at IS NULL LIMIT 1`,
+        [businessId]
+      );
+      if (branches.length > 0) {
+        actualBranchId = branches[0].id;
+        logger.debug('Found branch for business', { businessId, branchId: actualBranchId });
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:25',message:'Found branch user ID',data:{businessId,actualBranchId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+      } else {
+        // No branch found - we'll need to handle this in INSERT
+        logger.debug('No branch found for business, will need to handle in INSERT', { businessId });
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:28',message:'No branch found',data:{businessId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+      }
+    } catch (error) {
+      logger.debug('Error finding branch, continuing with businessId', { error: error.message });
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:31',message:'Error finding branch',data:{error:error.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+    }
+  }
+  
   // Find existing cart order
-  const orders = await queryMySQL(`
-    SELECT * FROM orders 
-    WHERE business_id = ? 
-    AND branch_id = ? 
-    AND customer_phone_number = ? 
-    AND status = 'cart'
-    ORDER BY created_at DESC
-    LIMIT 1
-  `, [businessId, branchId, customerPhoneNumber]);
+  // Note: branch_id in orders table is from branches table, not users table
+  // We need to find a valid branch_id from branches table to match against
+  let orders = [];
+  try {
+    // First, try to find a branch_id from branches table (same logic as cart creation)
+    let lookupBranchId = null;
+    if (actualBranchId && actualBranchId !== businessId) {
+      // actualBranchId is a user ID, but we need a branch_id from branches table
+      // Find any branch_id for this business to use for lookup
+      const [branches] = await queryMySQL(
+        `SELECT id FROM branches WHERE business_id = ? LIMIT 1`,
+        [businessId]
+      );
+      if (branches.length > 0) {
+        lookupBranchId = branches[0].id;
+      }
+    }
+    
+    // Query for existing cart - use business_id and customer_phone_number ONLY
+    // Don't filter by branch_id to avoid multiple carts for same customer
+    // This ensures we always find the same cart regardless of which branch context we're in
+    orders = await queryMySQL(`
+      SELECT * FROM orders 
+      WHERE business_id = ? 
+      AND customer_phone_number = ? 
+      AND status = 'cart'
+      AND notes = '__cart__'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `, [businessId, customerPhoneNumber]);
+  } catch (error) {
+    logger.error('Error getting cart:', error);
+    // If query fails, return empty array (will create new cart)
+    orders = [];
+  }
   
   if (orders.length > 0) {
     const order = orders[0];
@@ -31,12 +92,15 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
       WHERE oi.order_id = ?
     `, [order.id]);
     
+    // If notes contains '__cart__', treat it as a cart (status='cart' for API)
+    const isCart = order.notes === '__cart__';
     return {
       id: order.id,
       business_id: order.business_id,
-      branch_id: order.branch_id,
+      user_id: order.user_id, // Use user_id instead of branch_id
+      branch_id: order.branch_id, // Keep for backward compatibility
       customer_phone_number: order.customer_phone_number,
-      status: order.status,
+      status: isCart ? 'cart' : order.status, // Return 'cart' if notes='__cart__', otherwise actual status
       items: items.map(item => ({
         item_id: item.item_id,
         name: item.name_at_time || item.name,
@@ -50,6 +114,10 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
       delivery_type: order.delivery_type,
       scheduled_for: order.scheduled_for,
       delivery_address_location_id: order.delivery_address_location_id,
+      location_address: order.location_address,
+      location_latitude: order.location_latitude,
+      location_longitude: order.location_longitude,
+      location_name: order.location_name,
       customer_name: order.customer_name,
       notes: order.notes,
       language: order.language_used,
@@ -58,28 +126,124 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
     };
   }
   
-  // Create new cart (order with status 'cart')
+  // Create new cart (order with status 'pending' and notes='__cart__')
   const orderId = generateUUID();
   const connection = await getMySQLConnection();
   
   try {
     await connection.beginTransaction();
     
-    await connection.query(`
-      INSERT INTO orders (
-        id, business_id, branch_id, customer_phone_number,
-        status, subtotal, delivery_price, total, delivery_type
-      ) VALUES (?, ?, ?, ?, 'cart', 0, 0, 0, 'takeaway')
-    `, [orderId, businessId, branchId, customerPhoneNumber]);
+    // Find branch if not already found (actualBranchId from earlier query)
+    let insertBranchId = actualBranchId;
+    let insertUserId = businessId; // Default to businessId for user_id
+    if (!insertBranchId || insertBranchId === businessId) {
+      // Use connection.query instead of queryMySQL when inside a transaction
+      const [branchUsers] = await connection.query(
+        `SELECT id FROM users WHERE parent_user_id = ? AND user_type = 'branch' AND is_active = true AND deleted_at IS NULL LIMIT 1`,
+        [businessId]
+      );
+      if (branchUsers.length > 0) {
+        insertUserId = branchUsers[0].id; // Use branch user ID for user_id
+        // Find a valid branch_id from branches table for FK constraint (workaround for deprecated column)
+        const [branches] = await connection.query(
+          `SELECT id FROM branches WHERE business_id = ? LIMIT 1`,
+          [businessId]
+        );
+        if (branches.length > 0) {
+          insertBranchId = branches[0].id; // Use valid branch_id from branches table
+        } else {
+          // Fallback: use any branch_id from branches table
+          const [anyBranch] = await connection.query(`SELECT id FROM branches LIMIT 1`);
+          insertBranchId = anyBranch[0]?.id || null;
+        }
+        logger.debug('Found branch for cart creation', { businessId, userId: insertUserId, branchId: insertBranchId });
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:143',message:'Found branch user ID and branch_id',data:{businessId,insertUserId,insertBranchId},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
+      } else {
+        // No branch user found - use businessId for user_id
+        insertUserId = businessId;
+        // Find a valid branch_id from branches table for FK constraint
+        const [branches] = await connection.query(
+          `SELECT id FROM branches WHERE business_id = ? LIMIT 1`,
+          [businessId]
+        );
+        if (branches.length > 0) {
+          insertBranchId = branches[0].id;
+        } else {
+          const [anyBranch] = await connection.query(`SELECT id FROM branches LIMIT 1`);
+          insertBranchId = anyBranch[0]?.id || null;
+        }
+        logger.debug('No branch user found, using businessId for user_id', { businessId, branchId: insertBranchId });
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:158',message:'No branch user, using businessId',data:{businessId,insertUserId,insertBranchId},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
+      }
+    } else {
+      // actualBranchId was found - it's a user ID from users table, use it for user_id
+      insertUserId = insertBranchId; // actualBranchId is a user ID, use for user_id
+      // Find a valid branch_id from branches table for FK constraint (actualBranchId is NOT a branch_id)
+      const [branches] = await connection.query(
+        `SELECT id FROM branches WHERE business_id = ? LIMIT 1`,
+        [businessId]
+      );
+      if (branches.length > 0) {
+        insertBranchId = branches[0].id; // Use valid branch_id from branches table
+      } else {
+        // Fallback: use any branch_id from branches table
+        const [anyBranch] = await connection.query(`SELECT id FROM branches LIMIT 1`);
+        insertBranchId = anyBranch[0]?.id || null;
+      }
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:176',message:'Using actualBranchId as user_id, finding branch_id',data:{businessId,insertUserId,insertBranchId},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
+    }
+    
+    // Ensure insertBranchId is never null (branch_id is NOT NULL in DB)
+    if (!insertBranchId) {
+      // Final fallback: get any branch_id from branches table
+      const [finalBranch] = await connection.query(`SELECT id FROM branches LIMIT 1`);
+      if (finalBranch.length > 0) {
+        insertBranchId = finalBranch[0].id;
+      } else {
+        throw new Error('No branches found in database - cannot create cart without valid branch_id');
+      }
+    }
+    
+    // Insert with user_id (new column) and branch_id (required for FK constraint, workaround)
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:202',message:'Before INSERT into orders',data:{orderId,businessId,insertUserId,insertBranchId,customerPhoneNumber},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    try {
+      await connection.query(`
+        INSERT INTO orders (
+          id, business_id, user_id, branch_id, customer_phone_number,
+          status, subtotal, delivery_price, total, delivery_type, notes
+        ) VALUES (?, ?, ?, ?, ?, 'cart', 0, 0, 0, 'takeaway', '__cart__')
+      `, [orderId, businessId, insertUserId, insertBranchId, customerPhoneNumber]);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:173',message:'INSERT successful',data:{orderId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+    } catch (insertError) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:175',message:'INSERT failed',data:{error:insertError.message,orderId,businessId,insertUserId,insertBranchId:insertBranchId||'NULL',customerPhoneNumber},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      throw insertError;
+    }
     
     await connection.commit();
     
+    // Return cart object (status is 'cart' in DB)
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:176',message:'Cart created successfully',data:{orderId,businessId,insertUserId,insertBranchId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
     return {
       id: orderId,
       business_id: businessId,
-      branch_id: branchId,
+      user_id: insertUserId, // user_id now used
+      branch_id: insertBranchId, // branch_id is deprecated, kept for backward compatibility
       customer_phone_number: customerPhoneNumber,
-      status: 'cart',
+      status: 'cart', // Return 'cart' for API compatibility (DB has 'pending' with notes='__cart__')
       items: [],
       subtotal: 0,
       delivery_price: 0,
@@ -136,13 +300,36 @@ async function updateCart(businessId, branchId, customerPhoneNumber, updates) {
     }
     
     if (updates.notes !== undefined) {
+      // CRITICAL: Keep '__cart__' marker to identify active carts
+      // Append delivery info as a separate field or skip notes update
+      // We use location_address field now, so don't update notes at all for carts
       updateFields.push('notes = ?');
-      values.push(updates.notes);
+      values.push('__cart__'); // Always keep the cart marker
     }
     
     if (updates.language !== undefined) {
       updateFields.push('language_used = ?');
       values.push(updates.language);
+    }
+    
+    if (updates.location_latitude !== undefined) {
+      updateFields.push('location_latitude = ?');
+      values.push(updates.location_latitude);
+    }
+    
+    if (updates.location_longitude !== undefined) {
+      updateFields.push('location_longitude = ?');
+      values.push(updates.location_longitude);
+    }
+    
+    if (updates.location_name !== undefined) {
+      updateFields.push('location_name = ?');
+      values.push(updates.location_name);
+    }
+    
+    if (updates.location_address !== undefined) {
+      updateFields.push('location_address = ?');
+      values.push(updates.location_address);
     }
     
     if (updates.subtotal !== undefined) {
@@ -164,11 +351,38 @@ async function updateCart(businessId, branchId, customerPhoneNumber, updates) {
       updateFields.push('updated_at = CURRENT_TIMESTAMP');
       values.push(cart.id);
       
+      // Update cart (identified by notes='__cart__' and status='cart')
       await connection.query(`
         UPDATE orders 
         SET ${updateFields.join(', ')}
-        WHERE id = ? AND status = 'cart'
+        WHERE id = ? AND status = 'cart' AND notes = '__cart__'
       `, values);
+    }
+    
+    // If delivery_price was updated, recalculate total
+    if (updates.delivery_price !== undefined) {
+      const [items] = await connection.query(`
+        SELECT quantity, price_at_time 
+        FROM order_items 
+        WHERE order_id = ?
+      `, [cart.id]);
+      
+      const subtotal = items.reduce((sum, item) => sum + (parseFloat(item.price_at_time) * item.quantity), 0);
+      const deliveryPrice = parseFloat(updates.delivery_price);
+      const total = subtotal + deliveryPrice;
+      
+      await connection.query(`
+        UPDATE orders 
+        SET subtotal = ?, total = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `, [subtotal, total, cart.id]);
+      
+      logger.info('Total recalculated after delivery price update', { 
+        cartId: cart.id, 
+        subtotal, 
+        deliveryPrice, 
+        total 
+      });
     }
     
     await connection.commit();
@@ -192,8 +406,8 @@ async function addItemToCart(businessId, branchId, customerPhoneNumber, item) {
   try {
     await connection.beginTransaction();
     
-    // Check if item already in cart
-    const existingItems = await queryMySQL(`
+    // Check if item already in cart (use connection.query for transaction isolation)
+    const [existingItems] = await connection.query(`
       SELECT * FROM order_items 
       WHERE order_id = ? AND item_id = ?
     `, [cart.id, item.itemId]);
@@ -205,7 +419,7 @@ async function addItemToCart(businessId, branchId, customerPhoneNumber, item) {
       
       await connection.query(`
         UPDATE order_items 
-        SET quantity = ?, updated_at = CURRENT_TIMESTAMP
+        SET quantity = ?
         WHERE id = ?
       `, [newQuantity, existingItem.id]);
     } else {
@@ -226,8 +440,8 @@ async function addItemToCart(businessId, branchId, customerPhoneNumber, item) {
       ]);
     }
     
-    // Recalculate totals
-    const items = await queryMySQL(`
+    // Recalculate totals (use connection.query to see items within transaction)
+    const [items] = await connection.query(`
       SELECT quantity, price_at_time 
       FROM order_items 
       WHERE order_id = ?
@@ -270,8 +484,8 @@ async function removeItemFromCart(businessId, branchId, customerPhoneNumber, ite
       WHERE order_id = ? AND item_id = ?
     `, [cart.id, itemId]);
     
-    // Recalculate totals
-    const items = await queryMySQL(`
+    // Recalculate totals (use connection.query to see items within transaction)
+    const [items] = await connection.query(`
       SELECT quantity, price_at_time 
       FROM order_items 
       WHERE order_id = ?
@@ -318,8 +532,8 @@ async function updateItemQuantity(businessId, branchId, customerPhoneNumber, ite
       WHERE order_id = ? AND item_id = ?
     `, [quantity, cart.id, itemId]);
     
-    // Recalculate totals
-    const items = await queryMySQL(`
+    // Recalculate totals (use connection.query to see items within transaction)
+    const [items] = await connection.query(`
       SELECT quantity, price_at_time 
       FROM order_items 
       WHERE order_id = ?
@@ -379,7 +593,7 @@ async function clearCart(businessId, branchId, customerPhoneNumber) {
 }
 
 /**
- * Confirm cart (change status from 'cart' to 'pending')
+ * Confirm cart (remove cart marker, order is already 'pending')
  */
 async function confirmCart(businessId, branchId, customerPhoneNumber) {
   const cart = await getCart(businessId, branchId, customerPhoneNumber);
@@ -388,11 +602,12 @@ async function confirmCart(businessId, branchId, customerPhoneNumber) {
   try {
     await connection.beginTransaction();
     
-    // Update status to 'pending'
+    // Remove cart marker (notes='__cart__') and set status to 'accepted'
+    // This effectively converts the cart to a real order
     await connection.query(`
       UPDATE orders 
-      SET status = 'pending', updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND status = 'cart'
+      SET notes = NULL, status = 'accepted', updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status = 'cart' AND notes = '__cart__'
     `, [cart.id]);
     
     // Create initial status history entry
@@ -432,16 +647,28 @@ function getCartSummary(cart) {
   let summary = '📋 **Your Cart:**\n\n';
   
   for (const item of cart.items) {
-    summary += `• ${item.name} x${item.quantity} - ${item.price * item.quantity}\n`;
+    summary += `• ${item.name} x${item.quantity} - $${(item.price * item.quantity).toFixed(2)}\n`;
   }
   
-  summary += `\nSubtotal: ${cart.subtotal}\n`;
+  summary += `\nSubtotal: $${parseFloat(cart.subtotal).toFixed(2)}\n`;
+  
+  // Add delivery type and price
+  if (cart.delivery_type) {
+    summary += `Delivery Type: ${cart.delivery_type === 'delivery' ? 'Delivery' : 
+                                      cart.delivery_type === 'takeaway' ? 'Takeaway' : 
+                                      'On-site'}\n`;
+  }
   
   if (cart.delivery_price > 0) {
-    summary += `Delivery: ${cart.delivery_price}\n`;
+    summary += `Delivery Fee: $${parseFloat(cart.delivery_price).toFixed(2)}\n`;
   }
   
-  summary += `**Total: ${cart.total}**`;
+  // Add delivery address if available
+  if (cart.location_address) {
+    summary += `\nDelivery Address: ${cart.location_address}\n`;
+  }
+  
+  summary += `\n**Total: $${parseFloat(cart.total).toFixed(2)}**`;
   
   return summary;
 }

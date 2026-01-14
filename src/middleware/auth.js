@@ -54,10 +54,12 @@ async function authenticate(req, res, next) {
         });
       }
       
-      // Attach user to request
+      // Attach user to request (user_type is sufficient for authorization)
       req.user = {
         id: user.id,
         userType: user.user_type,
+        userRole: user.user_type, // Use user_type as user_role since column doesn't exist
+        parentUserId: null, // Not in schema
         email: user.email
       };
       
@@ -101,7 +103,16 @@ function requireUserType(...allowedTypes) {
       });
     }
     
-    if (!allowedTypes.includes(req.user.userType)) {
+    // Branch users should have same permissions as business users
+    const userType = req.user.userType;
+    const allowedTypesWithBranch = allowedTypes.map(type => {
+      if (type === CONSTANTS.USER_TYPES.BUSINESS) {
+        return [type, CONSTANTS.USER_TYPES.BRANCH];
+      }
+      return [type];
+    }).flat();
+    
+    if (!allowedTypesWithBranch.includes(userType)) {
       return res.status(403).json({
         success: false,
         error: { message: 'Insufficient permissions' }

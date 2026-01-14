@@ -54,6 +54,18 @@ async function processMessage(message, value) {
     
     const { business, branch } = context;
     
+    // Check if chatbot is enabled for this business
+    if (business.chatbot_enabled === false) {
+      logger.info('Chatbot is disabled for this business', { businessId: business.id, from: message.from });
+      await messageSender.sendMessage({
+        business,
+        branch,
+        to: message.from,
+        message: 'Our chatbot is currently unavailable. Please contact us directly at ' + (business.contact_phone_number || business.whatsapp_phone_number || 'our phone number') + '. Thank you!'
+      });
+      return;
+    }
+    
     // Extract message details
     const from = message.from;
     const messageId = message.id;

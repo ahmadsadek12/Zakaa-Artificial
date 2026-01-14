@@ -11,22 +11,37 @@ const logger = require('../../utils/logger');
  */
 async function buildPrompt({ business, branch, customerPhoneNumber, message, language, messageHistory = [] }) {
   // Fetch business context (menus, items, policies, hours)
+  // Menus belong to business - all branches of a business share all menus
   const menus = await queryMySQL(
-    `SELECT m.* FROM menus m 
-     JOIN branch_menus bm ON m.id = bm.menu_id 
-     WHERE bm.branch_id = ? AND m.is_active = true`,
-    [branch?.id || business.id]
-  );
-  
-  const items = await queryMySQL(
-    `SELECT i.*, m.name as menu_name FROM items i
-     LEFT JOIN menus m ON i.menu_id = m.id
-     WHERE i.business_id = ? AND i.availability = 'available' AND i.deleted_at IS NULL
-     ORDER BY m.name, i.name`,
+    `SELECT * FROM menus 
+     WHERE business_id = ? AND is_active = true`,
     [business.id]
   );
   
-  // Get cart if exists
+  // Get items for business
+  // For now, get all items for the business (can filter by branch later if needed)
+  // Items can be associated with specific branch via branch_id, or be available to all branches (branch_id IS NULL)
+  let itemsQuery = `
+    SELECT i.*, m.name as menu_name FROM items i
+    LEFT JOIN menus m ON i.menu_id = m.id
+    WHERE i.business_id = ? AND i.availability = 'available' AND i.deleted_at IS NULL
+  `;
+  const itemsParams = [business.id];
+  
+  // Try to filter by branch if branch exists
+  if (branch?.id) {
+    // Branch is now a user with user_type='branch', branch.id is the user ID
+    // Include items that belong to this branch or have no specific branch
+    itemsQuery += ` AND (i.branch_id = ? OR i.branch_id IS NULL)`;
+    itemsParams.push(branch.id);
+  }
+  // If no branch specified - show all items for business (branch_id IS NULL or any)
+  
+  itemsQuery += ` ORDER BY m.name, i.name`;
+  
+  const items = await queryMySQL(itemsQuery, itemsParams);
+  
+  // Get cart if exists (branch?.id is actually userId)
   const cart = await cartManager.getCart(business.id, branch?.id || business.id, customerPhoneNumber);
   
   // Get opening hours
@@ -82,6 +97,12 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
   // Check if open now
   const openStatus = await conversationManager.isOpenNow(business.id, branch?.id || business.id);
   
+  // Determine business type context
+  const isFoodAndBeverage = business.business_type === 'f & b';
+  const isServices = business.business_type === 'services';
+  const isProducts = business.business_type === 'products';
+  const businessTypeContext = isFoodAndBeverage ? 'restaurant' : (isServices ? 'service business' : (isProducts ? 'product business' : 'business'));
+  
   // Build opening hours text
   const hoursText = openingHours.length > 0 
     ? openingHours.map(h => {
@@ -125,66 +146,87 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
       ).join('\n')}`
     : '';
   
-  // Build system prompt
-  const systemPrompt = `You are a friendly and helpful AI assistant for ${business.business_name}${branch ? ` - ${branch.branch_name}` : ''}.
-You handle customer service and order taking via WhatsApp.
+  // Determine response language - use detected language, not default
+  // This ensures the AI responds in the same language the customer is using
+  const responseLanguage = language || business.default_language || 'english';
+  
+  // Build language-specific greeting templates
+  const languageGreetings = {
+    arabic: 'مرحباً',
+    arabizi: 'Marhaba',  // Lebanese arabizi greeting
+    english: 'Hello',
+    french: 'Bonjour'
+  };
+  
+  // Build business-specific context
+  let businessContext = `You are a helpful AI assistant for ${business.business_name}, a ${businessTypeContext}.`;
+  
+  // Add business-type-specific context
+  if (isFoodAndBeverage) {
+    if (openStatus.isOpen) {
+      businessContext += ` We're currently open.`;
+    } else {
+      businessContext += ` We're currently closed (${openStatus.reason}). You can still take orders for scheduled delivery/pickup.`;
+    }
+    
+    if (business.allow_scheduled_orders) {
+      businessContext += ` We accept scheduled orders - customers can order for a future time.`;
+    }
+  } else if (isServices) {
+    businessContext += ` We offer services that can be scheduled.`;
+    businessContext += ` Status: ${openStatus.isOpen ? 'Open' : `Closed (${openStatus.reason})`}`;
+  } else {
+    businessContext += ` Status: ${openStatus.isOpen ? 'Open' : `Closed (${openStatus.reason})`}`;
+  }
+  
+  // Language instruction map (only English and Arabic)
+  const languageInstructions = {
+    'arabic': 'You MUST respond ONLY in Arabic (عربي). Use Arabic script for all responses.',
+    'english': 'You MUST respond ONLY in English.'
+  };
 
-**Your Role:**
-- Greet customers warmly and naturally
-- Answer questions about the menu, items, prices, and policies
-- Help customers build their order (add items, modify quantities, remove items)
-- Handle date/time selection for scheduled orders
-- Provide information about opening hours and availability
-- Confirm orders when customer is ready
-- Respond naturally and conversationally
+  // Concise prompt - keep it short to preserve conversation history context
+  const systemPrompt = `${businessContext}
 
-**Business Information:**
-- Name: ${business.business_name}
-- Type: ${business.business_type}
-- Default Language: ${business.default_language || 'arabic'}
-${branch ? `- Branch: ${branch.branch_name}` : ''}
+**CRITICAL: LANGUAGE INSTRUCTION**
+${languageInstructions[responseLanguage] || languageInstructions['english']}
+DO NOT mix languages. ALL text must be in ${responseLanguage}.
+If customer asks to change language, tell them only English and Arabic are available.
 
-**Current Status:**
-- Open Now: ${openStatus.isOpen ? 'Yes' : `No (${openStatus.reason})`}
+Cart: ${cartSummary}
 
-**Opening Hours:**
+${!openStatus.isOpen && isFoodAndBeverage ? `
+IMPORTANT - We're Closed:
+- Inform customer we're currently closed
+- Offer to schedule order for when we open (use set_scheduled_time function)
+- Accept natural language time like "tomorrow 7pm" or "Friday evening"
+- Opening hours:
 ${hoursText}
+` : ''}
 
-**Menu & Items:**
-${itemsText}
+${isServices ? `
+Service Scheduling:
+- Services can be scheduled for future times
+- Some services require minimum advance booking (check item min_schedule_hours)
+- Use set_scheduled_time() to schedule services
+- Opening hours:
+${hoursText}
+` : ''}
 
-**Policies:**
-${policies.length > 0 
-  ? policies.map(p => `- ${p.policy_type}: ${p.description}`).join('\n')
-  : 'No specific policies listed'}
+Address Format (Lebanese):
+Lebanese addresses: "Street, Building, Block/Apt, Floor, Landmark"
+Examples: "Salim Salam, Abraj Beirut, Block B2, 21, 7ad LIU"
+Common words: "7ad/3ad" (next to), "faw2" (above), "ta7et" (below), "3al" (on/at)
+Save FULL address exactly as provided with set_delivery_address().
 
-**Current Cart:**
-${cartSummary}
+Rules:
+- Use get_menu_items() to show menu/catalog
+- Use add_item_to_cart() when customer wants items/services
+- Use set_delivery_address() for delivery addresses
+${(isFoodAndBeverage && business.allow_scheduled_orders) || isServices ? '- Use set_scheduled_time() when customer wants to schedule (parse natural language)\n' : ''}- Use confirm_order() only when: cart has items + delivery type set + address (if delivery)${(isFoodAndBeverage && business.allow_scheduled_orders) || isServices ? ' + scheduled time (if scheduling)' : ''}
+- Keep responses short and friendly`;
 
-**Important Rules:**
-1. ONLY offer items that exist in the menu above
-2. NEVER invent items, prices, or information
-3. If asked about something not in the menu, politely say it's not available
-4. Help customers add items to cart by name (match items from menu above)
-5. For quantities, ask if not specified
-6. For scheduled orders, check availability and suggest available times
-7. For delivery, ask for delivery address if needed
-8. When customer confirms order, say "Order confirmed! Your order #ORDER_ID has been placed."
-9. Respond naturally in ${language || business.default_language || 'arabic'} language
-10. Be friendly, helpful, and conversational
-
-**Order Actions You Can Take:**
-- To add item: Say "Adding [item name] to your cart"
-- To show cart: Display current cart items and total
-- To remove item: Say "Removed [item name] from cart"
-- To confirm order: Say "Order confirmed! Your order #ORDER_ID has been placed."
-- To schedule: Ask for date and time, then suggest available slots
-
-**Current conversation language:** ${language || 'unknown'}${conversationContext}`;
-
-  const userPrompt = `Customer (${customerPhoneNumber}) says: "${message}"
-
-Based on the context above, respond naturally and helpfully. If this is a greeting, greet them warmly and offer to help. If they're asking about items, explain what's available. If they want to order, help them add items to cart. If they're ready to checkout, confirm the order.`;
+  const userPrompt = `Customer: "${message}"`;
 
   return {
     system: systemPrompt,

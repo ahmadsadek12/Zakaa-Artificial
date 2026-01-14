@@ -84,7 +84,7 @@ async function update(policyId, updateData) {
 /**
  * Delete policy
  */
-async function delete(policyId) {
+async function deletePolicy(policyId) {
   await queryMySQL('DELETE FROM policies WHERE id = ?', [policyId]);
 }
 
@@ -93,5 +93,5 @@ module.exports = {
   findByOwner,
   create,
   update,
-  delete
+  deletePolicy
 };

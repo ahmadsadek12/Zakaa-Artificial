@@ -59,15 +59,17 @@ async function create(menuData) {
     await connection.query(`
       INSERT INTO menus (
         id, business_id, name, description, is_shared,
-        menu_image_url, is_active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        menu_pdf_url, menu_image_urls, menu_link, is_active
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       menuId,
       menuData.businessId,
       menuData.name,
       menuData.description || null,
       menuData.isShared !== undefined ? menuData.isShared : false,
-      menuData.menuImageUrl || null,
+      menuData.menuPdfUrl || null,
+      menuData.menuImageUrls ? JSON.stringify(menuData.menuImageUrls) : null,
+      menuData.menuLink || null,
       menuData.isActive !== undefined ? menuData.isActive : true
     ]);
     
@@ -90,7 +92,9 @@ async function update(menuId, businessId, updateData) {
     name: 'name',
     description: 'description',
     isShared: 'is_shared',
-    menuImageUrl: 'menu_image_url',
+    menuPdfUrl: 'menu_pdf_url',
+    menuImageUrls: 'menu_image_urls',
+    menuLink: 'menu_link',
     isActive: 'is_active'
   };
   
@@ -131,44 +135,22 @@ async function softDelete(menuId, businessId) {
 }
 
 /**
- * Attach menu to branches
+ * Attach menu to branches (DEPRECATED - menus belong to business, all branches share them)
+ * This function is kept for backward compatibility but does nothing since branch_menus table is removed
  */
 async function attachToBranches(menuId, businessId, branchIds) {
-  const connection = await getMySQLConnection();
+  // Menus belong to business - all branches of a business share all menus
+  // branch_menus table has been removed
+  // This function is kept for backward compatibility but is a no-op
   
-  try {
-    await connection.beginTransaction();
-    
-    // Verify menu belongs to business
-    const menu = await findById(menuId, businessId);
-    if (!menu) {
-      throw new Error('Menu not found');
-    }
-    
-    // Remove existing attachments
-    await connection.query(
-      'DELETE FROM branch_menus WHERE menu_id = ?',
-      [menuId]
-    );
-    
-    // Add new attachments
-    for (const branchId of branchIds) {
-      const id = generateUUID();
-      await connection.query(`
-        INSERT INTO branch_menus (id, branch_id, menu_id)
-        SELECT ?, ?, ?
-        FROM branches
-        WHERE id = ? AND business_id = ? AND deleted_at IS NULL
-      `, [id, branchId, menuId, branchId, businessId]);
-    }
-    
-    await connection.commit();
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
+  // Verify menu belongs to business
+  const menu = await findById(menuId, businessId);
+  if (!menu) {
+    throw new Error('Menu not found');
   }
+  
+  // No-op - menus are automatically available to all branches of the business
+  return;
 }
 
 module.exports = {

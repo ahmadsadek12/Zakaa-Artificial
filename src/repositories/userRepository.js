@@ -104,8 +104,13 @@ async function update(userId, updateData) {
     contactPhoneNumber: 'contact_phone_number',
     businessName: 'business_name',
     businessType: 'business_type',
+    businessDescription: 'business_description',
     defaultLanguage: 'default_language',
+    languages: 'languages',
     timezone: 'timezone',
+    locationLatitude: 'location_latitude',
+    locationLongitude: 'location_longitude',
+    deliveryRadiusKm: 'delivery_radius_km',
     subscriptionType: 'subscription_type',
     subscriptionPrice: 'subscription_price',
     subscriptionStatus: 'subscription_status',
@@ -115,10 +120,17 @@ async function update(userId, updateData) {
     allowDelivery: 'allow_delivery',
     allowTakeaway: 'allow_takeaway',
     allowOnSite: 'allow_on_site',
+    chatbotEnabled: 'chatbot_enabled',
     whatsappPhoneNumber: 'whatsapp_phone_number',
     whatsappPhoneNumberId: 'whatsapp_phone_number_id',
+    whatsappBusinessAccountId: 'whatsapp_business_account_id',
     whatsappAccessTokenEncrypted: 'whatsapp_access_token_encrypted',
-    isActive: 'is_active'
+    telegramBotToken: 'telegram_bot_token',
+    isActive: 'is_active',
+    locationId: 'location_id',
+    locationLatitude: 'location_latitude',
+    locationLongitude: 'location_longitude',
+    deliveryRadiusKm: 'delivery_radius_km'
   };
   
   const allowedFields = Object.values(fieldMap);
@@ -130,7 +142,12 @@ async function update(userId, updateData) {
     const dbKey = fieldMap[key] || key.replace(/([A-Z])/g, '_$1').toLowerCase();
     if (allowedFields.includes(dbKey) && value !== undefined) {
       updates.push(`${dbKey} = ?`);
-      values.push(value);
+      // Handle JSON fields
+      if (key === 'languages' && Array.isArray(value)) {
+        values.push(JSON.stringify(value));
+      } else {
+        values.push(value);
+      }
     }
   }
   
@@ -203,6 +220,162 @@ async function softDelete(userId) {
   );
 }
 
+/**
+ * Find branches by parent business ID (branches are in users table)
+ */
+async function findBranchesByParent(parentUserId) {
+  // Branches are stored in users table with user_type='branch'
+  return await queryMySQL(
+    `SELECT u.*, l.city, l.street, l.building, l.floor, l.notes as location_notes, l.latitude, l.longitude
+     FROM users u
+     LEFT JOIN locations l ON u.location_id = l.id
+     WHERE u.user_type = 'branch' 
+       AND u.parent_user_id = ?
+       AND u.deleted_at IS NULL
+       AND u.is_active = true
+     ORDER BY u.created_at DESC`,
+    [parentUserId]
+  );
+}
+
+/**
+ * Create branch user (branches are stored in users table)
+ * Creates a user account with user_type='branch' and parent_user_id pointing to the business
+ */
+async function createBranchUser(parentUserId, branchData) {
+  const connection = await getMySQLConnection();
+  const branchUserId = generateUUID();
+  const hashedPassword = branchData.password 
+    ? await bcrypt.hash(branchData.password, 10) 
+    : null;
+  
+  if (!hashedPassword) {
+    throw new Error('Password is required for branch users');
+  }
+  
+  try {
+    await connection.beginTransaction();
+    
+    // Get parent business to inherit business_type
+    const parentBusiness = await findById(parentUserId);
+    if (!parentBusiness) {
+      throw new Error('Parent business not found');
+    }
+    
+    // Create location if provided
+    let locationId = branchData.locationId;
+    if (branchData.location && !locationId) {
+      locationId = generateUUID();
+      await connection.query(`
+        INSERT INTO locations (id, city, street, building, floor, notes, latitude, longitude, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      `, [
+        locationId,
+        branchData.location.city,
+        branchData.location.street,
+        branchData.location.building || null,
+        branchData.location.floor || null,
+        branchData.location.notes || null,
+        branchData.location.latitude || null,
+        branchData.location.longitude || null
+      ]);
+    }
+    
+    // Create branch user in users table
+    await connection.query(`
+      INSERT INTO users (
+        id, user_type, user_role, parent_user_id, email, contact_phone_number, is_active,
+        business_name, business_type, default_language, timezone,
+        subscription_type, subscription_price, subscription_status,
+        allow_scheduled_orders, allow_delivery, allow_takeaway, allow_on_site,
+        location_id, password_hash, whatsapp_phone_number, whatsapp_phone_number_id,
+        whatsapp_access_token_encrypted, created_at
+      ) VALUES (?, 'branch', 'branch', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+    `, [
+      branchUserId,
+      parentUserId,
+      branchData.email,
+      branchData.contactPhoneNumber || null,
+      branchData.isActive !== undefined ? branchData.isActive : true,
+      branchData.branchName,
+      parentBusiness.business_type || null,
+      branchData.defaultLanguage || 'arabic',
+      branchData.timezone || 'Asia/Beirut',
+      'standard',
+      0,
+      'active',
+      true,
+      true,
+      true,
+      true,
+      locationId,
+      hashedPassword,
+      branchData.whatsappPhoneNumber || null,
+      branchData.whatsappPhoneNumberId || null,
+      branchData.whatsappAccessTokenEncrypted || null
+    ]);
+    
+    await connection.commit();
+    
+    // Return user without password
+    const user = await findById(branchUserId);
+    if (user) {
+      delete user.password_hash;
+    }
+    return user;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Create branch (branches are stored in branches table, not users table)
+ * This method is kept for backward compatibility but should use branchRepository instead
+ */
+async function createBranch(parentUserId, branchData) {
+  // Redirect to branchRepository which handles branches table correctly
+  const branchRepository = require('./branchRepository');
+  return await branchRepository.create({
+    businessId: parentUserId,
+    branchName: branchData.businessName || branchData.branchName,
+    location: branchData.location,
+    contactPhoneNumber: branchData.contactPhoneNumber,
+    whatsappPhoneNumber: branchData.whatsappPhoneNumber,
+    whatsappPhoneNumberId: branchData.whatsappPhoneNumberId,
+    whatsappAccessTokenEncrypted: branchData.whatsappAccessTokenEncrypted,
+    isActive: branchData.isActive !== undefined ? branchData.isActive : true
+  });
+}
+
+/**
+ * Check if user is a branch (branches are in users table)
+ * This method checks if a user exists with user_type='branch'
+ */
+async function isBranch(userId) {
+  const users = await queryMySQL(
+    `SELECT id FROM users WHERE id = ? AND user_type = 'branch' AND is_active = true AND deleted_at IS NULL`,
+    [userId]
+  );
+  return users && users.length > 0;
+}
+
+/**
+ * Get parent business for a branch (branches are in users table)
+ */
+async function getParentBusiness(userId) {
+  const users = await queryMySQL(
+    `SELECT parent_user_id FROM users WHERE id = ? AND user_type = 'branch' AND is_active = true AND deleted_at IS NULL`,
+    [userId]
+  );
+  if (!users || users.length === 0 || !users[0].parent_user_id) {
+    return null;
+  }
+  return await findById(users[0].parent_user_id);
+}
+
 module.exports = {
   findById,
   findByEmail,
@@ -212,5 +385,10 @@ module.exports = {
   updatePassword,
   verifyPassword,
   verifyPasswordByEmail,
-  softDelete
+  softDelete,
+  findBranchesByParent,
+  createBranch,
+  createBranchUser,
+  isBranch,
+  getParentBusiness
 };

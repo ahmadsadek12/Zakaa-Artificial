@@ -18,7 +18,7 @@ router.post('/register', [
   body('email').isEmail().withMessage('Valid email required'),
   body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
   body('businessName').notEmpty().withMessage('Business name required'),
-  body('businessType').isIn(['restaurant', 'sports_court', 'salon', 'other']).withMessage('Invalid business type'),
+  body('businessType').isIn(['f & b', 'services', 'products']).withMessage('Invalid business type'),
   body('contactPhoneNumber').optional().isMobilePhone().withMessage('Valid phone number required')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
@@ -40,11 +40,13 @@ router.post('/register', [
     });
   }
   
-  // Create user
+  // Create user with user_role and parent_user_id
   const user = await userRepository.create({
     email,
     password,
     userType: 'business',
+    userRole: 'business',
+    parentUserId: null,
     businessName,
     businessType,
     contactPhoneNumber
@@ -200,6 +202,26 @@ router.get('/me', authenticate, asyncHandler(async (req, res) => {
   
   // Remove sensitive data
   delete user.password_hash;
+  
+  // Convert MySQL boolean (tinyint) fields to proper JavaScript booleans
+  if (user.chatbot_enabled !== undefined) {
+    user.chatbot_enabled = Boolean(user.chatbot_enabled);
+  }
+  if (user.is_active !== undefined) {
+    user.is_active = Boolean(user.is_active);
+  }
+  if (user.allow_scheduled_orders !== undefined) {
+    user.allow_scheduled_orders = Boolean(user.allow_scheduled_orders);
+  }
+  if (user.allow_delivery !== undefined) {
+    user.allow_delivery = Boolean(user.allow_delivery);
+  }
+  if (user.allow_takeaway !== undefined) {
+    user.allow_takeaway = Boolean(user.allow_takeaway);
+  }
+  if (user.allow_on_site !== undefined) {
+    user.allow_on_site = Boolean(user.allow_on_site);
+  }
   
   res.json({
     success: true,

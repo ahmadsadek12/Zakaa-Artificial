@@ -7,6 +7,8 @@ const logger = require('./src/utils/logger');
 const { connectMongoDB, getMySQLPool } = require('./src/config/database');
 const CONSTANTS = require('./src/config/constants');
 const { startArchiveJob } = require('./src/jobs/archiveJob');
+const { startCartCleanupJob } = require('./src/jobs/cartCleanupJob');
+const cartTimeoutJob = require('./src/jobs/cartTimeoutJob');
 
 const PORT = CONSTANTS.PORT;
 
@@ -21,10 +23,8 @@ async function startServer() {
     }
     logger.info('MySQL connection pool ready');
     
-    // Test MongoDB connection
-    logger.info('Testing MongoDB connection...');
-    await connectMongoDB();
-    logger.info('MongoDB connection ready');
+    // MongoDB disabled - skipping connection
+    logger.info('MongoDB disabled - message logging and conversation history will be skipped');
     
     // Start server
     app.listen(PORT, () => {
@@ -35,6 +35,14 @@ async function startServer() {
       // Start archive job
       startArchiveJob();
       logger.info('Archive job started');
+      
+      // Start cart cleanup job
+      startCartCleanupJob();
+      logger.info('Cart cleanup job started');
+      
+      // Start cart timeout job
+      cartTimeoutJob.start();
+      logger.info('Cart timeout job started');
     });
   } catch (error) {
     logger.error('Failed to start server:', error);

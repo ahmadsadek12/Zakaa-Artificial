@@ -73,8 +73,8 @@ async function testMySQL() {
 let mongoClient = null;
 let mongoDb = null;
 
-const MONGODB_URI = `mongodb://${process.env.MONGODB_HOST}:${process.env.MONGODB_PORT}`;
-const MONGODB_DB_NAME = process.env.MONGODB_DATABASE || 'zakaa_db';
+const MONGODB_URI = `mongodb://${process.env.MONGODB_HOST || process.env.MONGO_URI?.replace('mongodb://', '').split(':')[0] || '127.0.0.1'}:${process.env.MONGODB_PORT || process.env.MONGO_URI?.split(':')[2] || '27017'}`;
+const MONGODB_DB_NAME = process.env.MONGODB_DATABASE || process.env.MONGO_DB_NAME || 'zakaa_db';
 
 async function connectMongoDB() {
   if (mongoClient && mongoClient.topology && mongoClient.topology.isConnected()) {
@@ -96,20 +96,39 @@ async function connectMongoDB() {
     console.error('MongoDB connection error:', error);
     mongoClient = null;
     mongoDb = null;
-    throw error;
+    return null; // Don't throw - just return null
   }
 }
 
 async function getMongoDB() {
   if (!mongoDb || !mongoClient || !mongoClient.topology || !mongoClient.topology.isConnected()) {
-    await connectMongoDB();
+    try {
+      await connectMongoDB();
+    } catch (error) {
+      // MongoDB not available - reset to null and return null
+      // This allows services to gracefully handle MongoDB unavailability
+      mongoClient = null;
+      mongoDb = null;
+      return null;
+    }
   }
   return mongoDb;
 }
 
 async function getMongoCollection(collectionName) {
-  const db = await getMongoDB();
-  return db.collection(collectionName);
+  try {
+    const db = await getMongoDB();
+    if (!db) {
+      // MongoDB not available - return null instead of throwing
+      // This allows callers to check and handle gracefully
+      return null;
+    }
+    return db.collection(collectionName);
+  } catch (error) {
+    // Connection failed - return null for graceful degradation
+    // Errors are already logged by connectMongoDB()
+    return null;
+  }
 }
 
 async function testMongoDB() {

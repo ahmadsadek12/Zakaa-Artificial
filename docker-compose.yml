@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # Backend API
+  api:
+    build: .
+    container_name: zakaa-api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=zakaa_user
+      - MYSQL_PASSWORD=zakaa_password
+      - MYSQL_DATABASE=zakaa_db
+      - MONGODB_HOST=mongodb
+      - MONGODB_PORT=27017
+      - MONGODB_DATABASE=zakaa_db
+    env_file:
+      - .env
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - zakaa-network
+
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: zakaa-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=root_password_change_this
+      - MYSQL_DATABASE=zakaa_db
+      - MYSQL_USER=zakaa_user
+      - MYSQL_PASSWORD=zakaa_password
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_password_change_this"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - zakaa-network
+
+  # MongoDB Database
+  mongodb:
+    image: mongo:7
+    container_name: zakaa-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=zakaa_db
+    volumes:
+      - mongodb-data:/data/db
+      - ./database/mongodb_init.js:/docker-entrypoint-initdb.d/mongodb_init.js:ro
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/zakaa_db --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - zakaa-network
+
+volumes:
+  mysql-data:
+    driver: local
+  mongodb-data:
+    driver: local
+
+networks:
+  zakaa-network:
+    driver: bridge

@@ -12,9 +12,9 @@ const analyticsService = require('../../services/analytics/analyticsService');
 const logger = require('../../utils/logger');
 const CONSTANTS = require('../../config/constants');
 
-// All routes require authentication, business/admin access, and premium subscription
+// All routes require authentication, business/admin/branch access, and premium subscription
 router.use(authenticate);
-router.use(requireUserType(CONSTANTS.USER_TYPES.ADMIN, CONSTANTS.USER_TYPES.BUSINESS));
+router.use(requireUserType(CONSTANTS.USER_TYPES.ADMIN, CONSTANTS.USER_TYPES.BUSINESS, CONSTANTS.USER_TYPES.BRANCH));
 router.use(tenantIsolation);
 router.use(requirePremium);
 
@@ -176,6 +176,140 @@ router.get('/branches', [
     success: true,
     data: { branches },
     count: branches.length
+  });
+}));
+
+/**
+ * Get top paying customers (most total spent)
+ * GET /api/analytics/customers/top?limit=10&startDate=&endDate=
+ */
+router.get('/customers/top', [
+  query('limit').optional().isInt({ min: 1, max: 100 }),
+  query('startDate').optional().isISO8601(),
+  query('endDate').optional().isISO8601()
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+  
+  const { limit = 10, startDate, endDate } = req.query;
+  
+  const customers = await analyticsService.getTopCustomers(req.businessId, parseInt(limit), startDate, endDate);
+  
+  res.json({
+    success: true,
+    data: { customers },
+    count: customers.length
+  });
+}));
+
+/**
+ * Get most recurring customers (most orders)
+ * GET /api/analytics/customers/recurring?limit=10&startDate=&endDate=
+ */
+router.get('/customers/recurring', [
+  query('limit').optional().isInt({ min: 1, max: 100 }),
+  query('startDate').optional().isISO8601(),
+  query('endDate').optional().isISO8601()
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+  
+  const { limit = 10, startDate, endDate } = req.query;
+  
+  const customers = await analyticsService.getRecurringCustomers(req.businessId, parseInt(limit), startDate, endDate);
+  
+  res.json({
+    success: true,
+    data: { customers },
+    count: customers.length
+  });
+}));
+
+/**
+ * Get customer lifetime value analysis
+ * GET /api/analytics/customers/lifetime-value?startDate=&endDate=
+ */
+router.get('/customers/lifetime-value', [
+  query('startDate').optional().isISO8601(),
+  query('endDate').optional().isISO8601()
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+  
+  const { startDate, endDate } = req.query;
+  
+  const analysis = await analyticsService.getCustomerLifetimeValue(req.businessId, startDate, endDate);
+  
+  res.json({
+    success: true,
+    data: analysis
+  });
+}));
+
+/**
+ * Get popular items (most ordered - using times_ordered from items table)
+ * GET /api/analytics/items/popular?limit=10
+ */
+router.get('/items/popular', [
+  query('limit').optional().isInt({ min: 1, max: 100 })
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+  
+  const { limit = 10 } = req.query;
+  
+  const items = await analyticsService.getPopularItems(req.businessId, parseInt(limit));
+  
+  res.json({
+    success: true,
+    data: { items },
+    count: items.length
+  });
+}));
+
+/**
+ * Get most delivered items (most completed - using times_delivered from items table)
+ * GET /api/analytics/items/delivered?limit=10
+ */
+router.get('/items/delivered', [
+  query('limit').optional().isInt({ min: 1, max: 100 })
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+  
+  const { limit = 10 } = req.query;
+  
+  const items = await analyticsService.getMostDeliveredItems(req.businessId, parseInt(limit));
+  
+  res.json({
+    success: true,
+    data: { items },
+    count: items.length
   });
 }));
 

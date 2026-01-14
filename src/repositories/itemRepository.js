@@ -5,6 +5,24 @@ const { queryMySQL, getMySQLConnection } = require('../config/database');
 const { generateUUID } = require('../utils/uuid');
 
 /**
+ * Remove analytics fields from item (reserved for premium features)
+ */
+function sanitizeItem(item) {
+  if (!item) return null;
+  
+  const { times_ordered, times_delivered, ...sanitizedItem } = item;
+  return sanitizedItem;
+}
+
+/**
+ * Remove analytics fields from multiple items
+ */
+function sanitizeItems(items) {
+  if (!items || !Array.isArray(items)) return items;
+  return items.map(sanitizeItem);
+}
+
+/**
  * Find item by ID
  */
 async function findById(itemId, businessId = null) {
@@ -17,7 +35,7 @@ async function findById(itemId, businessId = null) {
   }
   
   const items = await queryMySQL(sql, params);
-  return items[0] || null;
+  return sanitizeItem(items[0] || null);
 }
 
 /**
@@ -37,9 +55,9 @@ async function find(filters = {}) {
     params.push(filters.menuId);
   }
   
-  if (filters.branchId) {
-    sql += ' AND (branch_id = ? OR branch_id IS NULL)';
-    params.push(filters.branchId);
+  if (filters.userId || filters.branchId) {
+    sql += ' AND (user_id = ? OR user_id IS NULL)';
+    params.push(filters.userId || filters.branchId);
   }
   
   if (filters.availability) {
@@ -50,7 +68,8 @@ async function find(filters = {}) {
   sql += ' AND deleted_at IS NULL';
   sql += ' ORDER BY name';
   
-  return await queryMySQL(sql, params);
+  const items = await queryMySQL(sql, params);
+  return sanitizeItems(items);
 }
 
 /**
@@ -63,24 +82,42 @@ async function create(itemData) {
   try {
     await connection.beginTransaction();
     
+    // Use user_id (can be branch or business) instead of branch_id
+    const userId = itemData.userId || itemData.branchId || itemData.businessId;
+    
     await connection.query(`
       INSERT INTO items (
-        id, business_id, menu_id, branch_id, name, description,
-        price, cost, preparation_time_minutes, availability,
-        item_image_url
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, business_id, menu_id, user_id, name, description,
+        item_type, is_schedulable, min_schedule_hours,
+        price, cost, preparation_time_minutes, duration_minutes, quantity, is_reusable,
+        available_from, available_to, days_available,
+        ingredients, availability, item_image_url,
+        times_ordered, times_delivered
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       itemId,
       itemData.businessId,
       itemData.menuId || null,
-      itemData.branchId || null,
+      userId,
       itemData.name,
       itemData.description || null,
+      itemData.itemType || 'good',
+      itemData.isSchedulable !== undefined ? (itemData.isSchedulable === true || itemData.isSchedulable === 'true') : false,
+      itemData.minScheduleHours !== undefined ? parseInt(itemData.minScheduleHours, 10) : 0,
       itemData.price,
       itemData.cost || null,
       itemData.preparationTimeMinutes || null,
+      itemData.durationMinutes || null,
+      itemData.quantity !== undefined ? itemData.quantity : null,
+      itemData.isReusable !== undefined ? (itemData.isReusable === true || itemData.isReusable === 'true') : true,
+      itemData.availableFrom || null,
+      itemData.availableTo || null,
+      itemData.daysAvailable ? JSON.stringify(itemData.daysAvailable) : null,
+      itemData.ingredients || null,
       itemData.availability || 'available',
-      itemData.itemImageUrl || null
+      itemData.itemImageUrl || null,
+      0, // times_ordered starts at 0
+      0  // times_delivered starts at 0
     ]);
     
     await connection.commit();
@@ -100,12 +137,23 @@ async function create(itemData) {
 async function update(itemId, businessId, updateData) {
   const fieldMap = {
     menuId: 'menu_id',
-    branchId: 'branch_id',
+    userId: 'user_id',
+    branchId: 'user_id', // Map branchId to user_id for compatibility
     name: 'name',
     description: 'description',
+    itemType: 'item_type',
+    isSchedulable: 'is_schedulable',
+    minScheduleHours: 'min_schedule_hours',
     price: 'price',
     cost: 'cost',
     preparationTimeMinutes: 'preparation_time_minutes',
+    durationMinutes: 'duration_minutes',
+    quantity: 'quantity',
+    isReusable: 'is_reusable',
+    availableFrom: 'available_from',
+    availableTo: 'available_to',
+    daysAvailable: 'days_available',
+    ingredients: 'ingredients',
     availability: 'availability',
     itemImageUrl: 'item_image_url'
   };
@@ -116,8 +164,14 @@ async function update(itemId, businessId, updateData) {
   for (const [key, value] of Object.entries(updateData)) {
     const dbKey = fieldMap[key];
     if (dbKey && value !== undefined) {
-      updates.push(`${dbKey} = ?`);
-      values.push(value);
+      // Handle JSON fields
+      if (key === 'daysAvailable' && Array.isArray(value)) {
+        updates.push(`${dbKey} = ?`);
+        values.push(JSON.stringify(value));
+      } else {
+        updates.push(`${dbKey} = ?`);
+        values.push(value);
+      }
     }
   }
   

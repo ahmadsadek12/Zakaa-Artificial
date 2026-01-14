@@ -5,13 +5,21 @@ const AWS = require('aws-sdk');
 require('dotenv').config();
 
 // Configure AWS
-AWS.config.update({
-  region: process.env.AWS_REGION || 'us-east-1',
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-});
+// Only configure if credentials are provided (not placeholder values)
+const hasAWSConfig = process.env.AWS_ACCESS_KEY_ID && 
+                     process.env.AWS_SECRET_ACCESS_KEY &&
+                     process.env.AWS_ACCESS_KEY_ID !== 'your-aws-access-key' &&
+                     process.env.AWS_SECRET_ACCESS_KEY !== 'your-aws-secret-key';
 
-const s3 = new AWS.S3();
+if (hasAWSConfig) {
+  AWS.config.update({
+    region: process.env.AWS_REGION || 'us-east-1',
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+  });
+}
+
+const s3 = hasAWSConfig ? new AWS.S3() : null;
 
 const S3_CONFIG = {
   bucket: process.env.S3_BUCKET_NAME || 'zakaa-images',
@@ -28,6 +36,10 @@ const S3_CONFIG = {
  * @returns {Promise<string>} - S3 URL
  */
 async function uploadToS3(fileBuffer, fileName, mimetype, folder = '') {
+  if (!s3) {
+    throw new Error('S3 is not configured. Please set AWS credentials in .env file');
+  }
+  
   const key = folder ? `${folder}/${fileName}` : fileName;
   
   const params = {

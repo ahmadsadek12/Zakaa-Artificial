@@ -14,10 +14,22 @@ const CONSTANTS = {
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
   
-  // WhatsApp
+  // WhatsApp Provider (meta or twilio)
+  WHATSAPP_PROVIDER: process.env.WHATSAPP_PROVIDER || 'meta', // 'meta' or 'twilio'
+  
+  // Meta WhatsApp Business API
   WHATSAPP_API_VERSION: process.env.WHATSAPP_API_VERSION || 'v21.0',
   WHATSAPP_VERIFY_TOKEN: process.env.WHATSAPP_VERIFY_TOKEN || 'your-webhook-verify-token',
   WHATSAPP_WEBHOOK_SECRET: process.env.WHATSAPP_WEBHOOK_SECRET || 'your-webhook-secret',
+  
+  // Twilio WhatsApp
+  TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID,
+  TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
+  TWILIO_WHATSAPP_NUMBER: process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+14155238886',
+  
+  // Telegram Bot
+  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
+  TELEGRAM_BOT_USERNAME: process.env.TELEGRAM_BOT_USERNAME || 'Testingzakaabot',
   
   // OpenAI / LLM
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
@@ -37,6 +49,7 @@ const CONSTANTS = {
   USER_TYPES: {
     ADMIN: 'admin',
     BUSINESS: 'business',
+    BRANCH: 'branch',
     CUSTOMER: 'customer'
   },
   
@@ -55,9 +68,10 @@ const CONSTANTS = {
   
   // Order Status
   ORDER_STATUS: {
+    CART: 'cart',
     PENDING: 'pending',
     ACCEPTED: 'accepted',
-    PREPARING: 'preparing',
+    ONGOING: 'ongoing',
     READY: 'ready',
     COMPLETED: 'completed',
     CANCELLED: 'cancelled'
@@ -80,10 +94,16 @@ const CONSTANTS = {
   
   // Business Types
   BUSINESS_TYPES: {
-    RESTAURANT: 'restaurant',
-    SPORTS_COURT: 'sports_court',
-    SALON: 'salon',
-    OTHER: 'other'
+    FOOD_AND_BEVERAGE: 'f & b',
+    SERVICES: 'services',
+    PRODUCTS: 'products'
+  },
+  
+  // Reservation Status
+  RESERVATION_STATUS: {
+    CONFIRMED: 'confirmed',
+    CANCELLED: 'cancelled',
+    COMPLETED: 'completed'
   },
   
   // Defaults

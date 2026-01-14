@@ -11,14 +11,22 @@ const logger = require('../../utils/logger');
  */
 async function createOrder(orderData) {
   try {
-    // Validate branch
-    const branch = await branchRepository.findById(orderData.branchId, orderData.businessId);
-    if (!branch) {
-      throw new Error('Branch not found');
+    // Validate branch/user (user_id can be branch or business)
+    const userId = orderData.userId || orderData.branchId || orderData.businessId;
+    const branch = await branchRepository.findById(userId, orderData.businessId);
+    
+    // If branch not found, check if it's the business itself
+    let targetUser = branch;
+    if (!targetUser) {
+      const userRepository = require('../../repositories/userRepository');
+      targetUser = await userRepository.findById(userId);
+      if (!targetUser || targetUser.business_id !== orderData.businessId) {
+        throw new Error('Branch/user not found');
+      }
     }
     
-    if (!branch.is_active) {
-      throw new Error('Branch is not active');
+    if (!targetUser.is_active) {
+      throw new Error('Branch/user is not active');
     }
     
     // Validate items and calculate totals
@@ -35,7 +43,7 @@ async function createOrder(orderData) {
         throw new Error(`Item ${item.name} is not available`);
       }
       
-      if (item.branch_id && item.branch_id !== orderData.branchId) {
+      if (item.user_id && item.user_id !== userId) {
         throw new Error(`Item ${item.name} is not available at this branch`);
       }
       
@@ -51,22 +59,31 @@ async function createOrder(orderData) {
       });
     }
     
-    // Check minimum order value
-    if (branch.min_order_value && subtotal < parseFloat(branch.min_order_value)) {
-      throw new Error(`Minimum order value is ${branch.min_order_value}`);
-    }
-    
     // Calculate delivery price (can be enhanced with delivery rules)
     const deliveryPrice = orderData.deliveryType === 'delivery' ? parseFloat(orderData.deliveryPrice || 0) : 0;
     const total = subtotal + deliveryPrice;
     
+    // Determine initial status based on scheduled_for
+    let initialStatus = 'accepted'; // Default for non-scheduled orders
+    if (orderData.scheduledFor) {
+      const scheduledDate = new Date(orderData.scheduledFor);
+      const now = new Date();
+      // If scheduled time is in the past or very close (within 5 minutes), set to ongoing
+      if (scheduledDate <= now || (scheduledDate - now) < 5 * 60 * 1000) {
+        initialStatus = 'ongoing';
+      }
+      // Otherwise, status remains 'accepted' for future scheduled orders
+    }
+    
     // Create order
     const order = await orderRepository.create({
       ...orderData,
+      userId: userId, // Use user_id instead of branch_id
       items: validatedItems,
       subtotal,
       deliveryPrice,
-      total
+      total,
+      status: initialStatus // Use determined status
     });
     
     logger.info(`Order created: ${order.id} for business: ${orderData.businessId}`);
@@ -80,6 +97,7 @@ async function createOrder(orderData) {
 
 /**
  * Update order status
+ * Handles status transitions: accepted → completed (non-scheduled) or accepted → ongoing → completed (scheduled)
  */
 async function updateOrderStatus(orderId, businessId, status, changedBy = 'system') {
   try {
@@ -88,9 +106,46 @@ async function updateOrderStatus(orderId, businessId, status, changedBy = 'syste
       throw new Error('Order not found');
     }
     
+    // Validate status transition
+    // Allowed transitions:
+    // - cart → pending (customer confirms) or accepted (if auto-accept)
+    // - pending → accepted (business accepts) or cancelled
+    // - accepted → ongoing (if scheduled) or ready/completed or cancelled
+    // - ongoing → completed or cancelled
+    // - ready → completed or cancelled
+    // - Any status → cancelled
+    
+    // Cannot go back to cart
+    if (status === 'cart') {
+      throw new Error('Cannot set status back to cart');
+    }
+    
+    // (pending status removed - orders go from cart → accepted)
+    
+    // Non-scheduled orders: accepted → ready/completed (ongoing not allowed)
+    if (order.status === 'accepted' && status === 'ongoing' && !order.scheduled_for) {
+      throw new Error('Cannot set status to ongoing for non-scheduled order');
+    }
+    
+    // Ongoing can only go to completed or cancelled
+    if (order.status === 'ongoing' && status !== 'completed' && status !== 'cancelled') {
+      throw new Error('Cannot transition from ongoing to ' + status);
+    }
+    
+    // Ready can only go to completed or cancelled
+    if (order.status === 'ready' && status !== 'completed' && status !== 'cancelled') {
+      throw new Error('Cannot transition from ready to ' + status);
+    }
+    
+    // Completed and cancelled are terminal states
+    if (order.status === 'completed' || order.status === 'cancelled') {
+      throw new Error(`Cannot change status from ${order.status} to ${status}`);
+    }
+    
+    // Note: times_delivered increment is handled in orderRepository.updateStatus
     const updatedOrder = await orderRepository.updateStatus(orderId, businessId, status, changedBy);
     
-    logger.info(`Order status updated: ${orderId} to ${status}`);
+    logger.info(`Order status updated: ${orderId} from ${order.status} to ${status}`);
     
     return updatedOrder;
   } catch (error) {

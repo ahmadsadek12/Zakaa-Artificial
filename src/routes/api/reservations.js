@@ -1,0 +1,328 @@
+// Reservations API Routes
+// Handle reservation management endpoints
+
+const express = require('express');
+const router = express.Router();
+const { body, param, query, validationResult } = require('express-validator');
+const reservationRepository = require('../../repositories/reservationRepository');
+const { tenantIsolation } = require('../../middleware/tenant');
+const { authenticate } = require('../../middleware/auth');
+
+/**
+ * GET /api/reservations - List reservations
+ */
+router.get('/',
+  authenticate,
+  tenantIsolation,
+  query('status').optional().isIn(['confirmed', 'cancelled', 'completed']),
+  query('reservationDate').optional().matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('reservationDate must be in YYYY-MM-DD format'),
+  query('tableId').optional().isUUID(),
+  query('startDate').optional().matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('startDate must be in YYYY-MM-DD format'),
+  query('endDate').optional().matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('endDate must be in YYYY-MM-DD format'),
+  query('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, error: { message: 'Invalid query parameters', details: errors.array() } });
+      }
+      
+      const businessUserId = req.isBranchUser ? req.userId : req.businessId;
+      
+      if (!businessUserId) {
+        return res.status(400).json({ 
+          success: false, 
+          error: { message: 'Business user ID is required. Authentication may have failed.' } 
+        });
+      }
+      
+      const filters = {
+        status: req.query.status,
+        reservationDate: req.query.reservationDate || undefined,
+        tableId: req.query.tableId,
+        startDate: req.query.startDate || undefined,
+        endDate: req.query.endDate || undefined,
+        limit: req.query.limit
+      };
+      
+      const reservations = await reservationRepository.findByBusiness(businessUserId, filters);
+      
+      res.json({
+        success: true,
+        data: { reservations }
+      });
+    } catch (error) {
+      console.error('Error fetching reservations:', error);
+      console.error('Error stack:', error.stack);
+      res.status(500).json({
+        success: false,
+        error: { 
+          message: 'Failed to fetch reservations',
+          details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        }
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/reservations/by-date/:date - Get reservations by date
+ */
+router.get('/by-date/:date',
+  authenticate,
+  tenantIsolation,
+  param('date').matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('Date must be in YYYY-MM-DD format'),
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, error: { message: 'Invalid date', details: errors.array() } });
+      }
+      
+      const businessUserId = req.isBranchUser ? req.userId : req.businessId;
+      const date = req.params.date;
+      
+      const reservations = await reservationRepository.findByDate(businessUserId, date);
+      
+      res.json({
+        success: true,
+        data: { reservations }
+      });
+    } catch (error) {
+      console.error('Error fetching reservations by date:', error);
+      res.status(500).json({
+        success: false,
+        error: { message: 'Failed to fetch reservations' }
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/reservations - Create reservation
+ */
+router.post('/',
+  authenticate,
+  tenantIsolation,
+  body('customerPhoneNumber').notEmpty().withMessage('Customer phone number is required'),
+  body('customerName').notEmpty().withMessage('Customer name is required'),
+  body('reservationDate').matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('Valid reservation date is required (YYYY-MM-DD format)'),
+  body('reservationTime').matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Valid reservation time is required (HH:MM)'),
+  body('numberOfGuests').optional().isInt({ min: 1 }),
+  body('tableId').optional().isUUID(),
+  body('itemId').optional().isUUID(),
+  body('status').optional().isIn(['confirmed', 'cancelled', 'completed']),
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, error: { message: 'Validation failed', details: errors.array() } });
+      }
+      
+      const businessUserId = req.isBranchUser ? req.userId : req.businessId;
+      
+      const reservation = await reservationRepository.create({
+        businessUserId,
+        userId: req.body.userId || null,
+        tableId: req.body.tableId || null,
+        itemId: req.body.itemId || null,
+        customerPhoneNumber: req.body.customerPhoneNumber,
+        customerName: req.body.customerName,
+        reservationDate: req.body.reservationDate,
+        reservationTime: req.body.reservationTime,
+        numberOfGuests: req.body.numberOfGuests || null,
+        notes: req.body.notes || null,
+        status: req.body.status || 'confirmed'
+      });
+      
+      res.status(201).json({
+        success: true,
+        data: reservation
+      });
+    } catch (error) {
+      console.error('Error creating reservation:', error);
+      res.status(500).json({
+        success: false,
+        error: { message: 'Failed to create reservation', details: error.message }
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/reservations/:id - Get reservation details
+ */
+router.get('/:id',
+  authenticate,
+  tenantIsolation,
+  param('id').isUUID().withMessage('Invalid reservation ID'),
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, error: { message: 'Invalid reservation ID', details: errors.array() } });
+      }
+      
+      const businessUserId = req.isBranchUser ? req.userId : req.businessId;
+      const reservation = await reservationRepository.findById(req.params.id, businessUserId);
+      
+      if (!reservation) {
+        return res.status(404).json({
+          success: false,
+          error: { message: 'Reservation not found' }
+        });
+      }
+      
+      res.json({
+        success: true,
+        data: reservation
+      });
+    } catch (error) {
+      console.error('Error fetching reservation:', error);
+      res.status(500).json({
+        success: false,
+        error: { message: 'Failed to fetch reservation' }
+      });
+    }
+  }
+);
+
+/**
+ * PUT /api/reservations/:id - Update reservation
+ */
+router.put('/:id',
+  authenticate,
+  tenantIsolation,
+  param('id').isUUID().withMessage('Invalid reservation ID'),
+  body('customerPhoneNumber').optional().notEmpty(),
+  body('customerName').optional().notEmpty(),
+  body('reservationDate').optional().matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('Date must be in YYYY-MM-DD format'),
+  body('reservationTime').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
+  body('numberOfGuests').optional().isInt({ min: 1 }),
+  body('tableId').optional().isUUID(),
+  body('itemId').optional().isUUID(),
+  body('notes').optional().isString(),
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, error: { message: 'Validation failed', details: errors.array() } });
+      }
+      
+      const businessUserId = req.isBranchUser ? req.userId : req.businessId;
+      
+      const updateData = {};
+      if (req.body.customerPhoneNumber !== undefined) updateData.customerPhoneNumber = req.body.customerPhoneNumber;
+      if (req.body.customerName !== undefined) updateData.customerName = req.body.customerName;
+      if (req.body.reservationDate !== undefined) updateData.reservationDate = req.body.reservationDate;
+      if (req.body.reservationTime !== undefined) updateData.reservationTime = req.body.reservationTime;
+      if (req.body.numberOfGuests !== undefined) updateData.numberOfGuests = req.body.numberOfGuests;
+      if (req.body.tableId !== undefined) updateData.tableId = req.body.tableId;
+      if (req.body.itemId !== undefined) updateData.itemId = req.body.itemId;
+      if (req.body.notes !== undefined) updateData.notes = req.body.notes;
+      
+      const reservation = await reservationRepository.update(req.params.id, businessUserId, updateData);
+      
+      if (!reservation) {
+        return res.status(404).json({
+          success: false,
+          error: { message: 'Reservation not found' }
+        });
+      }
+      
+      res.json({
+        success: true,
+        data: reservation
+      });
+    } catch (error) {
+      console.error('Error updating reservation:', error);
+      res.status(500).json({
+        success: false,
+        error: { message: 'Failed to update reservation', details: error.message }
+      });
+    }
+  }
+);
+
+/**
+ * PUT /api/reservations/:id/status - Update reservation status
+ */
+router.put('/:id/status',
+  authenticate,
+  tenantIsolation,
+  param('id').isUUID().withMessage('Invalid reservation ID'),
+  body('status').isIn(['confirmed', 'cancelled', 'completed']).withMessage('Valid status is required'),
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, error: { message: 'Validation failed', details: errors.array() } });
+      }
+      
+      const businessUserId = req.isBranchUser ? req.userId : req.businessId;
+      
+      const reservation = await reservationRepository.updateStatus(req.params.id, businessUserId, req.body.status);
+      
+      if (!reservation) {
+        return res.status(404).json({
+          success: false,
+          error: { message: 'Reservation not found' }
+        });
+      }
+      
+      res.json({
+        success: true,
+        data: reservation
+      });
+    } catch (error) {
+      console.error('Error updating reservation status:', error);
+      res.status(500).json({
+        success: false,
+        error: { message: 'Failed to update reservation status', details: error.message }
+      });
+    }
+  }
+);
+
+/**
+ * DELETE /api/reservations/:id - Cancel/delete reservation
+ */
+router.delete('/:id',
+  authenticate,
+  tenantIsolation,
+  param('id').isUUID().withMessage('Invalid reservation ID'),
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, error: { message: 'Invalid reservation ID', details: errors.array() } });
+      }
+      
+      const businessUserId = req.isBranchUser ? req.userId : req.businessId;
+      
+      const reservation = await reservationRepository.findById(req.params.id, businessUserId);
+      if (!reservation) {
+        return res.status(404).json({
+          success: false,
+          error: { message: 'Reservation not found' }
+        });
+      }
+      
+      await reservationRepository.deleteReservation(req.params.id, businessUserId);
+      
+      res.json({
+        success: true,
+        message: 'Reservation cancelled successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting reservation:', error);
+      res.status(500).json({
+        success: false,
+        error: { message: 'Failed to cancel reservation', details: error.message }
+      });
+    }
+  }
+);
+
+module.exports = router;

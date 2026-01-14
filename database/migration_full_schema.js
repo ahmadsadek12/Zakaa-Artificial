@@ -177,6 +177,7 @@ async function runFullSchemaMigration() {
     }
     
     // Create branch_menus table
+    // Note: branch_id now references users.id where user_type='branch', not branches table
     const branchMenusExists = await tableExists(connection, 'branch_menus');
     if (!branchMenusExists) {
       console.log('\nCreating branch_menus table...');
@@ -187,14 +188,30 @@ async function runFullSchemaMigration() {
           menu_id CHAR(36) NOT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           
-          FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
+          FOREIGN KEY (branch_id) REFERENCES users(id) ON DELETE CASCADE,
           FOREIGN KEY (menu_id) REFERENCES menus(id) ON DELETE CASCADE,
           UNIQUE KEY unique_branch_menu (branch_id, menu_id),
           INDEX idx_branch_id (branch_id),
           INDEX idx_menu_id (menu_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `);
-      console.log('✓ Created branch_menus table');
+      console.log('✓ Created branch_menus table (branch_id references users.id)');
+    } else {
+      // Check if foreign key needs to be updated (migration scenario)
+      console.log('\nChecking branch_menus table foreign key...');
+      const foreignKeys = await connection.query(`
+        SELECT CONSTRAINT_NAME, REFERENCED_TABLE_NAME
+        FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'branch_menus'
+        AND COLUMN_NAME = 'branch_id'
+        AND REFERENCED_TABLE_NAME IS NOT NULL
+      `);
+      
+      if (foreignKeys.length > 0 && foreignKeys[0].REFERENCED_TABLE_NAME === 'branches') {
+        console.log('⚠️  branch_menus.branch_id still references branches table - migration needed');
+        console.log('   Consider running migration to update foreign key to users table');
+      }
     }
     
     // Update items table - add missing fields

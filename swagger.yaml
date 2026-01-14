@@ -1,0 +1,276 @@
+openapi: 3.0.0
+info:
+  title: Zakaa WhatsApp Ordering SaaS API
+  version: 1.0.0
+  description: REST API for WhatsApp-first ordering and reservation system
+  contact:
+    name: API Support
+
+servers:
+  - url: http://localhost:3000
+    description: Development server
+  - url: https://api.zakaa.com
+    description: Production server
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                  uptime:
+                    type: number
+                  environment:
+                    type: string
+
+  /health/db:
+    get:
+      summary: Database health check
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Databases are connected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  databases:
+                    type: object
+                    properties:
+                      mysql:
+                        type: string
+                        example: connected
+                      mongodb:
+                        type: string
+                        example: connected
+
+  /health/services:
+    get:
+      summary: External services health check
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Services are configured
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  services:
+                    type: object
+                    properties:
+                      openai:
+                        type: string
+                        example: configured
+                      whatsapp:
+                        type: string
+                        example: configured
+
+  /api/auth/register:
+    post:
+      summary: Register new business
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - businessName
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                businessName:
+                  type: string
+                businessType:
+                  type: string
+                  enum: [food and beverage, entertainment, sports, salons, clinics, rentals, other]
+      responses:
+        '201':
+          description: Business registered successfully
+        '400':
+          description: Validation error
+
+  /api/auth/login:
+    post:
+      summary: Login
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+        '401':
+          description: Invalid credentials
+
+  /api/orders:
+    get:
+      summary: List orders
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [cart, pending, accepted, ongoing, ready, completed, cancelled]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of orders
+
+  /api/orders/{id}:
+    get:
+      summary: Get order details
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Order details
+        '404':
+          description: Order not found
+
+  /api/orders/{id}/status:
+    put:
+      summary: Update order status
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [cart, pending, accepted, ongoing, ready, completed, cancelled]
+      responses:
+        '200':
+          description: Order status updated
+
+  /webhook/whatsapp:
+    get:
+      summary: WhatsApp webhook verification
+      tags:
+        - Webhooks
+      parameters:
+        - name: hub.mode
+          in: query
+          required: true
+        - name: hub.verify_token
+          in: query
+          required: true
+        - name: hub.challenge
+          in: query
+          required: true
+      responses:
+        '200':
+          description: Verification successful
+        '403':
+          description: Verification failed
+    post:
+      summary: WhatsApp webhook handler
+      tags:
+        - Webhooks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Webhook received
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Authentication
+    description: Authentication endpoints
+  - name: Orders
+    description: Order management endpoints
+  - name: Webhooks
+    description: Webhook endpoints

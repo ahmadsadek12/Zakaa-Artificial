@@ -169,55 +169,96 @@ async function processChatbotResponse({
     const orderKeywords = ['order confirmed', 'order placed', 'order created', 'thank you for your order'];
     
     if (orderKeywords.some(keyword => lowerResponse.includes(keyword))) {
-      // Confirm cart (change status from 'cart' to 'pending')
-      // Cart is already an order in the orders table, just need to update status
+      // Confirm cart (remove cart marker, set status to 'accepted')
+      // Cart is already an order in the orders table with status='cart' and notes='__cart__'
       if (cart && cart.items && cart.items.length > 0) {
-        // Update order with missing fields if needed
-        const { queryMySQL, getMySQLConnection } = require('../../config/database');
+        // Verify delivery type is set
+        if (!cart.delivery_type) {
+          logger.warn('Order confirmation attempted without delivery type', { cartId: cart.id });
+          return { 
+            orderCreated: false, 
+            error: 'Delivery type must be set before confirming order' 
+          };
+        }
+        
+        // Verify delivery address if delivery type is 'delivery'
+        if (cart.delivery_type === 'delivery' && !cart.location_address && !cart.notes?.includes('Delivery Address:')) {
+          logger.warn('Delivery order confirmation attempted without address', { cartId: cart.id });
+          return { 
+            orderCreated: false, 
+            error: 'Delivery address must be provided for delivery orders' 
+          };
+        }
+        
+        // Update order with all required fields and remove cart marker
+        const { getMySQLConnection } = require('../../config/database');
         const connection = await getMySQLConnection();
         
         try {
           await connection.beginTransaction();
           
-          // Update order with customer info if not set
+          // Determine order source (check if customerPhoneNumber is telegram: format)
+          const orderSource = customerPhoneNumber.startsWith('telegram:') ? 'telegram' : 'whatsapp';
+          
+          // Update order: remove cart marker (notes='__cart__'), set status='accepted'
+          // Set all customer info and delivery details
           await connection.query(`
             UPDATE orders 
             SET 
+              status = 'accepted',
               whatsapp_user_id = COALESCE(?, whatsapp_user_id),
               language_used = COALESCE(?, language_used),
-              order_source = COALESCE(order_source, 'whatsapp'),
+              order_source = ?,
               customer_name = COALESCE(?, customer_name),
-              notes = COALESCE(?, notes),
+              notes = CASE 
+                WHEN notes = '__cart__' THEN NULL 
+                ELSE COALESCE(?, notes) 
+              END,
               scheduled_for = COALESCE(?, scheduled_for),
+              delivery_type = COALESCE(?, delivery_type),
+              delivery_price = COALESCE(?, delivery_price),
               updated_at = CURRENT_TIMESTAMP
-            WHERE id = ? AND status = 'cart'
+            WHERE id = ? AND status = 'cart' AND notes = '__cart__'
           `, [
             customerPhoneNumber,
             language || 'arabic',
+            orderSource,
             cart.customer_name,
-            cart.notes,
+            cart.notes && cart.notes !== '__cart__' ? cart.notes : null,
             cart.scheduled_for ? new Date(cart.scheduled_for) : null,
+            cart.delivery_type || 'takeaway',
+            cart.delivery_price || 0,
             cart.id
           ]);
           
+          // Create initial status history entry (order is now accepted)
+          const { generateUUID } = require('../../utils/uuid');
+          await connection.query(`
+            INSERT INTO order_status_history (id, order_id, status, changed_by, changed_at)
+            VALUES (?, ?, 'accepted', 'customer', CURRENT_TIMESTAMP)
+            ON DUPLICATE KEY UPDATE changed_at = CURRENT_TIMESTAMP
+          `, [generateUUID(), cart.id]);
+          
           await connection.commit();
+          
+          logger.info(`Cart confirmed as order`, { 
+            orderId: cart.id, 
+            deliveryType: cart.delivery_type,
+            deliveryPrice: cart.delivery_price 
+          });
+          
+          return {
+            orderCreated: true,
+            orderId: cart.id,
+            orderNumber: cart.id.substring(0, 8).toUpperCase()
+          };
         } catch (error) {
           await connection.rollback();
+          logger.error('Error confirming order:', error);
           throw error;
         } finally {
           connection.release();
         }
-        
-        // Confirm cart (change status to 'pending')
-        const order = await cartManager.confirmCart(business.id, branch?.id || business.id, customerPhoneNumber);
-        
-        logger.info(`Cart confirmed as order: ${cart.id}`);
-        
-        return {
-          orderCreated: true,
-          orderId: cart.id,
-          orderNumber: cart.id.substring(0, 8).toUpperCase()
-        };
       }
     }
     

@@ -6,30 +6,53 @@ const logger = require('../utils/logger');
 
 /**
  * Tenant isolation middleware
- * Automatically filters queries by business_id for business users
+ * Automatically filters queries by business_id/user_id for business and branch users
  * Admins bypass this restriction
  */
-function tenantIsolation(req, res, next) {
-  // Admins can access everything
-  if (req.user.userType === 'admin') {
-    return next();
-  }
-  
-  // Business users - attach their business_id to request
-  if (req.user.userType === 'business') {
+async function tenantIsolation(req, res, next) {
+  try {
+    // Admins can access everything
+    if (req.user.userType === 'admin') {
+      req.businessId = null; // Admins can access all businesses
+      req.userId = null;
+      req.isBusinessUser = false;
+      req.isBranchUser = false;
+      return next();
+    }
+    
+    // Business users - can see their own data and their branches' data
+    if (req.user.userType === 'business') {
+      req.businessId = req.user.id;
+      req.userId = req.user.id; // For backward compatibility
+      req.parentBusinessId = req.user.id; // For businesses, their own ID is also their parent ID
+      req.isBusinessUser = true;
+      req.isBranchUser = false;
+      return next();
+    }
+    
+    // Customers shouldn't access dashboard routes
+    if (req.user.userType === 'customer') {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Customers cannot access this resource' }
+      });
+    }
+    
+    // Unknown user type - treat as business for backward compatibility
     req.businessId = req.user.id;
+    req.userId = req.user.id;
+    req.parentBusinessId = req.user.id;
     req.isBusinessUser = true;
-  }
-  
-  // Customers shouldn't access dashboard routes (this middleware shouldn't be used for customer routes)
-  if (req.user.userType === 'customer') {
-    return res.status(403).json({
+    req.isBranchUser = false;
+    
+    next();
+  } catch (error) {
+    logger.error('Tenant isolation error:', error);
+    return res.status(500).json({
       success: false,
-      error: { message: 'Customers cannot access this resource' }
+      error: { message: 'Internal server error' }
     });
   }
-  
-  next();
 }
 
 /**
@@ -51,14 +74,57 @@ async function verifyBusinessOwnership(tableName, resourceId, businessId, busine
 
 /**
  * Verify resource ownership
+ * Works with new structure: orders/items use user_id, branches are now users
  */
-async function verifyOwnership(tableName, resourceId, businessId) {
+async function verifyOwnership(tableName, resourceId, businessId, userId = null) {
+  // Special handling for branches (stored in users table)
+  if (tableName === 'branches') {
+    const resources = await queryMySQL(
+      `SELECT parent_user_id FROM users WHERE id = ? AND user_type = 'branch' AND is_active = true AND deleted_at IS NULL LIMIT 1`,
+      [resourceId]
+    );
+    
+    if (!resources || resources.length === 0) {
+      return false;
+    }
+    
+    // Branch belongs to business if parent_user_id matches
+    return resources[0].parent_user_id === businessId;
+  }
+  
+  // For orders and items, check business_id field
+  if (tableName === 'orders' || tableName === 'items') {
+    const resources = await queryMySQL(
+      `SELECT business_id FROM ${tableName} WHERE id = ? LIMIT 1`,
+      [resourceId]
+    );
+    
+    if (!resources || resources.length === 0) {
+      return false;
+    }
+    
+    // Resource belongs to business if business_id matches
+    return resources[0].business_id === businessId;
+  }
+  
+  // Default check for other tables (menus, policies, opening_hours, etc.)
   const resources = await queryMySQL(
     `SELECT business_id FROM ${tableName} WHERE id = ? LIMIT 1`,
     [resourceId]
   );
   
   if (!resources || resources.length === 0) {
+    // For policies and opening_hours, check owner_id and owner_type
+    if (tableName === 'policies' || tableName === 'opening_hours') {
+      const ownerResources = await queryMySQL(
+        `SELECT owner_id FROM ${tableName} WHERE id = ? AND owner_type = 'business' LIMIT 1`,
+        [resourceId]
+      );
+      
+      if (ownerResources && ownerResources.length > 0) {
+        return ownerResources[0].owner_id === businessId;
+      }
+    }
     return false;
   }
   
@@ -85,7 +151,8 @@ function requireOwnership(tableName, paramName = 'id') {
       });
     }
     
-    const isOwner = await verifyOwnership(tableName, resourceId, req.businessId);
+    const userId = req.isBranchUser ? req.userId : null;
+    const isOwner = await verifyOwnership(tableName, resourceId, req.businessId, userId);
     if (!isOwner) {
       return res.status(403).json({
         success: false,

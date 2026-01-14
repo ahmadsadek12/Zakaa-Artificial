@@ -49,4 +49,49 @@ router.get('/db', async (req, res) => {
   }
 });
 
+/**
+ * External services health check
+ * GET /health/services
+ */
+router.get('/services', async (req, res) => {
+  try {
+    const services = {
+      openai: null,
+      whatsapp: null
+    };
+    
+    // Check OpenAI API (basic check - just verify key is set)
+    const CONSTANTS = require('../config/constants');
+    if (CONSTANTS.OPENAI_API_KEY) {
+      services.openai = 'configured';
+    } else {
+      services.openai = 'not_configured';
+    }
+    
+    // Check WhatsApp configuration
+    if (CONSTANTS.WHATSAPP_VERIFY_TOKEN && CONSTANTS.WHATSAPP_WEBHOOK_SECRET) {
+      services.whatsapp = 'configured';
+    } else {
+      services.whatsapp = 'not_configured';
+    }
+    
+    const allConfigured = services.openai === 'configured' && services.whatsapp === 'configured';
+    const status = allConfigured ? 'ok' : 'partial';
+    const statusCode = allConfigured ? 200 : 503;
+    
+    res.status(statusCode).json({
+      status,
+      services,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Services health check error:', error);
+    res.status(503).json({
+      status: 'error',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 module.exports = router;

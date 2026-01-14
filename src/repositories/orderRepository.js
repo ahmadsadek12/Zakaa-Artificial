@@ -10,11 +10,11 @@ const { generateUUID } = require('../utils/uuid');
 async function findById(orderId, businessId = null) {
   let sql = `
     SELECT o.*, 
-           b.branch_name, 
+           u.business_name as branch_name, 
            l.city, l.street, l.building, l.floor as branch_location
     FROM orders o
-    LEFT JOIN branches b ON o.branch_id = b.id
-    LEFT JOIN locations l ON b.location_id = l.id
+    LEFT JOIN users u ON o.user_id = u.id
+    LEFT JOIN locations l ON u.location_id = l.id
     WHERE o.id = ?
   `;
   const params = [orderId];
@@ -34,12 +34,13 @@ async function findById(orderId, businessId = null) {
 async function find(filters = {}) {
   let sql = `
     SELECT o.*, 
-           b.branch_name,
+           u.business_name as branch_name,
            l.city, l.street, l.building, l.floor as branch_location
     FROM orders o
-    LEFT JOIN branches b ON o.branch_id = b.id
-    LEFT JOIN locations l ON b.location_id = l.id
+    LEFT JOIN users u ON o.user_id = u.id
+    LEFT JOIN locations l ON u.location_id = l.id
     WHERE 1=1
+      AND o.status != 'cart'
   `;
   const params = [];
   
@@ -48,9 +49,9 @@ async function find(filters = {}) {
     params.push(filters.businessId);
   }
   
-  if (filters.branchId) {
-    sql += ' AND o.branch_id = ?';
-    params.push(filters.branchId);
+  if (filters.userId || filters.branchId) {
+    sql += ' AND o.user_id = ?';
+    params.push(filters.userId || filters.branchId);
   }
   
   if (filters.customerPhoneNumber) {
@@ -75,14 +76,15 @@ async function find(filters = {}) {
   
   sql += ' ORDER BY o.created_at DESC';
   
+  // LIMIT and OFFSET cannot be parameters in prepared statements, must use string interpolation
   if (filters.limit) {
-    sql += ' LIMIT ?';
-    params.push(parseInt(filters.limit));
+    const limit = parseInt(filters.limit);
+    sql += ` LIMIT ${limit}`;
   }
   
   if (filters.offset) {
-    sql += ' OFFSET ?';
-    params.push(parseInt(filters.offset));
+    const offset = parseInt(filters.offset);
+    sql += ` OFFSET ${offset}`;
   }
   
   return await queryMySQL(sql, params);
@@ -122,10 +124,25 @@ async function create(orderData) {
   try {
     await connection.beginTransaction();
     
+    // Determine initial status: accepted by default, or ongoing if scheduled and ready
+    let initialStatus = 'accepted';
+    if (orderData.scheduledFor) {
+      const scheduledDate = new Date(orderData.scheduledFor);
+      const now = new Date();
+      // If scheduled time is in the past or very close, set to ongoing
+      if (scheduledDate <= now || (scheduledDate - now) < 5 * 60 * 1000) { // Within 5 minutes
+        initialStatus = 'ongoing';
+      }
+    }
+    const finalStatus = orderData.status || initialStatus;
+    
+    // Use user_id (which can be branch or business) instead of branch_id
+    const userId = orderData.userId || orderData.branchId || orderData.businessId;
+    
     // Create order
     await connection.query(`
       INSERT INTO orders (
-        id, business_id, branch_id, customer_phone_number, whatsapp_user_id,
+        id, business_id, user_id, customer_phone_number, whatsapp_user_id,
         language_used, order_source, delivery_type, status,
         subtotal, delivery_price, total, notes, scheduled_for,
         payment_method, payment_status, delivery_address_location_id, customer_name
@@ -133,13 +150,13 @@ async function create(orderData) {
     `, [
       orderId,
       orderData.businessId,
-      orderData.branchId,
+      userId,
       orderData.customerPhoneNumber,
       orderData.whatsappUserId || null,
       orderData.languageUsed || null,
       orderData.orderSource || 'whatsapp',
       orderData.deliveryType,
-      orderData.status || 'pending',
+      finalStatus,
       orderData.subtotal,
       orderData.deliveryPrice || 0,
       orderData.total,
@@ -151,7 +168,7 @@ async function create(orderData) {
       orderData.customerName || null
     ]);
     
-    // Create order items
+    // Create order items and increment times_ordered
     for (const item of orderData.items) {
       const orderItemId = generateUUID();
       await connection.query(`
@@ -167,6 +184,11 @@ async function create(orderData) {
         item.name,
         item.notes || null
       ]);
+      
+      // Increment times_ordered for this item
+      await connection.query(`
+        UPDATE items SET times_ordered = times_ordered + ? WHERE id = ?
+      `, [item.quantity, item.itemId]);
     }
     
     // Create initial status history
@@ -176,7 +198,7 @@ async function create(orderData) {
     `, [
       generateUUID(),
       orderId,
-      orderData.status || 'pending',
+      finalStatus,
       'system'
     ]);
     
@@ -200,13 +222,24 @@ async function updateStatus(orderId, businessId, status, changedBy = 'system') {
   try {
     await connection.beginTransaction();
     
-    // Get current status
-    const orders = await queryMySQL('SELECT status FROM orders WHERE id = ? AND business_id = ?', [orderId, businessId]);
+    // Get current order with items
+    const [orders] = await connection.query(
+      'SELECT status, scheduled_for FROM orders WHERE id = ? AND business_id = ?',
+      [orderId, businessId]
+    );
     if (!orders || orders.length === 0) {
       throw new Error('Order not found');
     }
     
-    const currentStatus = orders[0].status;
+    const currentOrder = orders[0];
+    const currentStatus = currentOrder.status;
+    
+    // Validate status transition
+    // Non-scheduled: accepted → completed
+    // Scheduled: accepted → ongoing → completed
+    if (currentStatus === 'accepted' && status === 'ongoing' && !currentOrder.scheduled_for) {
+      throw new Error('Cannot set status to ongoing for non-scheduled order');
+    }
     
     // Update order
     const updates = ['status = ?', 'updated_at = CURRENT_TIMESTAMP'];
@@ -214,6 +247,17 @@ async function updateStatus(orderId, businessId, status, changedBy = 'system') {
     
     if (status === 'completed') {
       updates.push('completed_at = CURRENT_TIMESTAMP');
+      
+      // Increment times_delivered for all order items
+      const [orderItems] = await connection.query(`
+        SELECT item_id, quantity FROM order_items WHERE order_id = ?
+      `, [orderId]);
+      
+      for (const orderItem of orderItems) {
+        await connection.query(`
+          UPDATE items SET times_delivered = times_delivered + ? WHERE id = ?
+        `, [orderItem.quantity, orderItem.item_id]);
+      }
     }
     
     if (status === 'cancelled') {

@@ -15,14 +15,14 @@ const logger = require('../../utils/logger');
 const CONSTANTS = require('../../config/constants');
 const { generateUUID } = require('../../utils/uuid');
 
-// All routes require authentication and business/admin access
+// All routes require authentication and business/admin/branch access
 router.use(authenticate);
-router.use(requireUserType(CONSTANTS.USER_TYPES.ADMIN, CONSTANTS.USER_TYPES.BUSINESS));
+router.use(requireUserType(CONSTANTS.USER_TYPES.ADMIN, CONSTANTS.USER_TYPES.BUSINESS, CONSTANTS.USER_TYPES.BRANCH));
 router.use(tenantIsolation);
 
-// Configure multer for S3 upload
+// Configure multer for S3 upload (or memory storage if S3 not configured)
 const upload = multer({
-  storage: multerS3({
+  storage: s3 ? multerS3({
     s3: s3,
     bucket: S3_CONFIG.bucket,
     acl: 'public-read',
@@ -31,7 +31,7 @@ const upload = multer({
       const fileName = `${generateUUID()}-${file.originalname}`;
       cb(null, `${folder}/${fileName}`);
     }
-  }),
+  }) : multer.memoryStorage(),
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB
   },
@@ -52,7 +52,7 @@ router.get('/', asyncHandler(async (req, res) => {
   const filters = {
     businessId: req.businessId,
     menuId: req.query.menuId || null,
-    branchId: req.query.branchId || null,
+    userId: req.query.userId || req.query.branchId || (req.isBranchUser ? req.userId : null),
     availability: req.query.availability || null
   };
   
@@ -89,12 +89,59 @@ router.get('/:id', requireOwnership('items'), asyncHandler(async (req, res) => {
  * Create item
  * POST /api/items
  */
-router.post('/', [
-  body('name').notEmpty().withMessage('Item name required'),
-  body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
+router.post('/', upload.single('itemImage'), [
+  body('name').trim().notEmpty().withMessage('Item name required'),
+  body('price').notEmpty().withMessage('Price is required').bail().isFloat({ min: 0 }).withMessage('Price must be a positive number'),
   body('menuId').optional().isUUID().withMessage('menuId must be a valid UUID'),
-  body('availability').optional().isIn(['available', 'out_of_stock', 'hidden']).withMessage('Invalid availability')
-], upload.single('itemImage'), asyncHandler(async (req, res) => {
+  body('availability').optional().isIn(['available', 'out_of_stock', 'hidden']).withMessage('Invalid availability'),
+  body('durationMinutes').optional().isInt({ min: 0 }).withMessage('Duration must be a non-negative integer'),
+  body('preparationTimeMinutes').optional().isInt({ min: 0 }).withMessage('Preparation time must be a non-negative integer'),
+  body('quantity').optional().custom((value) => {
+    // Allow empty string, null, or undefined for unlimited
+    if (value === '' || value === null || value === undefined) return true;
+    const numValue = parseInt(value);
+    if (isNaN(numValue)) return false;
+    return numValue >= 1;
+  }).withMessage('Quantity must be 1 or greater, or empty for unlimited'),
+  body('isReusable').optional().isBoolean().withMessage('isReusable must be a boolean'),
+  body('availableFrom').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9])?$/).withMessage('Available from must be a valid time (HH:MM or HH:MM:SS)'),
+  body('availableTo').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9])?$/).withMessage('Available to must be a valid time (HH:MM or HH:MM:SS)'),
+  body('daysAvailable').optional().custom((value) => {
+    // Allow array or JSON string that can be parsed to array
+    if (Array.isArray(value)) return true;
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed);
+      } catch (e) {
+        return false;
+      }
+    }
+    return false;
+  }).withMessage('Days available must be an array or JSON string'),
+  body('daysAvailable.*').optional().isIn(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']).withMessage('Invalid day name'),
+  body('ingredients').optional().isString().withMessage('Ingredients must be a string')
+], asyncHandler(async (req, res) => {
+  // Parse daysAvailable from JSON string if it's a string (FormData sends it as JSON string)
+  if (req.body.daysAvailable && typeof req.body.daysAvailable === 'string') {
+    try {
+      req.body.daysAvailable = JSON.parse(req.body.daysAvailable);
+    } catch (e) {
+      // If parsing fails, treat as empty array
+      req.body.daysAvailable = [];
+    }
+  }
+  
+  // Parse isReusable from string to boolean if it's a string (FormData sends booleans as strings)
+  if (req.body.isReusable !== undefined && typeof req.body.isReusable === 'string') {
+    req.body.isReusable = req.body.isReusable === 'true';
+  }
+  
+  // Parse isSchedulable from string to boolean if it's a string
+  if (req.body.isSchedulable !== undefined && typeof req.body.isSchedulable === 'string') {
+    req.body.isSchedulable = req.body.isSchedulable === 'true';
+  }
+  
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({
@@ -103,18 +150,46 @@ router.post('/', [
     });
   }
   
-  const { name, description, menuId, branchId, price, cost, preparationTimeMinutes, availability } = req.body;
-  const itemImageUrl = req.file ? req.file.location : null;
+  const { name, description, menuId, userId, branchId, price, cost, preparationTimeMinutes, durationMinutes, quantity, isReusable, itemType, isSchedulable, minScheduleHours, availableFrom, availableTo, daysAvailable, ingredients, availability } = req.body;
+  
+  // Handle file upload: S3 returns req.file.location, memory storage returns req.file.buffer
+  let itemImageUrl = null;
+  if (req.file) {
+    if (req.file.location) {
+      // S3 upload
+      itemImageUrl = req.file.location;
+    } else if (req.file.buffer && s3) {
+      // Memory storage - upload to S3 if configured
+      try {
+        const { uploadToS3 } = require('../../config/aws');
+        const fileName = `${generateUUID()}-${req.file.originalname}`;
+        itemImageUrl = await uploadToS3(req.file.buffer, fileName, req.file.mimetype, 'items');
+      } catch (error) {
+        logger.warn('S3 upload failed, skipping image:', error.message);
+        // Continue without image if S3 upload fails
+      }
+    }
+  }
   
   const item = await itemRepository.create({
     businessId: req.businessId,
     menuId: menuId || null,
-    branchId: branchId || null,
+    userId: userId || branchId || (req.isBranchUser ? req.userId : req.businessId),
     name,
-    description,
+    description: description || null,
+    itemType: itemType || 'good',
+    isSchedulable: isSchedulable !== undefined ? (isSchedulable === true || isSchedulable === 'true') : false,
+    minScheduleHours: minScheduleHours ? parseInt(minScheduleHours, 10) : 0,
     price: parseFloat(price),
     cost: cost ? parseFloat(cost) : null,
     preparationTimeMinutes: preparationTimeMinutes ? parseInt(preparationTimeMinutes) : null,
+    durationMinutes: durationMinutes ? parseInt(durationMinutes) : null,
+    quantity: quantity && quantity !== '' ? parseInt(quantity, 10) : null,
+    isReusable: isReusable !== undefined ? (isReusable === true || isReusable === 'true') : true,
+    availableFrom: availableFrom || null,
+    availableTo: availableTo || null,
+    daysAvailable: daysAvailable || null,
+    ingredients: ingredients || null,
     availability: availability || 'available',
     itemImageUrl
   });
@@ -131,11 +206,61 @@ router.post('/', [
  * Update item
  * PUT /api/items/:id
  */
-router.put('/:id', requireOwnership('items'), [
+router.put('/:id', requireOwnership('items'), upload.single('itemImage'), [
   body('name').optional().notEmpty().withMessage('Item name cannot be empty'),
   body('price').optional().isFloat({ min: 0 }).withMessage('Price must be a positive number'),
-  body('availability').optional().isIn(['available', 'out_of_stock', 'hidden']).withMessage('Invalid availability')
-], upload.single('itemImage'), asyncHandler(async (req, res) => {
+  body('availability').optional().isIn(['available', 'out_of_stock', 'hidden']).withMessage('Invalid availability'),
+  body('durationMinutes').optional().isInt({ min: 0 }).withMessage('Duration must be a non-negative integer'),
+  body('preparationTimeMinutes').optional().isInt({ min: 0 }).withMessage('Preparation time must be a non-negative integer'),
+  body('quantity').optional().custom((value) => {
+    // Allow empty string, null, or undefined for unlimited
+    if (value === '' || value === null || value === undefined) return true;
+    const numValue = parseInt(value);
+    if (isNaN(numValue)) return false;
+    return numValue >= 1;
+  }).withMessage('Quantity must be 1 or greater, or empty for unlimited'),
+  body('isReusable').optional().isBoolean().withMessage('isReusable must be a boolean'),
+  body('itemType').optional().isIn(['service', 'good']).withMessage('Item type must be service or good'),
+  body('isSchedulable').optional().isBoolean().withMessage('isSchedulable must be a boolean'),
+  body('minScheduleHours').optional().isInt({ min: 0, max: 168 }).withMessage('Min schedule hours must be between 0 and 168'),
+  body('availableFrom').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9])?$/).withMessage('Available from must be a valid time (HH:MM or HH:MM:SS)'),
+  body('availableTo').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9])?$/).withMessage('Available to must be a valid time (HH:MM or HH:MM:SS)'),
+  body('daysAvailable').optional().custom((value) => {
+    // Allow array or JSON string that can be parsed to array
+    if (Array.isArray(value)) return true;
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed);
+      } catch (e) {
+        return false;
+      }
+    }
+    return false;
+  }).withMessage('Days available must be an array or JSON string'),
+  body('daysAvailable.*').optional().isIn(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']).withMessage('Invalid day name'),
+  body('ingredients').optional().isString().withMessage('Ingredients must be a string')
+], asyncHandler(async (req, res) => {
+  // Parse daysAvailable from JSON string if it's a string (FormData sends it as JSON string)
+  if (req.body.daysAvailable && typeof req.body.daysAvailable === 'string') {
+    try {
+      req.body.daysAvailable = JSON.parse(req.body.daysAvailable);
+    } catch (e) {
+      // If parsing fails, treat as empty array
+      req.body.daysAvailable = [];
+    }
+  }
+  
+  // Parse isReusable from string to boolean if it's a string (FormData sends booleans as strings)
+  if (req.body.isReusable !== undefined && typeof req.body.isReusable === 'string') {
+    req.body.isReusable = req.body.isReusable === 'true';
+  }
+  
+  // Parse isSchedulable from string to boolean if it's a string
+  if (req.body.isSchedulable !== undefined && typeof req.body.isSchedulable === 'string') {
+    req.body.isSchedulable = req.body.isSchedulable === 'true';
+  }
+  
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({
@@ -145,20 +270,43 @@ router.put('/:id', requireOwnership('items'), [
   }
   
   const updateData = {};
-  const { name, description, menuId, branchId, price, cost, preparationTimeMinutes, availability } = req.body;
+  const { name, description, menuId, userId, branchId, price, cost, preparationTimeMinutes, durationMinutes, quantity, isReusable, itemType, isSchedulable, minScheduleHours, availableFrom, availableTo, daysAvailable, ingredients, availability } = req.body;
   
   if (name !== undefined) updateData.name = name;
   if (description !== undefined) updateData.description = description;
   if (menuId !== undefined) updateData.menuId = menuId;
-  if (branchId !== undefined) updateData.branchId = branchId;
+  if (userId !== undefined || branchId !== undefined) updateData.userId = userId || branchId;
   if (price !== undefined) updateData.price = parseFloat(price);
   if (cost !== undefined) updateData.cost = cost ? parseFloat(cost) : null;
-  if (preparationTimeMinutes !== undefined) updateData.preparationTimeMinutes = preparationTimeMinutes ? parseInt(preparationTimeMinutes) : null;
+    if (preparationTimeMinutes !== undefined) updateData.preparationTimeMinutes = preparationTimeMinutes ? parseInt(preparationTimeMinutes) : null;
+    if (durationMinutes !== undefined) updateData.durationMinutes = durationMinutes ? parseInt(durationMinutes) : null;
+    if (quantity !== undefined) updateData.quantity = quantity && quantity !== '' ? parseInt(quantity, 10) : null;
+    if (isReusable !== undefined) updateData.isReusable = isReusable === true || isReusable === 'true';
+    if (itemType !== undefined) updateData.itemType = itemType;
+    if (isSchedulable !== undefined) updateData.isSchedulable = isSchedulable === true || isSchedulable === 'true';
+    if (minScheduleHours !== undefined) updateData.minScheduleHours = minScheduleHours ? parseInt(minScheduleHours, 10) : 0;
+    if (availableFrom !== undefined) updateData.availableFrom = availableFrom;
+  if (availableTo !== undefined) updateData.availableTo = availableTo;
+  if (daysAvailable !== undefined) updateData.daysAvailable = daysAvailable;
+  if (ingredients !== undefined) updateData.ingredients = ingredients;
   if (availability !== undefined) updateData.availability = availability;
   
-  // Handle image upload
+  // Handle image upload: S3 returns req.file.location, memory storage returns req.file.buffer
   if (req.file) {
-    updateData.itemImageUrl = req.file.location;
+    if (req.file.location) {
+      // S3 upload
+      updateData.itemImageUrl = req.file.location;
+    } else if (req.file.buffer && s3) {
+      // Memory storage - upload to S3 if configured
+      try {
+        const { uploadToS3 } = require('../../config/aws');
+        const fileName = `${generateUUID()}-${req.file.originalname}`;
+        updateData.itemImageUrl = await uploadToS3(req.file.buffer, fileName, req.file.mimetype, 'items');
+      } catch (error) {
+        logger.warn('S3 upload failed, skipping image update:', error.message);
+        // Continue without image if S3 upload fails
+      }
+    }
   }
   
   const updatedItem = await itemRepository.update(req.params.id, req.businessId, updateData);
