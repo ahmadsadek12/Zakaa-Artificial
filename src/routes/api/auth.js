@@ -223,9 +223,17 @@ router.get('/me', authenticate, asyncHandler(async (req, res) => {
     user.allow_on_site = Boolean(user.allow_on_site);
   }
   
+  // Transform to match login response format (camelCase for frontend)
+  const userResponse = {
+    ...user,
+    userType: user.user_type,
+    businessName: user.business_name,
+    subscriptionType: user.subscription_type
+  };
+  
   res.json({
     success: true,
-    data: { user }
+    data: { user: userResponse }
   });
 }));
 

@@ -17,8 +17,9 @@ export default function Login() {
     setLoading(true)
 
     try {
-      await login(email, password)
-      navigate('/')
+      const { user } = await login(email, password)
+      // Redirect admin to admin dashboard, others to business dashboard
+      navigate(user.userType === 'admin' ? '/admin' : '/')
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Login failed. Please try again.')
     } finally {
