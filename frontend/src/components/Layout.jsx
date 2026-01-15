@@ -51,6 +51,11 @@ export default function Layout({ children }) {
   ]
 
   const navItems = user?.userType === 'admin' ? adminNavItems : businessNavItems
+  
+  // Debug logging
+  console.log('🔍 Layout - User:', user)
+  console.log('🔍 Layout - User Type:', user?.userType)
+  console.log('🔍 Layout - Is Admin?', user?.userType === 'admin')
 
   const isActive = (path) => location.pathname === path
 

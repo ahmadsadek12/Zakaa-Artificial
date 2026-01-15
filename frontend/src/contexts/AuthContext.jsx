@@ -22,8 +22,12 @@ export function AuthProvider({ children }) {
   const fetchUser = async () => {
     try {
       const response = await axios.get(`${API_URL}/api/auth/me`)
-      setUser(response.data.data.user)
+      const userData = response.data.data.user
+      console.log('🔍 Fetched user data:', userData)
+      console.log('🔍 User type:', userData.userType || userData.user_type)
+      setUser(userData)
     } catch (error) {
+      console.error('❌ Error fetching user:', error)
       localStorage.removeItem('token')
       delete axios.defaults.headers.common['Authorization']
     } finally {
@@ -34,6 +38,8 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     const response = await axios.post(`${API_URL}/api/auth/login`, { email, password })
     const { token, user } = response.data.data
+    console.log('🔐 Login successful, user data:', user)
+    console.log('🔐 User type:', user.userType)
     localStorage.setItem('token', token)
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
     setUser(user)
