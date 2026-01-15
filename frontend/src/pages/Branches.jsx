@@ -92,7 +92,13 @@ export default function Branches() {
       fetchBranches()
     } catch (error) {
       console.error('Error saving branch:', error)
-      alert(error.response?.data?.error?.message || 'Failed to save branch')
+      const errorData = error.response?.data?.error
+      if (errorData?.errors && Array.isArray(errorData.errors)) {
+        const errorMessages = errorData.errors.map(e => `${e.field}: ${e.message}`).join('\n')
+        alert(`Validation errors:\n${errorMessages}`)
+      } else {
+        alert(errorData?.message || 'Failed to save branch')
+      }
     }
   }
 
