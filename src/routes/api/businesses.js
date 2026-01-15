@@ -341,9 +341,11 @@ router.post('/me/branches', [
   body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
   body('password').notEmpty().isLength({ min: 8 }).withMessage('Password is required (minimum 8 characters)'),
   body('branchName').notEmpty().trim().withMessage('Branch name is required'),
-  body('location').isObject().withMessage('Location is required'),
-  body('location.city').notEmpty().trim().withMessage('City is required'),
-  body('location.street').notEmpty().trim().withMessage('Street is required'),
+  body('location').optional().isObject().withMessage('Location must be an object'),
+  body('location.city').optional({ checkFalsy: true }).trim().withMessage('City must be a string'),
+  body('location.street').optional({ checkFalsy: true }).trim().withMessage('Street must be a string'),
+  body('location.building').optional({ checkFalsy: true }).trim(),
+  body('location.floor').optional({ checkFalsy: true }).trim(),
   body('contactPhoneNumber').optional({ checkFalsy: true }).isMobilePhone().withMessage('Valid phone number required'),
   body('whatsappPhoneNumber').optional({ checkFalsy: true }).isMobilePhone().withMessage('Valid WhatsApp phone number required')
 ], asyncHandler(async (req, res) => {
@@ -372,19 +374,9 @@ router.post('/me/branches', [
   
   const { email, password, branchName, contactPhoneNumber, whatsappPhoneNumber, whatsappPhoneNumberId, whatsappAccessToken, location } = req.body;
   
-  // Validate location object exists and has required fields
-  if (!location || !location.city || !location.street) {
-    return res.status(400).json({
-      success: false,
-      error: { 
-        message: 'Validation failed',
-        errors: [
-          { field: 'location.city', message: location?.city ? '' : 'City is required' },
-          { field: 'location.street', message: location?.street ? '' : 'Street is required' }
-        ].filter(e => e.message)
-      }
-    });
-  }
+  // Location is now optional - only validate if provided
+  // If location is provided but empty, treat it as null
+  const locationData = (location && (location.city || location.street)) ? location : null;
   
   // Check if email is already in use
   const existingUser = await userRepository.findByEmail(email);
@@ -414,7 +406,7 @@ router.post('/me/branches', [
     email,
     password,
     branchName,
-    location,
+    location: locationData,
     contactPhoneNumber: contactPhoneNumber || null,
     whatsappPhoneNumber: whatsappPhoneNumber || null,
     whatsappPhoneNumberId: whatsappPhoneNumberId || null,
