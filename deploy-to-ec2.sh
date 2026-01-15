@@ -97,7 +97,7 @@ cd frontend
 # Install frontend dependencies
 npm install
 
-# Create frontend .env
+# Create frontend .env (only for build time)
 echo -e "${YELLOW}Creating frontend environment config...${NC}"
 cat > .env << EOF
 VITE_API_URL=http://${EC2_IP}
@@ -105,6 +105,9 @@ EOF
 
 # Build frontend
 npm run build
+
+# Remove frontend .env after build (not needed in production)
+rm -f .env
 
 cd ..
 
