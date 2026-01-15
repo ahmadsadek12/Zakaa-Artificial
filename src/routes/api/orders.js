@@ -180,22 +180,15 @@ router.post('/', [
       if (branches && branches.length > 0) {
         branchId = branches[0].id;
       } else {
-        // Fallback: get any branch_id from branches table
-        const [anyBranch] = await connection.query(`SELECT id FROM branches LIMIT 1`);
-        if (anyBranch && anyBranch.length > 0) {
-          branchId = anyBranch[0].id;
-        }
+        // No branch found - use businessId directly
+        // This allows businesses to create orders without requiring branches
+        branchId = req.businessId;
+        logger.info('No branch found, using businessId for order', { businessId: req.businessId });
       }
     } catch (branchError) {
       logger.error('Error fetching branch_id:', branchError);
-    }
-    
-    if (!branchId) {
-      await connection.rollback();
-      return res.status(500).json({
-        success: false,
-        error: { message: 'No branch found in database - cannot create order. Please contact support.' }
-      });
+      // On error, fallback to businessId
+      branchId = req.businessId;
     }
 
     // Calculate totals
