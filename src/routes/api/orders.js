@@ -228,18 +228,17 @@ router.post('/', [
     // Create order
     await connection.query(`
       INSERT INTO orders (
-        id, business_id, user_id, branch_id, customer_phone_number, customer_name,
+        id, business_id, user_id, customer_phone_number, customer_name,
         status, subtotal, delivery_price, total, delivery_type,
         notes, scheduled_for,
-        location_latitude, location_longitude, location_name, location_address,
+        location_latitude, location_longitude,
         payment_method, payment_status, language_used, order_source,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
     `, [
       orderId,
       req.businessId,
-      userId,
-      branchId, // Add branch_id for foreign key constraint
+      branchId, // user_id - can be branch or business
       customerPhoneNumber,
       customerName || null,
       'accepted', // Manual orders start as accepted
@@ -251,8 +250,6 @@ router.post('/', [
       scheduledFor || null,
       locationLatitude || null,
       locationLongitude || null,
-      locationName || null,
-      locationAddress || null,
       paymentMethod || 'unknown',
       'unpaid',
       language || null,
