@@ -358,7 +358,7 @@ export default function Orders() {
                       </div>
                     </td>
                     <td className="py-3 px-4 text-sm">
-                      {order.items?.length || 0} item(s)
+                      {order.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0} item(s)
                     </td>
                     <td className="py-3 px-4 text-sm font-medium">${order.total}</td>
                     <td className="py-3 px-4">
