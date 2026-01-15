@@ -340,12 +340,12 @@ router.get('/me/branches', asyncHandler(async (req, res) => {
 router.post('/me/branches', [
   body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
   body('password').notEmpty().isLength({ min: 8 }).withMessage('Password is required (minimum 8 characters)'),
-  body('branchName').notEmpty().trim().withMessage('Branch name is required'),
+  body('branchName').notEmpty().withMessage('Branch name is required'),
   body('location').optional().isObject().withMessage('Location must be an object'),
-  body('location.city').optional({ checkFalsy: true }).trim().withMessage('City must be a string'),
-  body('location.street').optional({ checkFalsy: true }).trim().withMessage('Street must be a string'),
-  body('location.building').optional({ checkFalsy: true }).trim(),
-  body('location.floor').optional({ checkFalsy: true }).trim(),
+  body('location.city').optional({ checkFalsy: true }).isString().withMessage('City must be a string'),
+  body('location.street').optional({ checkFalsy: true }).isString().withMessage('Street must be a string'),
+  body('location.building').optional({ checkFalsy: true }).isString(),
+  body('location.floor').optional({ checkFalsy: true }).isString(),
   body('contactPhoneNumber').optional({ checkFalsy: true }).isMobilePhone().withMessage('Valid phone number required'),
   body('whatsappPhoneNumber').optional({ checkFalsy: true }).isMobilePhone().withMessage('Valid WhatsApp phone number required')
 ], asyncHandler(async (req, res) => {
@@ -374,9 +374,21 @@ router.post('/me/branches', [
   
   const { email, password, branchName, contactPhoneNumber, whatsappPhoneNumber, whatsappPhoneNumberId, whatsappAccessToken, location } = req.body;
   
+  // Trim branch name
+  const trimmedBranchName = branchName ? String(branchName).trim() : '';
+  
   // Location is now optional - only validate if provided
   // If location is provided but empty, treat it as null
-  const locationData = (location && (location.city || location.street)) ? location : null;
+  // Trim location fields if they exist
+  let locationData = null;
+  if (location && (location.city || location.street)) {
+    locationData = {
+      city: location.city ? String(location.city).trim() : null,
+      street: location.street ? String(location.street).trim() : null,
+      building: location.building ? String(location.building).trim() : null,
+      floor: location.floor ? String(location.floor).trim() : null
+    };
+  }
   
   // Check if email is already in use
   const existingUser = await userRepository.findByEmail(email);
@@ -405,7 +417,7 @@ router.post('/me/branches', [
   const branch = await userRepository.createBranchUser(req.businessId, {
     email,
     password,
-    branchName,
+    branchName: trimmedBranchName,
     location: locationData,
     contactPhoneNumber: contactPhoneNumber || null,
     whatsappPhoneNumber: whatsappPhoneNumber || null,
