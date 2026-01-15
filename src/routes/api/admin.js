@@ -76,7 +76,7 @@ router.get('/businesses', asyncHandler(async (req, res) => {
     params.push(`%${search}%`, `%${search}%`);
   }
   
-  // Get businesses with stats
+  // Get businesses first (fast query without subqueries)
   const businesses = await queryMySQL(
     `SELECT 
       u.id,
@@ -90,16 +90,51 @@ router.get('/businesses', asyncHandler(async (req, res) => {
       u.subscription_type,
       u.subscription_status,
       u.is_active,
-      u.created_at,
-      (SELECT COUNT(*) FROM users WHERE parent_user_id = u.id AND user_type = 'branch' AND is_active = 1) as branches_count,
-      (SELECT COUNT(*) FROM orders WHERE business_id = u.id) as orders_count,
-      (SELECT COUNT(*) FROM orders WHERE business_id = u.id AND status = 'accepted') as accepted_orders_count,
-      (SELECT COUNT(*) FROM orders WHERE business_id = u.id AND status = 'completed') as completed_orders_count
+      u.created_at
     FROM users u
     ${whereClause}
     ORDER BY u.created_at DESC
     LIMIT ${limit} OFFSET ${offset}`
   , params);
+  
+  // Add stats for each business (only if businesses exist)
+  if (businesses.length > 0) {
+    const businessIds = businesses.map(b => b.id);
+    const placeholders = businessIds.map(() => '?').join(',');
+    
+    // Get branch counts
+    const branchCounts = await queryMySQL(
+      `SELECT parent_user_id as business_id, COUNT(*) as count 
+       FROM users 
+       WHERE parent_user_id IN (${placeholders}) AND user_type = 'branch' AND is_active = 1
+       GROUP BY parent_user_id`,
+      businessIds
+    );
+    
+    // Get order counts
+    const orderCounts = await queryMySQL(
+      `SELECT business_id,
+         COUNT(*) as total,
+         SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) as accepted,
+         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
+       FROM orders
+       WHERE business_id IN (${placeholders})
+       GROUP BY business_id`,
+      businessIds
+    );
+    
+    // Map counts to businesses
+    const branchCountMap = Object.fromEntries(branchCounts.map(bc => [bc.business_id, bc.count]));
+    const orderCountMap = Object.fromEntries(orderCounts.map(oc => [oc.business_id, oc]));
+    
+    businesses.forEach(b => {
+      b.branches_count = branchCountMap[b.id] || 0;
+      const orderStats = orderCountMap[b.id] || { total: 0, accepted: 0, completed: 0 };
+      b.orders_count = orderStats.total;
+      b.accepted_orders_count = orderStats.accepted;
+      b.completed_orders_count = orderStats.completed;
+    });
+  }
   
   // Get total count for pagination
   const totalResult = await queryMySQL(
