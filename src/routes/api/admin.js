@@ -21,34 +21,26 @@ router.use(requireUserType(CONSTANTS.USER_TYPES.ADMIN));
  * GET /api/admin/stats
  */
 router.get('/stats', asyncHandler(async (req, res) => {
-  // Get total businesses
-  const businesses = await queryMySQL(
-    `SELECT COUNT(*) as count FROM users WHERE user_type = 'business' AND deleted_at IS NULL`
-  );
+  // Run all queries in parallel for faster response
+  const [businesses, branches, orders] = await Promise.all([
+    queryMySQL(
+      `SELECT COUNT(*) as count FROM users WHERE user_type = 'business' AND is_active = true`
+    ),
+    queryMySQL(
+      `SELECT COUNT(*) as count FROM users WHERE user_type = 'branch' AND is_active = true`
+    ),
+    queryMySQL(
+      `SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) as accepted,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+        SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected
+      FROM orders`
+    )
+  ]);
   
-  // Get total branches
-  const branches = await queryMySQL(
-    `SELECT COUNT(*) as count FROM users WHERE user_type = 'branch' AND deleted_at IS NULL`
-  );
-  
-  // Get total orders
-  const orders = await queryMySQL(
-    `SELECT 
-      COUNT(*) as total,
-      SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) as accepted,
-      SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-      SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected
-    FROM orders`
-  );
-  
-  // Get message count from MongoDB (if available)
-  let messageCount = 0;
-  try {
-    const messageLogs = await getMongoCollection('message_logs');
-    messageCount = await messageLogs.countDocuments({});
-  } catch (error) {
-    logger.warn('Could not get message count from MongoDB:', error.message);
-  }
+  // Message count - skipped for now (MongoDB not configured)
+  const messageCount = 0;
   
   res.json({
     success: true,
@@ -76,7 +68,7 @@ router.get('/businesses', asyncHandler(async (req, res) => {
   const offset = (page - 1) * limit;
   const search = req.query.search || '';
   
-  let whereClause = `WHERE user_type = 'business' AND deleted_at IS NULL`;
+  let whereClause = `WHERE user_type = 'business' AND is_active = true`;
   const params = [];
   
   if (search) {
@@ -99,7 +91,7 @@ router.get('/businesses', asyncHandler(async (req, res) => {
       u.subscription_status,
       u.is_active,
       u.created_at,
-      (SELECT COUNT(*) FROM users WHERE parent_user_id = u.id AND user_type = 'branch' AND deleted_at IS NULL) as branches_count,
+      (SELECT COUNT(*) FROM users WHERE parent_user_id = u.id AND user_type = 'branch' AND is_active = true) as branches_count,
       (SELECT COUNT(*) FROM orders WHERE business_id = u.id) as orders_count,
       (SELECT COUNT(*) FROM orders WHERE business_id = u.id AND status = 'accepted') as accepted_orders_count,
       (SELECT COUNT(*) FROM orders WHERE business_id = u.id AND status = 'completed') as completed_orders_count
@@ -150,7 +142,7 @@ router.get('/businesses/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
   
   const businesses = await queryMySQL(
-    `SELECT * FROM users WHERE id = ? AND user_type = 'business' AND deleted_at IS NULL`,
+    `SELECT * FROM users WHERE id = ? AND user_type = 'business' AND is_active = true`,
     [id]
   );
   
@@ -165,7 +157,7 @@ router.get('/businesses/:id', asyncHandler(async (req, res) => {
   
   // Get branches
   const branches = await queryMySQL(
-    `SELECT * FROM users WHERE parent_user_id = ? AND user_type = 'branch' AND deleted_at IS NULL`,
+    `SELECT * FROM users WHERE parent_user_id = ? AND user_type = 'branch' AND is_active = true`,
     [id]
   );
   
@@ -320,7 +312,7 @@ router.put('/businesses/:id', asyncHandler(async (req, res) => {
   
   // Check if business exists
   const businesses = await queryMySQL(
-    'SELECT id FROM users WHERE id = ? AND user_type = "business" AND deleted_at IS NULL',
+    'SELECT id FROM users WHERE id = ? AND user_type = "business" AND is_active = true',
     [id]
   );
   
@@ -453,7 +445,7 @@ router.delete('/businesses/:id', asyncHandler(async (req, res) => {
   
   // Check if business exists
   const businesses = await queryMySQL(
-    'SELECT id FROM users WHERE id = ? AND user_type = "business" AND deleted_at IS NULL',
+    'SELECT id FROM users WHERE id = ? AND user_type = "business" AND is_active = true',
     [id]
   );
   
@@ -485,7 +477,7 @@ router.get('/businesses/:businessId/branches', asyncHandler(async (req, res) => 
   
   // Verify business exists
   const businesses = await queryMySQL(
-    'SELECT id FROM users WHERE id = ? AND user_type = "business" AND deleted_at IS NULL',
+    'SELECT id FROM users WHERE id = ? AND user_type = "business" AND is_active = true',
     [businessId]
   );
   
@@ -504,7 +496,7 @@ router.get('/businesses/:businessId/branches', asyncHandler(async (req, res) => 
       (SELECT COUNT(*) FROM orders WHERE user_id = u.id AND status = 'accepted') as accepted_orders_count
     FROM users u
     LEFT JOIN locations l ON u.location_id = l.id
-    WHERE u.parent_user_id = ? AND u.user_type = 'branch' AND u.deleted_at IS NULL
+    WHERE u.parent_user_id = ? AND u.user_type = 'branch' AND u.is_active = true
     ORDER BY u.created_at DESC`,
     [businessId]
   );
@@ -555,7 +547,7 @@ router.post('/businesses/:businessId/branches', asyncHandler(async (req, res) =>
   
   // Verify business exists
   const businesses = await queryMySQL(
-    'SELECT id, business_type FROM users WHERE id = ? AND user_type = "business" AND deleted_at IS NULL',
+    'SELECT id, business_type FROM users WHERE id = ? AND user_type = "business" AND is_active = true',
     [businessId]
   );
   
@@ -686,7 +678,7 @@ router.put('/branches/:id', asyncHandler(async (req, res) => {
   
   // Check if branch exists
   const branches = await queryMySQL(
-    'SELECT id, location_id FROM users WHERE id = ? AND user_type = "branch" AND deleted_at IS NULL',
+    'SELECT id, location_id FROM users WHERE id = ? AND user_type = "branch" AND is_active = true',
     [id]
   );
   
@@ -847,7 +839,7 @@ router.delete('/branches/:id', asyncHandler(async (req, res) => {
   
   // Check if branch exists
   const branches = await queryMySQL(
-    'SELECT id FROM users WHERE id = ? AND user_type = "branch" AND deleted_at IS NULL',
+    'SELECT id FROM users WHERE id = ? AND user_type = "branch" AND is_active = true',
     [id]
   );
   
@@ -881,7 +873,7 @@ router.get('/branches', asyncHandler(async (req, res) => {
   const search = req.query.search || '';
   const businessId = req.query.businessId || null;
   
-  let whereClause = `WHERE u.user_type = 'branch' AND u.deleted_at IS NULL`;
+  let whereClause = `WHERE u.user_type = 'branch' AND u.is_active = true`;
   const params = [];
   
   if (businessId) {
@@ -1112,7 +1104,7 @@ router.get('/items', asyncHandler(async (req, res) => {
   const businessId = req.query.businessId || null;
   const search = req.query.search || '';
   
-  let whereClause = 'WHERE i.deleted_at IS NULL';
+  let whereClause = 'WHERE i.is_active = true';
   const params = [];
   
   if (businessId) {
@@ -1188,7 +1180,7 @@ router.get('/menus', asyncHandler(async (req, res) => {
   const offset = (page - 1) * limit;
   const businessId = req.query.businessId || null;
   
-  let whereClause = 'WHERE m.deleted_at IS NULL';
+  let whereClause = 'WHERE m.is_active = true';
   const params = [];
   
   if (businessId) {
@@ -1200,7 +1192,7 @@ router.get('/menus', asyncHandler(async (req, res) => {
     `SELECT 
       m.*,
       b.business_name,
-      (SELECT COUNT(*) FROM items WHERE menu_id = m.id AND deleted_at IS NULL) as items_count
+      (SELECT COUNT(*) FROM items WHERE menu_id = m.id AND is_active = true) as items_count
     FROM menus m
     LEFT JOIN users b ON m.business_id = b.id
     ${whereClause}
@@ -1258,7 +1250,7 @@ router.get('/customers', asyncHandler(async (req, res) => {
   const offset = (page - 1) * limit;
   const search = req.query.search || '';
   
-  let whereClause = `WHERE user_type = 'customer' AND deleted_at IS NULL`;
+  let whereClause = `WHERE user_type = 'customer' AND is_active = true`;
   const params = [];
   
   if (search) {
@@ -1309,7 +1301,7 @@ router.get('/customers/:id', asyncHandler(async (req, res) => {
       u.id, u.email, u.first_name, u.last_name, u.contact_phone_number,
       u.is_active, u.created_at, u.updated_at
     FROM users u
-    WHERE u.id = ? AND u.user_type = 'customer' AND u.deleted_at IS NULL`,
+    WHERE u.id = ? AND u.user_type = 'customer' AND u.is_active = true`,
     [id]
   );
   
@@ -1398,7 +1390,7 @@ router.get('/admins', asyncHandler(async (req, res) => {
       id, email, first_name, last_name, contact_phone_number,
       is_active, created_at, updated_at
     FROM users 
-    WHERE user_type = 'admin' AND deleted_at IS NULL
+    WHERE user_type = 'admin' AND is_active = true
     ORDER BY created_at DESC`
   );
   
