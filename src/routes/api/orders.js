@@ -231,10 +231,10 @@ router.post('/', [
         id, business_id, user_id, customer_phone_number, customer_name,
         status, subtotal, delivery_price, total, delivery_type,
         notes, scheduled_for,
-        location_latitude, location_longitude,
+        location_latitude, location_longitude, location_address,
         payment_method, payment_status, language_used, order_source,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
     `, [
       orderId,
       req.businessId,
@@ -250,6 +250,7 @@ router.post('/', [
       scheduledFor || null,
       locationLatitude || null,
       locationLongitude || null,
+      locationAddress || null,
       paymentMethod || 'unknown',
       'unpaid',
       language || null,
