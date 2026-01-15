@@ -24,10 +24,10 @@ router.get('/stats', asyncHandler(async (req, res) => {
   // Run all queries in parallel for faster response
   const [businesses, branches, orders] = await Promise.all([
     queryMySQL(
-      `SELECT COUNT(*) as count FROM users WHERE user_type = 'business' AND is_active = true`
+      `SELECT COUNT(*) as count FROM users WHERE user_type = 'business' AND is_active = 1`
     ),
     queryMySQL(
-      `SELECT COUNT(*) as count FROM users WHERE user_type = 'branch' AND is_active = true`
+      `SELECT COUNT(*) as count FROM users WHERE user_type = 'branch' AND is_active = 1`
     ),
     queryMySQL(
       `SELECT 
@@ -68,7 +68,7 @@ router.get('/businesses', asyncHandler(async (req, res) => {
   const offset = (page - 1) * limit;
   const search = req.query.search || '';
   
-  let whereClause = `WHERE user_type = 'business' AND is_active = true`;
+  let whereClause = `WHERE user_type = 'business' AND is_active = 1`;
   const params = [];
   
   if (search) {
@@ -91,16 +91,15 @@ router.get('/businesses', asyncHandler(async (req, res) => {
       u.subscription_status,
       u.is_active,
       u.created_at,
-      (SELECT COUNT(*) FROM users WHERE parent_user_id = u.id AND user_type = 'branch' AND is_active = true) as branches_count,
+      (SELECT COUNT(*) FROM users WHERE parent_user_id = u.id AND user_type = 'branch' AND is_active = 1) as branches_count,
       (SELECT COUNT(*) FROM orders WHERE business_id = u.id) as orders_count,
       (SELECT COUNT(*) FROM orders WHERE business_id = u.id AND status = 'accepted') as accepted_orders_count,
       (SELECT COUNT(*) FROM orders WHERE business_id = u.id AND status = 'completed') as completed_orders_count
     FROM users u
     ${whereClause}
     ORDER BY u.created_at DESC
-    LIMIT ? OFFSET ?`,
-    [...params, limit, offset]
-  );
+    LIMIT ${limit} OFFSET ${offset}`
+  , params);
   
   // Get total count for pagination
   const totalResult = await queryMySQL(
@@ -142,7 +141,7 @@ router.get('/businesses/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
   
   const businesses = await queryMySQL(
-    `SELECT * FROM users WHERE id = ? AND user_type = 'business' AND is_active = true`,
+    `SELECT * FROM users WHERE id = ? AND user_type = 'business' AND is_active = 1`,
     [id]
   );
   
@@ -157,7 +156,7 @@ router.get('/businesses/:id', asyncHandler(async (req, res) => {
   
   // Get branches
   const branches = await queryMySQL(
-    `SELECT * FROM users WHERE parent_user_id = ? AND user_type = 'branch' AND is_active = true`,
+    `SELECT * FROM users WHERE parent_user_id = ? AND user_type = 'branch' AND is_active = 1`,
     [id]
   );
   
@@ -312,7 +311,7 @@ router.put('/businesses/:id', asyncHandler(async (req, res) => {
   
   // Check if business exists
   const businesses = await queryMySQL(
-    'SELECT id FROM users WHERE id = ? AND user_type = "business" AND is_active = true',
+    'SELECT id FROM users WHERE id = ? AND user_type = "business" AND is_active = 1',
     [id]
   );
   
@@ -445,7 +444,7 @@ router.delete('/businesses/:id', asyncHandler(async (req, res) => {
   
   // Check if business exists
   const businesses = await queryMySQL(
-    'SELECT id FROM users WHERE id = ? AND user_type = "business" AND is_active = true',
+    'SELECT id FROM users WHERE id = ? AND user_type = "business" AND is_active = 1',
     [id]
   );
   
@@ -477,7 +476,7 @@ router.get('/businesses/:businessId/branches', asyncHandler(async (req, res) => 
   
   // Verify business exists
   const businesses = await queryMySQL(
-    'SELECT id FROM users WHERE id = ? AND user_type = "business" AND is_active = true',
+    'SELECT id FROM users WHERE id = ? AND user_type = "business" AND is_active = 1',
     [businessId]
   );
   
@@ -496,7 +495,7 @@ router.get('/businesses/:businessId/branches', asyncHandler(async (req, res) => 
       (SELECT COUNT(*) FROM orders WHERE user_id = u.id AND status = 'accepted') as accepted_orders_count
     FROM users u
     LEFT JOIN locations l ON u.location_id = l.id
-    WHERE u.parent_user_id = ? AND u.user_type = 'branch' AND u.is_active = true
+    WHERE u.parent_user_id = ? AND u.user_type = 'branch' AND u.is_active = 1
     ORDER BY u.created_at DESC`,
     [businessId]
   );
@@ -547,7 +546,7 @@ router.post('/businesses/:businessId/branches', asyncHandler(async (req, res) =>
   
   // Verify business exists
   const businesses = await queryMySQL(
-    'SELECT id, business_type FROM users WHERE id = ? AND user_type = "business" AND is_active = true',
+    'SELECT id, business_type FROM users WHERE id = ? AND user_type = "business" AND is_active = 1',
     [businessId]
   );
   
@@ -678,7 +677,7 @@ router.put('/branches/:id', asyncHandler(async (req, res) => {
   
   // Check if branch exists
   const branches = await queryMySQL(
-    'SELECT id, location_id FROM users WHERE id = ? AND user_type = "branch" AND is_active = true',
+    'SELECT id, location_id FROM users WHERE id = ? AND user_type = "branch" AND is_active = 1',
     [id]
   );
   
@@ -839,7 +838,7 @@ router.delete('/branches/:id', asyncHandler(async (req, res) => {
   
   // Check if branch exists
   const branches = await queryMySQL(
-    'SELECT id FROM users WHERE id = ? AND user_type = "branch" AND is_active = true',
+    'SELECT id FROM users WHERE id = ? AND user_type = "branch" AND is_active = 1',
     [id]
   );
   
@@ -873,7 +872,7 @@ router.get('/branches', asyncHandler(async (req, res) => {
   const search = req.query.search || '';
   const businessId = req.query.businessId || null;
   
-  let whereClause = `WHERE u.user_type = 'branch' AND u.is_active = true`;
+  let whereClause = `WHERE u.user_type = 'branch' AND u.is_active = 1`;
   const params = [];
   
   if (businessId) {
@@ -899,8 +898,8 @@ router.get('/branches', asyncHandler(async (req, res) => {
     LEFT JOIN locations l ON u.location_id = l.id
     ${whereClause}
     ORDER BY u.created_at DESC
-    LIMIT ? OFFSET ?`,
-    [...params, limit, offset]
+    LIMIT ${limit} OFFSET ${offset}`,
+    params
   );
   
   // Get total count for pagination
@@ -977,8 +976,8 @@ router.get('/orders', asyncHandler(async (req, res) => {
     LEFT JOIN users u ON o.user_id = u.id
     ${whereClause}
     ORDER BY o.created_at DESC
-    LIMIT ? OFFSET ?`,
-    [...params, limit, offset]
+    LIMIT ${limit} OFFSET ${offset}`,
+    params
   );
   
   const totalResult = await queryMySQL(
@@ -1104,7 +1103,7 @@ router.get('/items', asyncHandler(async (req, res) => {
   const businessId = req.query.businessId || null;
   const search = req.query.search || '';
   
-  let whereClause = 'WHERE i.is_active = true';
+  let whereClause = 'WHERE i.is_active = 1';
   const params = [];
   
   if (businessId) {
@@ -1127,8 +1126,8 @@ router.get('/items', asyncHandler(async (req, res) => {
     LEFT JOIN users u ON i.user_id = u.id
     ${whereClause}
     ORDER BY i.created_at DESC
-    LIMIT ? OFFSET ?`,
-    [...params, limit, offset]
+    LIMIT ${limit} OFFSET ${offset}`,
+    params
   );
   
   const totalResult = await queryMySQL(
@@ -1180,7 +1179,7 @@ router.get('/menus', asyncHandler(async (req, res) => {
   const offset = (page - 1) * limit;
   const businessId = req.query.businessId || null;
   
-  let whereClause = 'WHERE m.is_active = true';
+  let whereClause = 'WHERE m.is_active = 1';
   const params = [];
   
   if (businessId) {
@@ -1192,13 +1191,13 @@ router.get('/menus', asyncHandler(async (req, res) => {
     `SELECT 
       m.*,
       b.business_name,
-      (SELECT COUNT(*) FROM items WHERE menu_id = m.id AND is_active = true) as items_count
+      (SELECT COUNT(*) FROM items WHERE menu_id = m.id AND is_active = 1) as items_count
     FROM menus m
     LEFT JOIN users b ON m.business_id = b.id
     ${whereClause}
     ORDER BY m.created_at DESC
-    LIMIT ? OFFSET ?`,
-    [...params, limit, offset]
+    LIMIT ${limit} OFFSET ${offset}`,
+    params
   );
   
   const totalResult = await queryMySQL(
@@ -1250,7 +1249,7 @@ router.get('/customers', asyncHandler(async (req, res) => {
   const offset = (page - 1) * limit;
   const search = req.query.search || '';
   
-  let whereClause = `WHERE user_type = 'customer' AND is_active = true`;
+  let whereClause = `WHERE user_type = 'customer' AND is_active = 1`;
   const params = [];
   
   if (search) {
@@ -1266,8 +1265,8 @@ router.get('/customers', asyncHandler(async (req, res) => {
     FROM users u
     ${whereClause}
     ORDER BY u.created_at DESC
-    LIMIT ? OFFSET ?`,
-    [...params, limit, offset]
+    LIMIT ${limit} OFFSET ${offset}`,
+    params
   );
   
   const totalResult = await queryMySQL(
@@ -1301,7 +1300,7 @@ router.get('/customers/:id', asyncHandler(async (req, res) => {
       u.id, u.email, u.first_name, u.last_name, u.contact_phone_number,
       u.is_active, u.created_at, u.updated_at
     FROM users u
-    WHERE u.id = ? AND u.user_type = 'customer' AND u.is_active = true`,
+    WHERE u.id = ? AND u.user_type = 'customer' AND u.is_active = 1`,
     [id]
   );
   
@@ -1390,7 +1389,7 @@ router.get('/admins', asyncHandler(async (req, res) => {
       id, email, first_name, last_name, contact_phone_number,
       is_active, created_at, updated_at
     FROM users 
-    WHERE user_type = 'admin' AND is_active = true
+    WHERE user_type = 'admin' AND is_active = 1
     ORDER BY created_at DESC`
   );
   
