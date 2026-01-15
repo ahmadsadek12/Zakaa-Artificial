@@ -41,7 +41,7 @@ async function findByBusinessId(businessId, includeDeleted = false) {
 async function getMenuItems(menuId, businessId) {
   return await queryMySQL(`
     SELECT * FROM items 
-    WHERE menu_id = ? AND business_id = ? AND deleted_at IS NULL
+    WHERE menu_id = ? AND business_id = ?
     ORDER BY name
   `, [menuId, businessId]);
 }

@@ -26,7 +26,7 @@ function sanitizeItems(items) {
  * Find item by ID
  */
 async function findById(itemId, businessId = null) {
-  let sql = 'SELECT * FROM items WHERE id = ? AND deleted_at IS NULL';
+  let sql = 'SELECT * FROM items WHERE id = ?';
   const params = [itemId];
   
   if (businessId) {
@@ -65,7 +65,6 @@ async function find(filters = {}) {
     params.push(filters.availability);
   }
   
-  sql += ' AND deleted_at IS NULL';
   sql += ' ORDER BY name';
   
   const items = await queryMySQL(sql, params);
@@ -191,12 +190,12 @@ async function update(itemId, businessId, updateData) {
 }
 
 /**
- * Soft delete item
+ * Soft delete item (mark as unavailable)
  */
 async function softDelete(itemId, businessId) {
   await queryMySQL(
-    'UPDATE items SET deleted_at = CURRENT_TIMESTAMP, availability = ? WHERE id = ? AND business_id = ?',
-    ['hidden', itemId, businessId]
+    'UPDATE items SET is_available = false WHERE id = ? AND business_id = ?',
+    [itemId, businessId]
   );
 }
 

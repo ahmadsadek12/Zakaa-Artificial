@@ -6,19 +6,19 @@ const { generateUUID } = require('../utils/uuid');
 const userRepository = require('./userRepository');
 
 /**
- * Find branch by ID (branches are stored in branches table)
+ * Find branch by ID (branches are stored in users table with user_type='branch')
  */
 async function findById(branchId, businessId = null) {
   let sql = `
-    SELECT b.*, l.city, l.street, l.building, l.floor, l.notes as location_notes, l.latitude, l.longitude 
-    FROM branches b 
-    LEFT JOIN locations l ON b.location_id = l.id 
-    WHERE b.id = ? AND b.is_active = true
+    SELECT u.*, l.city, l.street, l.building, l.floor, l.notes as location_notes, l.latitude, l.longitude 
+    FROM users u 
+    LEFT JOIN locations l ON u.location_id = l.id 
+    WHERE u.id = ? AND u.user_type = 'branch' AND u.is_active = true
   `;
   const params = [branchId];
   
   if (businessId) {
-    sql += ' AND b.business_id = ?';
+    sql += ' AND u.parent_user_id = ?';
     params.push(businessId);
   }
   
@@ -27,38 +27,38 @@ async function findById(branchId, businessId = null) {
 }
 
 /**
- * Find all branches for a business
+ * Find all branches for a business (from users table where user_type='branch')
  */
 async function findByBusinessId(businessId, includeDeleted = false) {
   let sql = `
-    SELECT b.*, l.city, l.street, l.building, l.floor, l.notes as location_notes, l.latitude, l.longitude 
-    FROM branches b 
-    LEFT JOIN locations l ON b.location_id = l.id 
-    WHERE b.business_id = ?
+    SELECT u.*, l.city, l.street, l.building, l.floor, l.notes as location_notes, l.latitude, l.longitude 
+    FROM users u 
+    LEFT JOIN locations l ON u.location_id = l.id 
+    WHERE u.parent_user_id = ? AND u.user_type = 'branch'
   `;
   
   if (!includeDeleted) {
-    sql += ' AND b.is_active = true';
+    sql += ' AND u.is_active = true';
   }
   
-  sql += ' ORDER BY b.created_at DESC';
+  sql += ' ORDER BY u.created_at DESC';
   
   return await queryMySQL(sql, [businessId]);
 }
 
 /**
- * Find branch by WhatsApp phone number ID
+ * Find branch by WhatsApp phone number ID (from users table)
  */
 async function findByWhatsAppPhoneId(whatsappPhoneNumberId) {
   const branches = await queryMySQL(
-    'SELECT * FROM branches WHERE whatsapp_phone_number_id = ? AND is_active = true',
+    'SELECT * FROM users WHERE whatsapp_phone_number_id = ? AND user_type = \'branch\' AND is_active = true',
     [whatsappPhoneNumberId]
   );
   return branches[0] || null;
 }
 
 /**
- * Create branch (creates a branch in branches table)
+ * Create branch (creates a branch in users table with user_type='branch')
  */
 async function create(branchData) {
   const connection = await getMySQLConnection();
@@ -72,39 +72,38 @@ async function create(branchData) {
     if (branchData.location && !locationId) {
       locationId = generateUUID();
       await connection.query(`
-        INSERT INTO locations (id, city, street, building, floor, notes, latitude, longitude)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO locations (id, city, street, building, floor, notes)
+        VALUES (?, ?, ?, ?, ?, ?)
       `, [
         locationId,
         branchData.location.city,
         branchData.location.street,
         branchData.location.building || null,
         branchData.location.floor || null,
-        branchData.location.notes || null,
-        branchData.location.latitude || null,
-        branchData.location.longitude || null
+        branchData.location.notes || null
       ]);
     }
     
-    // Create branch in branches table
+    // Create branch in users table
     await connection.query(`
-      INSERT INTO branches (
-        id, business_id, branch_name, address, latitude, longitude,
+      INSERT INTO users (
+        id, user_type, parent_user_id, business_name, email,
         contact_phone_number, whatsapp_phone_number, whatsapp_phone_number_id,
-        whatsapp_access_token_encrypted, location_id, is_active, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        whatsapp_access_token_encrypted, location_id, location_latitude, location_longitude,
+        is_active, created_at
+      ) VALUES (?, 'branch', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     `, [
       branchId,
       branchData.businessId,
-      branchData.branchName,
-      branchData.location ? `${branchData.location.street}, ${branchData.location.city}` : null,
-      branchData.location?.latitude || null,
-      branchData.location?.longitude || null,
+      branchData.branchName || branchData.business_name,
+      branchData.email || null,
       branchData.contactPhoneNumber || null,
       branchData.whatsappPhoneNumber || null,
       branchData.whatsappPhoneNumberId || null,
       branchData.whatsappAccessTokenEncrypted || null,
       locationId,
+      branchData.location?.latitude || null,
+      branchData.location?.longitude || null,
       branchData.isActive !== undefined ? branchData.isActive : true
     ]);
     
@@ -175,17 +174,17 @@ async function update(branchId, businessId, updateData) {
       delete updateData.location;
     }
     
-    // Build update query for branch
+    // Build update query for branch (in users table)
     const updates = [];
     const values = [];
     
-    if (updateData.branchName !== undefined) {
-      updates.push('branch_name = ?');
-      values.push(updateData.branchName);
+    if (updateData.branchName !== undefined || updateData.business_name !== undefined) {
+      updates.push('business_name = ?');
+      values.push(updateData.branchName || updateData.business_name);
     }
-    if (updateData.address !== undefined) {
-      updates.push('address = ?');
-      values.push(updateData.address);
+    if (updateData.email !== undefined) {
+      updates.push('email = ?');
+      values.push(updateData.email);
     }
     if (updateData.contactPhoneNumber !== undefined) {
       updates.push('contact_phone_number = ?');
@@ -215,9 +214,9 @@ async function update(branchId, businessId, updateData) {
     if (updates.length > 0) {
       values.push(branchId, businessId);
       await connection.query(`
-        UPDATE branches 
+        UPDATE users 
         SET ${updates.join(', ')} 
-        WHERE id = ? AND business_id = ?
+        WHERE id = ? AND parent_user_id = ? AND user_type = 'branch'
       `, values);
     }
     
@@ -233,7 +232,7 @@ async function update(branchId, businessId, updateData) {
 }
 
 /**
- * Soft delete branch (mark as inactive)
+ * Soft delete branch (mark as inactive in users table)
  */
 async function softDelete(branchId, businessId) {
   // Verify branch belongs to business
@@ -243,7 +242,7 @@ async function softDelete(branchId, businessId) {
   }
   
   await queryMySQL(
-    'UPDATE branches SET is_active = false WHERE id = ? AND business_id = ?',
+    'UPDATE users SET is_active = false WHERE id = ? AND parent_user_id = ? AND user_type = \'branch\'',
     [branchId, businessId]
   );
 }

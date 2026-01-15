@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS locations (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   
   INDEX idx_city (city)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Users Table (Single Table, Multi-Role - Now includes branches)
 CREATE TABLE IF NOT EXISTS users (
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS users (
   INDEX idx_is_active (is_active),
   INDEX idx_subscription_type (subscription_type),
   INDEX idx_location_id (location_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Branches Table REMOVED - Branches are now stored in users table with user_type='branch'
 
@@ -134,7 +134,7 @@ CREATE TABLE IF NOT EXISTS item_ingredients (
   
   FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
   INDEX idx_item_id (item_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Orders Table (Transactional, Short-Lived)
 CREATE TABLE IF NOT EXISTS orders (
@@ -196,7 +196,7 @@ CREATE TABLE IF NOT EXISTS orders (
   INDEX idx_created_at (created_at),
   INDEX idx_completed_at (completed_at),
   INDEX idx_customer_created (customer_phone_number, created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Order Items Table (Many-to-Many with Price Snapshots)
 CREATE TABLE IF NOT EXISTS order_items (
@@ -213,7 +213,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE RESTRICT,
   INDEX idx_order_id (order_id),
   INDEX idx_item_id (item_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Order Status History Table (Track order status changes)
 CREATE TABLE IF NOT EXISTS order_status_history (
@@ -226,7 +226,7 @@ CREATE TABLE IF NOT EXISTS order_status_history (
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
   INDEX idx_order_id (order_id),
   INDEX idx_changed_at (changed_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Tables Table (For F&B businesses - physical tables)
 CREATE TABLE IF NOT EXISTS tables (
@@ -240,7 +240,7 @@ CREATE TABLE IF NOT EXISTS tables (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_user_id (user_id),
   INDEX idx_reserved (reserved)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Reservations Table (For all business types)
 CREATE TABLE IF NOT EXISTS reservations (
@@ -263,7 +263,7 @@ CREATE TABLE IF NOT EXISTS reservations (
   INDEX idx_business_user_id (business_user_id),
   INDEX idx_reservation_date (reservation_date),
   INDEX idx_table_id (table_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Menus Table
 CREATE TABLE IF NOT EXISTS menus (
@@ -284,7 +284,7 @@ CREATE TABLE IF NOT EXISTS menus (
   FOREIGN KEY (business_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_business_id (business_id),
   INDEX idx_is_active (is_active)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Branch Menus Table REMOVED - Menus belong to business, all branches share them
 
@@ -302,7 +302,7 @@ CREATE TABLE IF NOT EXISTS opening_hours (
   INDEX idx_owner (owner_type, owner_id),
   INDEX idx_day (day_of_week),
   UNIQUE KEY unique_owner_day (owner_type, owner_id, day_of_week)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Policies Table (Business or Branch level)
 CREATE TABLE IF NOT EXISTS policies (
@@ -316,6 +316,6 @@ CREATE TABLE IF NOT EXISTS policies (
   
   INDEX idx_owner (owner_type, owner_id),
   INDEX idx_policy_type (policy_type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Branches Table REMOVED - Branches are now stored in users table with user_type='branch'
