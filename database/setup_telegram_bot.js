@@ -77,9 +77,10 @@ async function setupTelegramBot() {
       // Update with Telegram bot info
       await connection.query(`
         UPDATE users 
-        SET whatsapp_phone_number_id = ?
+        SET whatsapp_phone_number_id = ?,
+            telegram_bot_token = ?
         WHERE id = ?
-      `, [`telegram:${TELEGRAM_BOT_USERNAME}`, businessId]);
+      `, [`telegram:${TELEGRAM_BOT_USERNAME}`, TELEGRAM_BOT_TOKEN, businessId]);
       
       console.log('✅ Telegram bot connected to business');
     } else {
@@ -88,11 +89,13 @@ async function setupTelegramBot() {
       
       // Update with Telegram bot info (store bot username as identifier)
       // We'll use whatsapp_phone_number_id field to store Telegram bot identifier
+      // Also store the actual bot token in telegram_bot_token column
       await connection.query(`
         UPDATE users 
-        SET whatsapp_phone_number_id = ?
+        SET whatsapp_phone_number_id = ?,
+            telegram_bot_token = ?
         WHERE id = ?
-      `, [`telegram:${TELEGRAM_BOT_USERNAME}`, business.id]);
+      `, [`telegram:${TELEGRAM_BOT_USERNAME}`, TELEGRAM_BOT_TOKEN, business.id]);
       
       console.log('✅ Telegram bot connected to business');
     }
