@@ -341,11 +341,6 @@ router.post('/me/branches', [
   body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
   body('password').notEmpty().isLength({ min: 8 }).withMessage('Password is required (minimum 8 characters)'),
   body('branchName').notEmpty().withMessage('Branch name is required'),
-  body('location').optional().isObject().withMessage('Location must be an object'),
-  body('location.city').optional({ checkFalsy: true }).isString().withMessage('City must be a string'),
-  body('location.street').optional({ checkFalsy: true }).isString().withMessage('Street must be a string'),
-  body('location.building').optional({ checkFalsy: true }).isString(),
-  body('location.floor').optional({ checkFalsy: true }).isString(),
   body('contactPhoneNumber').optional({ checkFalsy: true }).isMobilePhone().withMessage('Valid phone number required'),
   body('whatsappPhoneNumber').optional({ checkFalsy: true }).isMobilePhone().withMessage('Valid WhatsApp phone number required')
 ], asyncHandler(async (req, res) => {
