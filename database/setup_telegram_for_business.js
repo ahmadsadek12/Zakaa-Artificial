@@ -28,11 +28,15 @@ async function setupTelegramForBusiness() {
     
     if (columns.length === 0) {
       console.log('📝 Adding telegram_bot_token column to users table...');
+      // Temporarily disable foreign key checks
+      await connection.query('SET FOREIGN_KEY_CHECKS = 0');
       await connection.query(`
         ALTER TABLE users 
         ADD COLUMN telegram_bot_token VARCHAR(255) NULL 
         AFTER whatsapp_access_token_encrypted
       `);
+      // Re-enable foreign key checks
+      await connection.query('SET FOREIGN_KEY_CHECKS = 1');
       console.log('✅ Column added successfully');
     } else {
       console.log('✅ telegram_bot_token column already exists');
@@ -49,11 +53,15 @@ async function setupTelegramForBusiness() {
     
     if (wabaColumns.length === 0) {
       console.log('📝 Adding whatsapp_business_account_id column to users table...');
+      // Temporarily disable foreign key checks
+      await connection.query('SET FOREIGN_KEY_CHECKS = 0');
       await connection.query(`
         ALTER TABLE users 
         ADD COLUMN whatsapp_business_account_id VARCHAR(255) NULL 
         AFTER whatsapp_phone_number_id
       `);
+      // Re-enable foreign key checks
+      await connection.query('SET FOREIGN_KEY_CHECKS = 1');
       console.log('✅ Column added successfully');
     }
     
