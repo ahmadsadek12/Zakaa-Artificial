@@ -263,17 +263,7 @@ async function executeFunction(functionName, args, context) {
           item = items[0];
         }
         
-        // Check if item is "only scheduled" (is_schedulable = true means ONLY scheduled, not direct order)
-        if (item.is_schedulable) {
-          // Item can only be scheduled, inform customer
-          return {
-            success: true,
-            message: `Added ${quantity}x ${item.name} to your cart. Note: This item can only be scheduled for a future time. Please use the scheduling function to set a date and time.`,
-            cart: await cartManager.getCart(business.id, branchId, customerPhoneNumber),
-            requiresScheduling: true
-          };
-        }
-        
+        // Add item to cart first
         const cart = await cartManager.addItemToCart(
           business.id,
           branchId,
@@ -292,8 +282,20 @@ async function executeFunction(functionName, args, context) {
         logger.info('Item added to cart via function call', { 
           itemName: item.name, 
           quantity,
-          cartId: cart.id 
+          cartId: cart.id,
+          isOnlyScheduled: item.is_schedulable
         });
+        
+        // Check if item is "only scheduled" (is_schedulable = true means ONLY scheduled, not direct order)
+        if (item.is_schedulable) {
+          // Item can only be scheduled, inform customer
+          return {
+            success: true,
+            message: `Added ${quantity}x ${item.name} to your cart. Note: This item can only be scheduled for a future time. Please use the scheduling function to set a date and time before confirming your order.`,
+            cart: cart,
+            requiresScheduling: true
+          };
+        }
         
         return {
           success: true,
