@@ -124,31 +124,33 @@ router.post('/', upload.fields([
     }
   }
   
-  // Handle multiple image uploads
+  // Handle multiple image uploads - compress before uploading
   let menuImageUrls = [];
   if (req.files && req.files.menuImages && req.files.menuImages.length > 0) {
-    const { compressImage } = require('../../utils/imageProcessor');
-    for (const imageFile of req.files.menuImages) {
-      if (imageFile.location) {
-        menuImageUrls.push(imageFile.location);
-      } else if (imageFile.buffer && s3) {
-        try {
-          // Compress image before uploading
-          const compressedBuffer = await compressImage(imageFile.buffer, {
-            maxWidth: 1200,
-            maxHeight: 1200,
-            quality: 85
-          });
-          
-          // Generate filename with .jpg extension (compressed images are JPEG)
-          const originalName = imageFile.originalname.replace(/\.[^/.]+$/, '');
-          const fileName = `${generateUUID()}-${originalName}.jpg`;
-          const imageUrl = await uploadToS3(compressedBuffer, fileName, 'image/jpeg', 'menus');
-          menuImageUrls.push(imageUrl);
-        } catch (error) {
-          logger.warn('S3 image upload failed, skipping image:', error.message);
+    if (s3) {
+      const { compressImage } = require('../../utils/imageProcessor');
+      for (const imageFile of req.files.menuImages) {
+        if (imageFile.buffer) {
+          try {
+            // Compress image before uploading (typically reduces size by 60-80%)
+            const compressedBuffer = await compressImage(imageFile.buffer, {
+              maxWidth: 1200,
+              maxHeight: 1200,
+              quality: 85
+            });
+            
+            // Generate filename with .jpg extension (compressed images are JPEG)
+            const originalName = imageFile.originalname.replace(/\.[^/.]+$/, '');
+            const fileName = `${generateUUID()}-${originalName}.jpg`;
+            const imageUrl = await uploadToS3(compressedBuffer, fileName, 'image/jpeg', 'menus');
+            menuImageUrls.push(imageUrl);
+          } catch (error) {
+            logger.warn('S3 image upload failed, skipping image:', error.message);
+          }
         }
       }
+    } else {
+      logger.warn('S3 not configured, menu images skipped');
     }
   }
   
@@ -250,30 +252,32 @@ router.put('/:id', requireOwnership('menus'), upload.fields([
     }
   }
   
-  // Add new uploaded images
+  // Add new uploaded images - compress before uploading
   if (req.files && req.files.menuImages && req.files.menuImages.length > 0) {
-    const { compressImage } = require('../../utils/imageProcessor');
-    for (const imageFile of req.files.menuImages) {
-      if (imageFile.location) {
-        finalImageUrls.push(imageFile.location);
-      } else if (imageFile.buffer && s3) {
-        try {
-          // Compress image before uploading
-          const compressedBuffer = await compressImage(imageFile.buffer, {
-            maxWidth: 1200,
-            maxHeight: 1200,
-            quality: 85
-          });
-          
-          // Generate filename with .jpg extension (compressed images are JPEG)
-          const originalName = imageFile.originalname.replace(/\.[^/.]+$/, '');
-          const fileName = `${generateUUID()}-${originalName}.jpg`;
-          const imageUrl = await uploadToS3(compressedBuffer, fileName, 'image/jpeg', 'menus');
-          finalImageUrls.push(imageUrl);
-        } catch (error) {
-          logger.warn('S3 image upload failed, skipping image:', error.message);
+    if (s3) {
+      const { compressImage } = require('../../utils/imageProcessor');
+      for (const imageFile of req.files.menuImages) {
+        if (imageFile.buffer) {
+          try {
+            // Compress image before uploading (typically reduces size by 60-80%)
+            const compressedBuffer = await compressImage(imageFile.buffer, {
+              maxWidth: 1200,
+              maxHeight: 1200,
+              quality: 85
+            });
+            
+            // Generate filename with .jpg extension (compressed images are JPEG)
+            const originalName = imageFile.originalname.replace(/\.[^/.]+$/, '');
+            const fileName = `${generateUUID()}-${originalName}.jpg`;
+            const imageUrl = await uploadToS3(compressedBuffer, fileName, 'image/jpeg', 'menus');
+            finalImageUrls.push(imageUrl);
+          } catch (error) {
+            logger.warn('S3 image upload failed, skipping image:', error.message);
+          }
         }
       }
+    } else {
+      logger.warn('S3 not configured, menu images skipped');
     }
     // Update with merged list (existing + new)
     updateData.menuImageUrls = finalImageUrls;

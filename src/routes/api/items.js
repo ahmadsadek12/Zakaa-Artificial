@@ -20,18 +20,9 @@ router.use(authenticate);
 router.use(requireUserType(CONSTANTS.USER_TYPES.ADMIN, CONSTANTS.USER_TYPES.BUSINESS, CONSTANTS.USER_TYPES.BRANCH));
 router.use(tenantIsolation);
 
-// Configure multer for S3 upload (or memory storage if S3 not configured)
+// Configure multer - always use memory storage so we can compress before S3 upload
 const upload = multer({
-  storage: s3 ? multerS3({
-    s3: s3,
-    bucket: S3_CONFIG.bucket,
-    acl: 'public-read',
-    key: function (req, file, cb) {
-      const folder = 'items';
-      const fileName = `${generateUUID()}-${file.originalname}`;
-      cb(null, `${folder}/${fileName}`);
-    }
-  }) : multer.memoryStorage(),
+  storage: multer.memoryStorage(), // Always use memory to compress before upload
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB (will be compressed before upload)
   },
@@ -152,19 +143,16 @@ router.post('/', upload.single('itemImage'), [
   
   const { name, description, menuId, userId, branchId, price, cost, preparationTimeMinutes, durationMinutes, quantity, isReusable, itemType, isSchedulable, minScheduleHours, availableFrom, availableTo, daysAvailable, ingredients, availability } = req.body;
   
-  // Handle file upload: S3 returns req.file.location, memory storage returns req.file.buffer
+  // Handle file upload - compress and upload to S3
   let itemImageUrl = null;
-  if (req.file) {
-    if (req.file.location) {
-      // S3 upload (already uploaded via multer-s3)
-      itemImageUrl = req.file.location;
-    } else if (req.file.buffer && s3) {
-      // Memory storage - compress and upload to S3 if configured
+  if (req.file && req.file.buffer) {
+    if (s3) {
+      // Compress and upload to S3
       try {
         const { uploadToS3 } = require('../../config/aws');
         const { compressImage } = require('../../utils/imageProcessor');
         
-        // Compress image before uploading
+        // Compress image before uploading (typically reduces size by 60-80%)
         const compressedBuffer = await compressImage(req.file.buffer, {
           maxWidth: 1200,
           maxHeight: 1200,
@@ -179,6 +167,8 @@ router.post('/', upload.single('itemImage'), [
         logger.warn('S3 upload failed, skipping image:', error.message);
         // Continue without image if S3 upload fails
       }
+    } else {
+      logger.warn('S3 not configured, image upload skipped');
     }
   }
   
@@ -302,18 +292,15 @@ router.put('/:id', requireOwnership('items'), upload.single('itemImage'), [
   if (ingredients !== undefined) updateData.ingredients = ingredients;
   if (availability !== undefined) updateData.availability = availability;
   
-  // Handle image upload: S3 returns req.file.location, memory storage returns req.file.buffer
-  if (req.file) {
-    if (req.file.location) {
-      // S3 upload (already uploaded via multer-s3)
-      updateData.itemImageUrl = req.file.location;
-    } else if (req.file.buffer && s3) {
-      // Memory storage - compress and upload to S3 if configured
+  // Handle image upload - compress and upload to S3
+  if (req.file && req.file.buffer) {
+    if (s3) {
+      // Compress and upload to S3
       try {
         const { uploadToS3 } = require('../../config/aws');
         const { compressImage } = require('../../utils/imageProcessor');
         
-        // Compress image before uploading
+        // Compress image before uploading (typically reduces size by 60-80%)
         const compressedBuffer = await compressImage(req.file.buffer, {
           maxWidth: 1200,
           maxHeight: 1200,
@@ -328,6 +315,8 @@ router.put('/:id', requireOwnership('items'), upload.single('itemImage'), [
         logger.warn('S3 upload failed, skipping image update:', error.message);
         // Continue without image if S3 upload fails
       }
+    } else {
+      logger.warn('S3 not configured, image update skipped');
     }
   }
   
