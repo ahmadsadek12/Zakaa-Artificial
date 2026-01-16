@@ -127,13 +127,23 @@ router.post('/', upload.fields([
   // Handle multiple image uploads
   let menuImageUrls = [];
   if (req.files && req.files.menuImages && req.files.menuImages.length > 0) {
+    const { compressImage } = require('../../utils/imageProcessor');
     for (const imageFile of req.files.menuImages) {
       if (imageFile.location) {
         menuImageUrls.push(imageFile.location);
       } else if (imageFile.buffer && s3) {
         try {
-          const fileName = `${generateUUID()}-${imageFile.originalname}`;
-          const imageUrl = await uploadToS3(imageFile.buffer, fileName, imageFile.mimetype, 'menus');
+          // Compress image before uploading
+          const compressedBuffer = await compressImage(imageFile.buffer, {
+            maxWidth: 1200,
+            maxHeight: 1200,
+            quality: 85
+          });
+          
+          // Generate filename with .jpg extension (compressed images are JPEG)
+          const originalName = imageFile.originalname.replace(/\.[^/.]+$/, '');
+          const fileName = `${generateUUID()}-${originalName}.jpg`;
+          const imageUrl = await uploadToS3(compressedBuffer, fileName, 'image/jpeg', 'menus');
           menuImageUrls.push(imageUrl);
         } catch (error) {
           logger.warn('S3 image upload failed, skipping image:', error.message);

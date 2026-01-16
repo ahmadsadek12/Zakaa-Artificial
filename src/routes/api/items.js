@@ -33,7 +33,7 @@ const upload = multer({
     }
   }) : multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB
+    fileSize: 5 * 1024 * 1024 // 5MB (will be compressed before upload)
   },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
@@ -156,14 +156,25 @@ router.post('/', upload.single('itemImage'), [
   let itemImageUrl = null;
   if (req.file) {
     if (req.file.location) {
-      // S3 upload
+      // S3 upload (already uploaded via multer-s3)
       itemImageUrl = req.file.location;
     } else if (req.file.buffer && s3) {
-      // Memory storage - upload to S3 if configured
+      // Memory storage - compress and upload to S3 if configured
       try {
         const { uploadToS3 } = require('../../config/aws');
-        const fileName = `${generateUUID()}-${req.file.originalname}`;
-        itemImageUrl = await uploadToS3(req.file.buffer, fileName, req.file.mimetype, 'items');
+        const { compressImage } = require('../../utils/imageProcessor');
+        
+        // Compress image before uploading
+        const compressedBuffer = await compressImage(req.file.buffer, {
+          maxWidth: 1200,
+          maxHeight: 1200,
+          quality: 85
+        });
+        
+        // Generate filename with .jpg extension (compressed images are JPEG)
+        const originalName = req.file.originalname.replace(/\.[^/.]+$/, '');
+        const fileName = `${generateUUID()}-${originalName}.jpg`;
+        itemImageUrl = await uploadToS3(compressedBuffer, fileName, 'image/jpeg', 'items');
       } catch (error) {
         logger.warn('S3 upload failed, skipping image:', error.message);
         // Continue without image if S3 upload fails
@@ -294,14 +305,25 @@ router.put('/:id', requireOwnership('items'), upload.single('itemImage'), [
   // Handle image upload: S3 returns req.file.location, memory storage returns req.file.buffer
   if (req.file) {
     if (req.file.location) {
-      // S3 upload
+      // S3 upload (already uploaded via multer-s3)
       updateData.itemImageUrl = req.file.location;
     } else if (req.file.buffer && s3) {
-      // Memory storage - upload to S3 if configured
+      // Memory storage - compress and upload to S3 if configured
       try {
         const { uploadToS3 } = require('../../config/aws');
-        const fileName = `${generateUUID()}-${req.file.originalname}`;
-        updateData.itemImageUrl = await uploadToS3(req.file.buffer, fileName, req.file.mimetype, 'items');
+        const { compressImage } = require('../../utils/imageProcessor');
+        
+        // Compress image before uploading
+        const compressedBuffer = await compressImage(req.file.buffer, {
+          maxWidth: 1200,
+          maxHeight: 1200,
+          quality: 85
+        });
+        
+        // Generate filename with .jpg extension (compressed images are JPEG)
+        const originalName = req.file.originalname.replace(/\.[^/.]+$/, '');
+        const fileName = `${generateUUID()}-${originalName}.jpg`;
+        updateData.itemImageUrl = await uploadToS3(compressedBuffer, fileName, 'image/jpeg', 'items');
       } catch (error) {
         logger.warn('S3 upload failed, skipping image update:', error.message);
         // Continue without image if S3 upload fails
