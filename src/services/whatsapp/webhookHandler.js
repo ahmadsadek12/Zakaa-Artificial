@@ -171,6 +171,28 @@ async function processMessage(message, value) {
         responseMessage += `\n\n✅ Your order has been placed! Order #${response.orderId.substring(0, 8).toUpperCase()}`;
       }
       
+      // Send images first if any
+      if (response.imagesToSend && response.imagesToSend.length > 0) {
+        const { sendImage } = require('./messageSender');
+        for (const image of response.imagesToSend) {
+          try {
+            await sendImage({
+              phoneNumberId: branch?.whatsapp_phone_number_id || business.whatsapp_phone_number_id,
+              accessToken: branch?.whatsapp_access_token_encrypted || business.whatsapp_access_token_encrypted,
+              to: from,
+              imageUrl: image.url,
+              caption: image.caption || ''
+            });
+          } catch (imageError) {
+            logger.error('Failed to send image via WhatsApp:', {
+              to: from,
+              imageUrl: image.url,
+              error: imageError.message
+            });
+          }
+        }
+      }
+      
       await messageSender.sendMessage({
         phoneNumberId: branch?.whatsapp_phone_number_id || business.whatsapp_phone_number_id,
         accessToken: branch?.whatsapp_access_token_encrypted || business.whatsapp_access_token_encrypted,

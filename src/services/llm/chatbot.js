@@ -271,6 +271,17 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
             updatedCart = result.cart;
           }
           
+          // Track image URLs from function results
+          if (result.shouldSendImage && result.imageUrl) {
+            if (!context.imagesToSend) {
+              context.imagesToSend = [];
+            }
+            context.imagesToSend.push({
+              url: result.imageUrl,
+              caption: result.message || `Image of ${result.itemName || 'item'}`
+            });
+          }
+          
           functionResults.push({
             tool_call_id: toolCall.id,
             result: result
@@ -344,7 +355,8 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
       tokensOut: completion.usage?.completion_tokens,
       cart: updatedCart,
       orderCreated,
-      orderId
+      orderId,
+      imagesToSend: context.imagesToSend || []
     };
   } catch (error) {
     logger.error('Error in chatbot service:', {

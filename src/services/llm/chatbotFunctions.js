@@ -203,6 +203,23 @@ function getAvailableFunctions() {
           required: []
         }
       }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'send_item_image',
+        description: 'Send an item image to the customer. Use this when customer asks to see a picture of an item, wants to see what an item looks like, or requests a photo/image of a specific item.',
+        parameters: {
+          type: 'object',
+          properties: {
+            itemName: {
+              type: 'string',
+              description: 'The name of the item to send the image for'
+            }
+          },
+          required: ['itemName']
+        }
+      }
     }
   ];
 }
@@ -1035,6 +1052,54 @@ async function executeFunction(functionName, args, context) {
         cache.set(cacheKey, result, 5 * 60 * 1000);
         
         return result;
+      }
+      
+      case 'send_item_image': {
+        const { itemName } = args;
+        
+        // Find the item
+        const items = await queryMySQL(
+          `SELECT * FROM items 
+           WHERE business_id = ? AND availability = 'available' AND deleted_at IS NULL
+           AND (LOWER(name) LIKE ? OR LOWER(name) LIKE ? OR LOWER(name) = ?)
+           ORDER BY CASE WHEN LOWER(name) = ? THEN 1 WHEN LOWER(name) LIKE ? THEN 2 ELSE 3 END
+           LIMIT 1`,
+          [
+            business.id,
+            `%${itemName.toLowerCase()}%`,
+            `${itemName.toLowerCase().split(' ')[0]}%`,
+            itemName.toLowerCase(),
+            itemName.toLowerCase(),
+            `${itemName.toLowerCase()}%`
+          ]
+        );
+        
+        if (items.length === 0) {
+          return {
+            success: false,
+            error: `Item "${itemName}" not found. Please check the menu for available items.`,
+            imageUrl: null
+          };
+        }
+        
+        const item = items[0];
+        
+        if (!item.item_image_url) {
+          return {
+            success: false,
+            error: `Sorry, there's no image available for "${item.name}" at the moment.`,
+            imageUrl: null
+          };
+        }
+        
+        // Return the image URL - the chatbot will send it
+        return {
+          success: true,
+          message: `Here's the image for ${item.name}:`,
+          imageUrl: item.item_image_url,
+          itemName: item.name,
+          shouldSendImage: true
+        };
       }
       
       default:

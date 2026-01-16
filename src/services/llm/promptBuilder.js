@@ -135,7 +135,7 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
     
     itemsText = Object.entries(itemsByMenu).map(([menuName, menuItems]) => {
       return `**${menuName}:**\n${menuItems.map(item => 
-        `  • ${item.name} - ${item.price}${item.description ? `\n    ${item.description}` : ''}`
+        `  • ${item.name} - ${item.price}${item.description ? `\n    ${item.description}` : ''}${item.item_image_url ? `\n    [Image available: ${item.item_image_url}]` : ''}`
       ).join('\n')}`;
     }).join('\n\n');
   } else {

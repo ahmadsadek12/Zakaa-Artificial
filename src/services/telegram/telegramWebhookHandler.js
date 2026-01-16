@@ -253,6 +253,25 @@ async function processMessage(message) {
         responseMessage += `\n\n✅ Your order has been placed! Order #${response.orderId.substring(0, 8).toUpperCase()}`;
       }
       
+      // Send images first if any
+      if (response.imagesToSend && response.imagesToSend.length > 0) {
+        for (const image of response.imagesToSend) {
+          try {
+            await telegramMessageSender.sendPhoto({
+              chatId,
+              imageUrl: image.url,
+              caption: image.caption || ''
+            });
+          } catch (imageError) {
+            logger.error('Failed to send image via Telegram:', {
+              chatId,
+              imageUrl: image.url,
+              error: imageError.message
+            });
+          }
+        }
+      }
+      
       // Send via Telegram
       // Note: We'll send as plain text for now to avoid Markdown escaping issues
       // You can enable Markdown later if needed
