@@ -237,6 +237,23 @@ function getAvailableFunctions() {
           required: []
         }
       }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'send_menu_image',
+        description: 'Send menu images to the customer. Use this when customer asks to see menu images, wants to see pictures of the menu, requests menu photos, or asks "can I see the menu?" (when they want visual menu).',
+        parameters: {
+          type: 'object',
+          properties: {
+            menuName: {
+              type: 'string',
+              description: 'The name of the menu to send images for. If not specified or "all", send images from the first available menu.'
+            }
+          },
+          required: []
+        }
+      }
     }
   ];
 }
@@ -1170,6 +1187,86 @@ async function executeFunction(functionName, args, context) {
           pdfUrl: menu.menu_pdf_url,
           menuName: menu.name,
           shouldSendPdf: true
+        };
+      }
+      
+      case 'send_menu_image': {
+        const { menuName } = args;
+        
+        // Find menus with images
+        let menus;
+        if (menuName) {
+          menus = await queryMySQL(
+            `SELECT * FROM menus 
+             WHERE business_id = ? AND is_active = true AND deleted_at IS NULL
+             AND menu_image_urls IS NOT NULL
+             AND (LOWER(name) LIKE ? OR LOWER(name) = ?)
+             ORDER BY CASE WHEN LOWER(name) = ? THEN 1 ELSE 2 END
+             LIMIT 1`,
+            [
+              business.id,
+              `%${menuName.toLowerCase()}%`,
+              menuName.toLowerCase(),
+              menuName.toLowerCase()
+            ]
+          );
+        } else {
+          // Get first menu with images
+          menus = await queryMySQL(
+            `SELECT * FROM menus 
+             WHERE business_id = ? AND is_active = true AND deleted_at IS NULL
+             AND menu_image_urls IS NOT NULL
+             ORDER BY name
+             LIMIT 1`,
+            [business.id]
+          );
+        }
+        
+        if (menus.length === 0) {
+          return {
+            success: false,
+            error: menuName 
+              ? `Sorry, there are no images available for menu "${menuName}" at the moment.`
+              : `Sorry, there are no menu images available at the moment.`,
+            imageUrls: []
+          };
+        }
+        
+        const menu = menus[0];
+        
+        // Parse menu_image_urls (stored as JSON string)
+        let menuImageUrls = [];
+        if (menu.menu_image_urls) {
+          try {
+            menuImageUrls = typeof menu.menu_image_urls === 'string' 
+              ? JSON.parse(menu.menu_image_urls) 
+              : menu.menu_image_urls;
+            if (!Array.isArray(menuImageUrls)) {
+              menuImageUrls = [];
+            }
+          } catch (e) {
+            logger.warn('Failed to parse menu_image_urls', { menuId: menu.id, error: e.message });
+            menuImageUrls = [];
+          }
+        }
+        
+        if (menuImageUrls.length === 0) {
+          return {
+            success: false,
+            error: menuName 
+              ? `Sorry, there are no images available for menu "${menu.name}" at the moment.`
+              : `Sorry, there are no menu images available at the moment.`,
+            imageUrls: []
+          };
+        }
+        
+        // Return the image URLs - the chatbot will send them
+        return {
+          success: true,
+          message: `Here are the menu images for ${menu.name}:`,
+          imageUrls: menuImageUrls,
+          menuName: menu.name,
+          shouldSendImages: true
         };
       }
       

@@ -293,6 +293,20 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
             });
           }
           
+          // Track menu image URLs from function results
+          if (result.shouldSendImages && result.imageUrls && Array.isArray(result.imageUrls) && result.imageUrls.length > 0) {
+            if (!context.imagesToSend) {
+              context.imagesToSend = [];
+            }
+            // Add all menu images
+            for (const imageUrl of result.imageUrls) {
+              context.imagesToSend.push({
+                url: imageUrl,
+                caption: result.message || `Menu image for ${result.menuName || 'menu'}`
+              });
+            }
+          }
+          
           functionResults.push({
             tool_call_id: toolCall.id,
             result: result

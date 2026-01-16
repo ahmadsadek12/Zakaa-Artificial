@@ -121,7 +121,7 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
       }).join('\n')
     : 'Opening hours not specified';
   
-  // Build menus text with PDF information
+  // Build menus text with PDF and image information
   let menusText = '';
   if (menus.length > 0) {
     menusText = menus.map(menu => {
@@ -131,6 +131,20 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
       }
       if (menu.menu_pdf_url) {
         menuInfo += `\n  [PDF Menu available: ${menu.menu_pdf_url}]`;
+      }
+      // Parse menu_image_urls (stored as JSON string)
+      let menuImageUrls = [];
+      if (menu.menu_image_urls) {
+        try {
+          menuImageUrls = typeof menu.menu_image_urls === 'string' 
+            ? JSON.parse(menu.menu_image_urls) 
+            : menu.menu_image_urls;
+          if (Array.isArray(menuImageUrls) && menuImageUrls.length > 0) {
+            menuInfo += `\n  [Menu images available: ${menuImageUrls.length} image(s)]`;
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
       }
       if (menu.menu_link) {
         menuInfo += `\n  [External link: ${menu.menu_link}]`;
@@ -258,6 +272,7 @@ ${menusText || 'No menus available'}
 Rules:
 - Use get_menu_items() to show menu/catalog
 - Use send_menu_pdf() when customer asks for menu in PDF format, wants to download menu PDF, or requests menu as PDF
+- Use send_menu_image() when customer asks to see menu images, wants to see pictures of the menu, or requests menu photos
 - Use send_item_image() when customer asks to see a picture of an item
 - Use add_item_to_cart() when customer wants items/services
 - Use set_delivery_address() for delivery addresses
