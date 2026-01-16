@@ -642,23 +642,26 @@ async function executeFunction(functionName, args, context) {
               
               // Check for existing orders with this item at overlapping times
               // Exclude rejected and cancelled orders
+              // We need to check if the scheduled time windows overlap
+              // Two time windows overlap if: start1 < end2 AND end1 > start2
               const [existingOrders] = await queryMySQL(
-                `SELECT o.id, o.scheduled_for, o.status, oi.item_id, oi.quantity
+                `SELECT o.id, o.scheduled_for, o.status, oi.item_id, oi.quantity, i.duration_minutes
                  FROM orders o
                  INNER JOIN order_items oi ON o.id = oi.order_id
+                 INNER JOIN items i ON oi.item_id = i.id
                  WHERE o.business_id = ?
                    AND oi.item_id = ?
                    AND o.scheduled_for IS NOT NULL
                    AND o.status NOT IN ('rejected', 'canceled', 'cancelled')
-                   AND o.scheduled_for >= DATE_SUB(?, INTERVAL ? MINUTE)
-                   AND o.scheduled_for <= ?
+                   AND o.scheduled_for < DATE_ADD(?, INTERVAL ? MINUTE)
+                   AND DATE_ADD(o.scheduled_for, INTERVAL COALESCE(i.duration_minutes, 60) MINUTE) > ?
                  ORDER BY o.scheduled_for ASC`,
                 [
                   business.id,
                   scheduledItem.itemId,
-                  scheduledStart,
+                  scheduledEnd,
                   scheduledItem.durationMinutes,
-                  scheduledEnd
+                  scheduledStart
                 ]
               );
               
