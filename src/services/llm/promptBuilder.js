@@ -10,58 +10,49 @@ const logger = require('../../utils/logger');
  * Build prompt with business context and conversation state
  */
 async function buildPrompt({ business, branch, customerPhoneNumber, message, language, messageHistory = [] }) {
-  // Fetch business context (menus, items, policies, hours)
-  // Menus belong to business - all branches of a business share all menus
-  const menus = await queryMySQL(
-    `SELECT * FROM menus 
-     WHERE business_id = ? AND is_active = true`,
-    [business.id]
-  );
+  const ownerId = branch?.id || business.id;
   
-  // Get items for business
-  // For now, get all items for the business (can filter by branch later if needed)
-  // Items can be associated with specific branch via branch_id, or be available to all branches (branch_id IS NULL)
-  let itemsQuery = `
-    SELECT i.*, m.name as menu_name FROM items i
-    LEFT JOIN menus m ON i.menu_id = m.id
-    WHERE i.business_id = ? AND i.availability = 'available' AND i.deleted_at IS NULL
-  `;
-  const itemsParams = [business.id];
-  
-  // Try to filter by branch if branch exists
-  if (branch?.id) {
-    // Branch is now a user with user_type='branch', branch.id is the user ID
-    // Include items that belong to this branch or have no specific branch
-    itemsQuery += ` AND (i.branch_id = ? OR i.branch_id IS NULL)`;
-    itemsParams.push(branch.id);
-  }
-  // If no branch specified - show all items for business (branch_id IS NULL or any)
-  
-  itemsQuery += ` ORDER BY m.name, i.name`;
-  
-  const items = await queryMySQL(itemsQuery, itemsParams);
-  
-  // Get cart if exists (branch?.id is actually userId)
-  const cart = await cartManager.getCart(business.id, branch?.id || business.id, customerPhoneNumber);
-  
-  // Get opening hours
-  const openingHours = await queryMySQL(`
-    SELECT * FROM opening_hours 
-    WHERE owner_type = ? AND owner_id = ? 
-    ORDER BY 
-      CASE day_of_week
-        WHEN 'monday' THEN 1
-        WHEN 'tuesday' THEN 2
-        WHEN 'wednesday' THEN 3
-        WHEN 'thursday' THEN 4
-        WHEN 'friday' THEN 5
-        WHEN 'saturday' THEN 6
-        WHEN 'sunday' THEN 7
-      END
-  `, ['branch', branch?.id || business.id]);
-  
-  if (openingHours.length === 0) {
-    const businessHours = await queryMySQL(`
+  // Run independent database queries in parallel for better performance
+  const [
+    menus,
+    items,
+    cart,
+    branchOpeningHours,
+    businessOpeningHours,
+    branchPolicies,
+    businessPolicies,
+    openStatus
+  ] = await Promise.all([
+    // Fetch menus
+    queryMySQL(
+      `SELECT * FROM menus 
+       WHERE business_id = ? AND is_active = true`,
+      [business.id]
+    ),
+    
+    // Get items for business
+    (async () => {
+      let itemsQuery = `
+        SELECT i.*, m.name as menu_name FROM items i
+        LEFT JOIN menus m ON i.menu_id = m.id
+        WHERE i.business_id = ? AND i.availability = 'available' AND i.deleted_at IS NULL
+      `;
+      const itemsParams = [business.id];
+      
+      if (branch?.id) {
+        itemsQuery += ` AND (i.branch_id = ? OR i.branch_id IS NULL)`;
+        itemsParams.push(branch.id);
+      }
+      
+      itemsQuery += ` ORDER BY m.name, i.name`;
+      return await queryMySQL(itemsQuery, itemsParams);
+    })(),
+    
+    // Get cart
+    cartManager.getCart(business.id, ownerId, customerPhoneNumber),
+    
+    // Get branch opening hours
+    queryMySQL(`
       SELECT * FROM opening_hours 
       WHERE owner_type = ? AND owner_id = ? 
       ORDER BY 
@@ -74,28 +65,45 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
           WHEN 'saturday' THEN 6
           WHEN 'sunday' THEN 7
         END
-    `, ['business', business.id]);
-    openingHours.push(...businessHours);
-  }
-  
-  // Get policies
-  const policies = await queryMySQL(`
-    SELECT * FROM policies 
-    WHERE owner_type = ? AND owner_id = ?
-    ORDER BY created_at DESC
-  `, ['branch', branch?.id || business.id]);
-  
-  if (policies.length === 0) {
-    const businessPolicies = await queryMySQL(`
+    `, ['branch', ownerId]),
+    
+    // Get business opening hours (in parallel, will use if branch is empty)
+    queryMySQL(`
+      SELECT * FROM opening_hours 
+      WHERE owner_type = ? AND owner_id = ? 
+      ORDER BY 
+        CASE day_of_week
+          WHEN 'monday' THEN 1
+          WHEN 'tuesday' THEN 2
+          WHEN 'wednesday' THEN 3
+          WHEN 'thursday' THEN 4
+          WHEN 'friday' THEN 5
+          WHEN 'saturday' THEN 6
+          WHEN 'sunday' THEN 7
+        END
+    `, ['business', business.id]),
+    
+    // Get branch policies
+    queryMySQL(`
       SELECT * FROM policies 
       WHERE owner_type = ? AND owner_id = ?
       ORDER BY created_at DESC
-    `, ['business', business.id]);
-    policies.push(...businessPolicies);
-  }
+    `, ['branch', ownerId]),
+    
+    // Get business policies (in parallel, will use if branch is empty)
+    queryMySQL(`
+      SELECT * FROM policies 
+      WHERE owner_type = ? AND owner_id = ?
+      ORDER BY created_at DESC
+    `, ['business', business.id]),
+    
+    // Check if open now
+    conversationManager.isOpenNow(business.id, ownerId)
+  ]);
   
-  // Check if open now
-  const openStatus = await conversationManager.isOpenNow(business.id, branch?.id || business.id);
+  // Use branch data if available, otherwise fall back to business data
+  const openingHours = branchOpeningHours.length > 0 ? branchOpeningHours : businessOpeningHours;
+  const policies = branchPolicies.length > 0 ? branchPolicies : businessPolicies;
   
   // Determine business type context
   const isFoodAndBeverage = business.business_type === 'f & b';
