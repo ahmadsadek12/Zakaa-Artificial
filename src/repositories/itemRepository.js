@@ -42,7 +42,7 @@ async function findById(itemId, businessId = null) {
  * Find items by filters
  */
 async function find(filters = {}) {
-  let sql = 'SELECT * FROM items WHERE 1=1';
+  let sql = 'SELECT * FROM items WHERE deleted_at IS NULL';
   const params = [];
   
   if (filters.businessId) {
