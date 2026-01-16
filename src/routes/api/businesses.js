@@ -67,13 +67,50 @@ router.put('/me', [
   body('whatsappPhoneNumberId').optional({ checkFalsy: true }).isString(),
   body('whatsappBusinessAccountId').optional({ checkFalsy: true }).isString(),
   body('telegramBotToken').optional({ checkFalsy: true }).isString(),
-  body('chatbotEnabled').optional().isBoolean().withMessage('Chatbot enabled must be true or false')
+  body('chatbotEnabled').optional().custom((value) => {
+    // Accept boolean or string "true"/"false"
+    if (value === undefined || value === null) return true;
+    if (typeof value === 'boolean') return true;
+    if (typeof value === 'string' && (value === 'true' || value === 'false')) return true;
+    throw new Error('Chatbot enabled must be true or false');
+  }).toBoolean(),
+  body('allowScheduledOrders').optional().custom((value) => {
+    if (value === undefined || value === null) return true;
+    if (typeof value === 'boolean') return true;
+    if (typeof value === 'string' && (value === 'true' || value === 'false')) return true;
+    throw new Error('Allow scheduled orders must be true or false');
+  }).toBoolean(),
+  body('allowDelivery').optional().custom((value) => {
+    if (value === undefined || value === null) return true;
+    if (typeof value === 'boolean') return true;
+    if (typeof value === 'string' && (value === 'true' || value === 'false')) return true;
+    throw new Error('Allow delivery must be true or false');
+  }).toBoolean(),
+  body('allowTakeaway').optional().custom((value) => {
+    if (value === undefined || value === null) return true;
+    if (typeof value === 'boolean') return true;
+    if (typeof value === 'string' && (value === 'true' || value === 'false')) return true;
+    throw new Error('Allow takeaway must be true or false');
+  }).toBoolean(),
+  body('allowOnSite').optional().custom((value) => {
+    if (value === undefined || value === null) return true;
+    if (typeof value === 'boolean') return true;
+    if (typeof value === 'string' && (value === 'true' || value === 'false')) return true;
+    throw new Error('Allow on site must be true or false');
+  }).toBoolean()
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({
       success: false,
-      error: { message: 'Validation failed', errors: errors.array() }
+      error: { 
+        message: 'Validation failed', 
+        errors: errors.array().map(e => ({
+          field: e.path || e.param,
+          message: e.msg,
+          value: e.value
+        }))
+      }
     });
   }
   
