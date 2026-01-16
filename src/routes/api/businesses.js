@@ -149,9 +149,14 @@ router.put('/me', [
   
   for (const field of allowedFields) {
     if (req.body[field] !== undefined) {
-      // Normalize businessType: 'food and beverage' -> 'f & b'
-      if (field === 'businessType' && req.body[field] === 'food and beverage') {
-        updateData[field] = 'f & b';
+      // Normalize businessType: 'food and beverage' -> 'f & b' (case-insensitive)
+      if (field === 'businessType') {
+        const businessType = String(req.body[field]).toLowerCase().trim();
+        if (businessType === 'food and beverage' || businessType === 'food & beverage') {
+          updateData[field] = 'f & b';
+        } else {
+          updateData[field] = req.body[field];
+        }
       } else {
         updateData[field] = req.body[field];
       }
@@ -160,7 +165,8 @@ router.put('/me', [
   
   logger.info('Update data received:', { updateData, chatbotEnabled: updateData.chatbotEnabled, type: typeof updateData.chatbotEnabled });
   
-  const updatedUser = await userRepository.update(req.user.id, updateData);
+  try {
+    const updatedUser = await userRepository.update(req.user.id, updateData);
   delete updatedUser.password_hash;
   
   // Convert MySQL boolean (tinyint) fields to proper JavaScript booleans
@@ -183,12 +189,28 @@ router.put('/me', [
     updatedUser.allow_on_site = Boolean(updatedUser.allow_on_site);
   }
   
-  logger.info(`Business profile updated: ${req.user.id}`, { chatbot_enabled: updatedUser.chatbot_enabled });
-  
-  res.json({
-    success: true,
-    data: { business: updatedUser }
-  });
+    logger.info(`Business profile updated: ${req.user.id}`, { chatbot_enabled: updatedUser.chatbot_enabled });
+    
+    res.json({
+      success: true,
+      data: { business: updatedUser }
+    });
+  } catch (error) {
+    logger.error('Error updating business profile:', {
+      userId: req.user.id,
+      error: error.message,
+      stack: error.stack,
+      updateData
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: { 
+        message: 'Failed to update business profile',
+        details: error.message 
+      }
+    });
+  }
 }));
 
 /**
