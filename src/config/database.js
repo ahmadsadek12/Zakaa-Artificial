@@ -76,19 +76,29 @@ let mongoDb = null;
 const MONGODB_URI = `mongodb://${process.env.MONGODB_HOST || process.env.MONGO_URI?.replace('mongodb://', '').split(':')[0] || '127.0.0.1'}:${process.env.MONGODB_PORT || process.env.MONGO_URI?.split(':')[2] || '27017'}`;
 const MONGODB_DB_NAME = process.env.MONGODB_DATABASE || process.env.MONGO_DB_NAME || 'zakaa_db';
 
+// Track if MongoDB is known to be unavailable to skip connection attempts
+let mongoUnavailable = false;
+
 async function connectMongoDB() {
+  // Skip connection attempt if MongoDB is known to be unavailable
+  if (mongoUnavailable) {
+    return null;
+  }
+  
   if (mongoClient && mongoClient.topology && mongoClient.topology.isConnected()) {
     return { client: mongoClient, db: mongoDb };
   }
   
   try {
+    // Reduce timeout to fail faster - 1 second instead of 5
     mongoClient = new MongoClient(MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
-      connectTimeoutMS: 5000
+      serverSelectionTimeoutMS: 1000, // Reduced from 5000 to fail faster
+      connectTimeoutMS: 1000 // Reduced from 5000 to fail faster
     });
     
     await mongoClient.connect();
     mongoDb = mongoClient.db(MONGODB_DB_NAME);
+    mongoUnavailable = false; // Reset flag on successful connection
     
     console.log('MongoDB connected successfully');
     return { client: mongoClient, db: mongoDb };
@@ -96,19 +106,29 @@ async function connectMongoDB() {
     console.error('MongoDB connection error:', error);
     mongoClient = null;
     mongoDb = null;
+    mongoUnavailable = true; // Mark as unavailable to skip future attempts
     return null; // Don't throw - just return null
   }
 }
 
 async function getMongoDB() {
+  // Skip connection attempt if MongoDB is known to be unavailable
+  if (mongoUnavailable) {
+    return null;
+  }
+  
   if (!mongoDb || !mongoClient || !mongoClient.topology || !mongoClient.topology.isConnected()) {
     try {
-      await connectMongoDB();
+      const result = await connectMongoDB();
+      if (!result) {
+        return null;
+      }
     } catch (error) {
       // MongoDB not available - reset to null and return null
       // This allows services to gracefully handle MongoDB unavailability
       mongoClient = null;
       mongoDb = null;
+      mongoUnavailable = true;
       return null;
     }
   }

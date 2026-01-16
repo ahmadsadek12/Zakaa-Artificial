@@ -82,8 +82,15 @@ async function processMessage(message) {
     }
     
     // Check if chatbot is enabled for this business
-    if (business.chatbot_enabled === false) {
-      logger.info('Chatbot is disabled for this business', { businessId: business.id, chatId });
+    // MySQL returns 0/1 (tinyint), not boolean - convert to boolean
+    const chatbotEnabled = Boolean(business.chatbot_enabled);
+    if (!chatbotEnabled) {
+      logger.info('Chatbot is disabled for this business', { 
+        businessId: business.id, 
+        chatId,
+        chatbot_enabled: business.chatbot_enabled,
+        chatbotEnabled
+      });
       await telegramMessageSender.sendMessage({
         chatId,
         message: 'Our chatbot is currently unavailable. Please contact us directly at ' + (business.contact_phone_number || business.whatsapp_phone_number || 'our phone number') + '. Thank you!'
@@ -103,8 +110,8 @@ async function processMessage(message) {
         customerPhoneNumber
       });
       
-      // Log location message to MongoDB
-      await logMessage({
+      // Log location message to MongoDB (non-blocking)
+      logMessage({
         business_id: business.id,
         branch_id: branch?.id || business.id,
         customer_phone_number: customerPhoneNumber,
@@ -115,7 +122,7 @@ async function processMessage(message) {
         text: `Location: ${location.latitude}, ${location.longitude}`,
         meta_message_id: messageId.toString(),
         timestamp: new Date()
-      });
+      }).catch(err => logger.debug('Failed to log message (non-critical):', err));
       
       // Save location directly to cart using chatbot function
       const chatbotFunctions = require('../llm/chatbotFunctions');
@@ -141,8 +148,8 @@ async function processMessage(message) {
         message: responseMessage
       });
       
-      // Log outbound message to MongoDB
-      await logMessage({
+      // Log outbound message to MongoDB (non-blocking)
+      logMessage({
         business_id: business.id,
         branch_id: branch?.id || business.id,
         customer_phone_number: customerPhoneNumber,
@@ -151,9 +158,9 @@ async function processMessage(message) {
         channel: 'telegram',
         message_type: 'text',
         text: responseMessage,
-        meta_message_id: messageId.toString(),
+        meta_message_id: sendResult?.message_id?.toString() || messageId.toString(),
         timestamp: new Date()
-      });
+      }).catch(err => logger.debug('Failed to log message (non-critical):', err));
       
       return;
     }
@@ -163,8 +170,8 @@ async function processMessage(message) {
       return; // No text and no location, skip
     }
     
-    // Log inbound message to MongoDB
-    await logMessage({
+    // Log inbound message to MongoDB (non-blocking)
+    logMessage({
       business_id: business.id,
       branch_id: branch?.id || business.id,
       customer_phone_number: customerPhoneNumber,
@@ -175,7 +182,7 @@ async function processMessage(message) {
       text: text,
       meta_message_id: messageId.toString(),
       timestamp: new Date()
-    });
+    }).catch(err => logger.debug('Failed to log message (non-critical):', err));
     
     // Get LLM response with full conversation context
     const response = await chatbotService.handleMessage({
@@ -218,8 +225,8 @@ async function processMessage(message) {
         }
       });
       
-      // Log outbound message to MongoDB
-      await logMessage({
+      // Log outbound message to MongoDB (non-blocking)
+      logMessage({
         business_id: business.id,
         branch_id: branch?.id || business.id,
         customer_phone_number: customerPhoneNumber,
@@ -230,7 +237,7 @@ async function processMessage(message) {
         text: responseMessage,
         meta_message_id: sendResult?.message_id?.toString() || messageId.toString(),
         timestamp: new Date()
-      });
+      }).catch(err => logger.debug('Failed to log message (non-critical):', err));
     }
   } catch (error) {
     logger.error('Error processing Telegram message:', error);

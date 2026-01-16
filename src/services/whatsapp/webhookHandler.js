@@ -55,8 +55,15 @@ async function processMessage(message, value) {
     const { business, branch } = context;
     
     // Check if chatbot is enabled for this business
-    if (business.chatbot_enabled === false) {
-      logger.info('Chatbot is disabled for this business', { businessId: business.id, from: message.from });
+    // MySQL returns 0/1 (tinyint), not boolean - convert to boolean
+    const chatbotEnabled = Boolean(business.chatbot_enabled);
+    if (!chatbotEnabled) {
+      logger.info('Chatbot is disabled for this business', { 
+        businessId: business.id, 
+        from: message.from,
+        chatbot_enabled: business.chatbot_enabled,
+        chatbotEnabled
+      });
       await messageSender.sendMessage({
         business,
         branch,
