@@ -26,7 +26,7 @@ function sanitizeItems(items) {
  * Find item by ID
  */
 async function findById(itemId, businessId = null) {
-  let sql = 'SELECT * FROM items WHERE id = ?';
+  let sql = 'SELECT * FROM items WHERE id = ? AND deleted_at IS NULL';
   const params = [itemId];
   
   if (businessId) {
