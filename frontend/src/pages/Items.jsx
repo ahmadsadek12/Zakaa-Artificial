@@ -172,7 +172,17 @@ export default function Items() {
       minScheduleHours: item.min_schedule_hours !== undefined ? item.min_schedule_hours : 0,
       availableFrom: item.available_from || '',
       availableTo: item.available_to || '',
-      daysAvailable: item.days_available ? (Array.isArray(item.days_available) ? item.days_available : JSON.parse(item.days_available)) : [],
+      daysAvailable: (() => {
+        if (!item.days_available) return [];
+        if (Array.isArray(item.days_available)) return item.days_available;
+        try {
+          const parsed = JSON.parse(item.days_available);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+          console.warn('Failed to parse days_available:', item.days_available, e);
+          return [];
+        }
+      })(),
       availability: item.availability || 'available',
       itemImage: null,
       imagePreview: item.item_image_url || null
@@ -280,12 +290,25 @@ export default function Items() {
                     <span>{item.available_from} - {item.available_to}</span>
                   </div>
                 )}
-                {item.days_available && (
-                  <div className="flex items-center gap-1 mt-1">
-                    <Calendar size={12} />
-                    <span>{Array.isArray(item.days_available) ? item.days_available.length : JSON.parse(item.days_available || '[]').length} days</span>
-                  </div>
-                )}
+                {item.days_available && (() => {
+                  let daysCount = 0;
+                  try {
+                    if (Array.isArray(item.days_available)) {
+                      daysCount = item.days_available.length;
+                    } else if (typeof item.days_available === 'string') {
+                      const parsed = JSON.parse(item.days_available || '[]');
+                      daysCount = Array.isArray(parsed) ? parsed.length : 0;
+                    }
+                  } catch (e) {
+                    daysCount = 0;
+                  }
+                  return daysCount > 0 ? (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Calendar size={12} />
+                      <span>{daysCount} days</span>
+                    </div>
+                  ) : null;
+                })()}
               </div>
             )}
             
