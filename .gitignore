@@ -25,3 +25,7 @@ Thumbs.db
 *.db
 *.sqlite
 
+# Build files
+.gradle/
+build/
+dist/
