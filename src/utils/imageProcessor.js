@@ -22,7 +22,9 @@ async function compressImage(imageBuffer, options = {}) {
     } = options;
 
     const compressed = await sharp(imageBuffer)
-      .resize(maxWidth, maxHeight, {
+      .resize({
+        width: maxWidth,
+        height: maxHeight,
         fit: 'inside',
         withoutEnlargement: true
       })
