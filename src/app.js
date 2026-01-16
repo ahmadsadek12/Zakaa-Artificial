@@ -30,6 +30,9 @@ const telegramWebhookRoutes = require('./routes/webhook/telegram');
 
 const app = express();
 
+// Trust proxy (for rate limiting behind reverse proxy/load balancer)
+app.set('trust proxy', true);
+
 // Security middleware
 app.use(helmet());
 
