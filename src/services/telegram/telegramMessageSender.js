@@ -5,30 +5,41 @@ const TelegramBot = require('node-telegram-bot-api');
 const CONSTANTS = require('../../config/constants');
 const logger = require('../../utils/logger');
 
-let botInstance = null;
+// Cache bot instances per token to avoid recreating them for every message
+// Key: botToken, Value: TelegramBot instance
+const botInstances = new Map();
 
 /**
- * Get or create Telegram bot instance
+ * Get or create Telegram bot instance for a specific token
+ * @param {string} botToken - Telegram bot token (optional, falls back to CONSTANTS)
  */
-function getTelegramBot() {
-  if (botInstance) {
-    return botInstance;
-  }
+function getTelegramBot(botToken = null) {
+  // If no token provided, use the one from CONSTANTS (for backward compatibility)
+  const token = botToken || CONSTANTS.TELEGRAM_BOT_TOKEN;
   
-  const botToken = CONSTANTS.TELEGRAM_BOT_TOKEN;
-  if (!botToken) {
+  if (!token) {
     logger.error('Telegram bot token is not configured');
     return null;
   }
   
+  // Check if we already have an instance for this token
+  if (botInstances.has(token)) {
+    return botInstances.get(token);
+  }
+  
   try {
-    // Use polling in development, webhook in production
-    // For now, we'll use polling as a fallback but primarily use webhook
-    botInstance = new TelegramBot(botToken, { polling: false });
-    logger.info('Telegram bot instance created');
+    // Create new bot instance for this token
+    const botInstance = new TelegramBot(token, { polling: false });
+    botInstances.set(token, botInstance);
+    logger.info('Telegram bot instance created', {
+      tokenPrefix: token.substring(0, 15) + '...'
+    });
     return botInstance;
   } catch (error) {
-    logger.error('Failed to create Telegram bot instance:', error);
+    logger.error('Failed to create Telegram bot instance:', {
+      error: error.message,
+      tokenPrefix: token.substring(0, 15) + '...'
+    });
     return null;
   }
 }
@@ -38,11 +49,12 @@ function getTelegramBot() {
  * @param {Object} params - Message parameters
  * @param {string|number} params.chatId - Telegram chat ID
  * @param {string} params.message - Message text
+ * @param {string} params.botToken - Telegram bot token (optional)
  * @param {Object} params.options - Additional options (parse_mode, etc.)
  */
-async function sendMessage({ chatId, message, options = {} }) {
+async function sendMessage({ chatId, message, botToken = null, options = {} }) {
   try {
-    const bot = getTelegramBot();
+    const bot = getTelegramBot(botToken);
     if (!bot) {
       throw new Error('Telegram bot not initialized');
     }
@@ -78,12 +90,12 @@ async function sendMessage({ chatId, message, options = {} }) {
 /**
  * Send message with retry logic
  */
-async function sendMessageWithRetry({ chatId, message, options = {}, maxRetries = 3 }) {
+async function sendMessageWithRetry({ chatId, message, botToken = null, options = {}, maxRetries = 3 }) {
   let lastError;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await sendMessage({ chatId, message, options });
+      return await sendMessage({ chatId, message, botToken, options });
     } catch (error) {
       lastError = error;
       
@@ -121,12 +133,13 @@ async function sendMessageWithRetry({ chatId, message, options = {}, maxRetries 
  * @param {Object} params - Photo parameters
  * @param {string|number} params.chatId - Telegram chat ID
  * @param {string} params.imageUrl - URL of the image to send
+ * @param {string} params.botToken - Telegram bot token (optional)
  * @param {string} params.caption - Optional caption for the image
  * @param {Object} params.options - Additional options
  */
-async function sendPhoto({ chatId, imageUrl, caption = '', options = {} }) {
+async function sendPhoto({ chatId, imageUrl, botToken = null, caption = '', options = {} }) {
   try {
-    const bot = getTelegramBot();
+    const bot = getTelegramBot(botToken);
     if (!bot) {
       throw new Error('Telegram bot not initialized');
     }
@@ -159,12 +172,13 @@ async function sendPhoto({ chatId, imageUrl, caption = '', options = {} }) {
  * @param {Object} params - Document parameters
  * @param {string|number} params.chatId - Telegram chat ID
  * @param {string} params.documentUrl - URL of the document/PDF to send
+ * @param {string} params.botToken - Telegram bot token (optional)
  * @param {string} params.caption - Optional caption for the document
  * @param {Object} params.options - Additional options
  */
-async function sendDocument({ chatId, documentUrl, caption = '', options = {} }) {
+async function sendDocument({ chatId, documentUrl, botToken = null, caption = '', options = {} }) {
   try {
-    const bot = getTelegramBot();
+    const bot = getTelegramBot(botToken);
     if (!bot) {
       throw new Error('Telegram bot not initialized');
     }

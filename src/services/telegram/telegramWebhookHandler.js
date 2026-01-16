@@ -77,11 +77,8 @@ async function processMessage(message, businessId = null) {
     const business = await resolveBusinessFromTelegram(businessId);
     
     if (!business) {
-      logger.warn('Could not resolve business for Telegram message', { chatId });
-      await telegramMessageSender.sendMessage({
-        chatId,
-        message: 'Sorry, this bot is not configured. Please contact support.'
-      });
+      logger.warn('Could not resolve business for Telegram message', { chatId, businessId });
+      // Can't send a message without a valid business/token
       return;
     }
     
@@ -104,7 +101,8 @@ async function processMessage(message, businessId = null) {
         });
         await telegramMessageSender.sendMessage({
           chatId,
-          message: 'Our chatbot is currently unavailable. An agent will be with you soon.'
+          message: 'Our chatbot is currently unavailable. An agent will be with you soon.',
+          botToken: business.telegram_bot_token
         });
         // Mark as sent for this conversation
         unavailableMessageSent.set(conversationKey, true);
@@ -185,7 +183,8 @@ async function processMessage(message, businessId = null) {
       const responseMessage = result.message || 'Thank you! Your location has been saved.';
       await telegramMessageSender.sendMessage({
         chatId,
-        message: responseMessage
+        message: responseMessage,
+        botToken: business.telegram_bot_token
       });
       
       // Log outbound message to MongoDB (non-blocking)
@@ -260,7 +259,8 @@ async function processMessage(message, businessId = null) {
             await telegramMessageSender.sendDocument({
               chatId,
               documentUrl: pdf.url,
-              caption: pdf.caption || ''
+              caption: pdf.caption || '',
+              botToken: business.telegram_bot_token
             });
           } catch (pdfError) {
             logger.error('Failed to send PDF via Telegram:', {
@@ -279,7 +279,8 @@ async function processMessage(message, businessId = null) {
             await telegramMessageSender.sendPhoto({
               chatId,
               imageUrl: image.url,
-              caption: image.caption || ''
+              caption: image.caption || '',
+              botToken: business.telegram_bot_token
             });
           } catch (imageError) {
             logger.error('Failed to send image via Telegram:', {
@@ -297,6 +298,7 @@ async function processMessage(message, businessId = null) {
       const sendResult = await telegramMessageSender.sendMessageWithRetry({
         chatId,
         message: responseMessage,
+        botToken: business.telegram_bot_token,
         options: {
           parse_mode: undefined, // Use plain text for now
           disable_web_page_preview: true
@@ -321,10 +323,11 @@ async function processMessage(message, businessId = null) {
     logger.error('Error processing Telegram message:', error);
     // Try to send error message to user
     try {
-      if (message && message.chat) {
+      if (message && message.chat && business && business.telegram_bot_token) {
         await telegramMessageSender.sendMessage({
           chatId: message.chat.id,
-          message: 'Sorry, I encountered an error. Please try again later.'
+          message: 'Sorry, I encountered an error. Please try again later.',
+          botToken: business.telegram_bot_token
         });
       }
     } catch (sendError) {
