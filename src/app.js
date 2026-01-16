@@ -66,7 +66,13 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: process.env.NODE_ENV === 'production' ? 100 : 1000, // Higher limit for development
-  message: 'Too many requests from this IP, please try again later.',
+  message: {
+    success: false,
+    error: {
+      message: 'Too many requests from this IP, please try again later.',
+      code: 'GENERAL_RATE_LIMIT'
+    }
+  },
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
@@ -77,7 +83,13 @@ const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 20, // Limit each IP to 20 requests per windowMs (increased from 5)
   skipSuccessfulRequests: true, // Only count failed login attempts
-  message: 'Too many login attempts. Please try again in 15 minutes.',
+  message: {
+    success: false,
+    error: {
+      message: 'Too many login attempts. Please try again in 15 minutes.',
+      code: 'AUTH_RATE_LIMIT'
+    }
+  },
   standardHeaders: true,
   legacyHeaders: false
 });

@@ -130,10 +130,15 @@ function requireUserType(...allowedTypes) {
  * @returns {string} JWT token
  */
 function generateToken(userId, userType) {
+  // Set expiration based on user type: 24h for non-admin, 7d for admin
+  const expiresIn = userType === CONSTANTS.USER_TYPES.ADMIN 
+    ? CONSTANTS.JWT_EXPIRES_IN 
+    : CONSTANTS.JWT_EXPIRES_IN_NON_ADMIN;
+  
   return jwt.sign(
     { userId, userType },
     CONSTANTS.JWT_SECRET,
-    { expiresIn: CONSTANTS.JWT_EXPIRES_IN }
+    { expiresIn }
   );
 }
 

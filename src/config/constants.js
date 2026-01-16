@@ -11,7 +11,8 @@ const CONSTANTS = {
   
   // JWT
   JWT_SECRET: process.env.JWT_SECRET || 'your-jwt-secret-key-here',
-  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
+  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d', // Default for admin
+  JWT_EXPIRES_IN_NON_ADMIN: process.env.JWT_EXPIRES_IN_NON_ADMIN || '24h', // For non-admin users
   JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
   
   // WhatsApp Provider (meta or twilio)
