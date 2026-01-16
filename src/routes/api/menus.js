@@ -20,21 +20,12 @@ router.use(authenticate);
 router.use(requireUserType(CONSTANTS.USER_TYPES.ADMIN, CONSTANTS.USER_TYPES.BUSINESS, CONSTANTS.USER_TYPES.BRANCH));
 router.use(tenantIsolation);
 
-// Configure multer for S3 upload (or memory storage if S3 not configured)
+// Configure multer - always use memory storage so we can compress images before S3 upload
 // Supports images (multiple) and PDFs (single)
 const upload = multer({
-  storage: s3 ? multerS3({
-    s3: s3,
-    bucket: S3_CONFIG.bucket,
-    acl: 'public-read',
-    key: function (req, file, cb) {
-      const folder = 'menus';
-      const fileName = `${generateUUID()}-${file.originalname}`;
-      cb(null, `${folder}/${fileName}`);
-    }
-  }) : multer.memoryStorage(),
+  storage: multer.memoryStorage(), // Always use memory to compress images before upload
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB (larger for PDFs)
+    fileSize: 10 * 1024 * 1024 // 10MB (larger for PDFs, images will be compressed)
   },
   fileFilter: (req, file, cb) => {
     // Allow images and PDFs
