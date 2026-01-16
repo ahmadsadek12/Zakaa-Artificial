@@ -623,10 +623,7 @@ export default function Items() {
                 </select>
               </div>
 
-              {/* Analytics (read-only in edit mode) */}
-              {editingItem && (
-                {/* Analytics removed - reserved for premium features */}
-              )}
+              {/* Analytics (read-only in edit mode) - Reserved for premium features */}
 
               <div className="flex gap-3 pt-4">
                 <button
