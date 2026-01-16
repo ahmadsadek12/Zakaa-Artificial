@@ -33,9 +33,12 @@ const CONSTANTS = {
   
   // OpenAI / LLM
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+  // Model options: 'gpt-4o-mini' (balanced), 'gpt-3.5-turbo' (faster, less capable), 'gpt-4o' (slower, more capable)
   OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS || '1000'),
-  OPENAI_TEMPERATURE: parseFloat(process.env.OPENAI_TEMPERATURE || '0.7'),
+  // Max tokens: Lower = faster responses but shorter. 500-750 is good for chatbots
+  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS || '750'),
+  // Temperature: Lower = faster and more deterministic. 0.5-0.6 is good for structured responses
+  OPENAI_TEMPERATURE: parseFloat(process.env.OPENAI_TEMPERATURE || '0.6'),
   
   // Archival
   ARCHIVE_ORDER_AGE_HOURS: parseInt(process.env.ARCHIVE_ORDER_AGE_HOURS || '24'),
