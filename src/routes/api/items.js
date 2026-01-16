@@ -4,7 +4,6 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const multerS3 = require('multer-s3');
 const { body, validationResult } = require('express-validator');
 const { authenticate, requireUserType } = require('../../middleware/auth');
 const { tenantIsolation, requireOwnership } = require('../../middleware/tenant');
