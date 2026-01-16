@@ -37,6 +37,39 @@ const upload = multer({
   }
 });
 
+// Multer error handler middleware
+const handleMulterError = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: 'File too large. Maximum file size is 10MB. Please compress your file or choose a smaller one.',
+          code: 'FILE_TOO_LARGE'
+        }
+      });
+    }
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: `Upload error: ${err.message}`,
+        code: 'UPLOAD_ERROR'
+      }
+    });
+  }
+  if (err) {
+    // Handle fileFilter errors
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: err.message || 'File upload error',
+        code: 'FILE_UPLOAD_ERROR'
+      }
+    });
+  }
+  next();
+};
+
 /**
  * List all menus for business
  * GET /api/menus
@@ -83,7 +116,7 @@ router.get('/:id', requireOwnership('menus'), asyncHandler(async (req, res) => {
 router.post('/', upload.fields([
   { name: 'menuPdf', maxCount: 1 },
   { name: 'menuImages', maxCount: 10 }
-]), [
+]), handleMulterError, [
   body('name').trim().notEmpty().withMessage('Menu name required'),
   body('menuLink').optional().isURL().withMessage('Menu link must be a valid URL'),
   body('isActive').optional().isBoolean().withMessage('isActive must be boolean')
@@ -170,7 +203,7 @@ router.post('/', upload.fields([
 router.put('/:id', requireOwnership('menus'), upload.fields([
   { name: 'menuPdf', maxCount: 1 },
   { name: 'menuImages', maxCount: 10 }
-]), [
+]), handleMulterError, [
   body('name').optional().trim().notEmpty().withMessage('Menu name cannot be empty'),
   body('menuLink').optional().isURL().withMessage('Menu link must be a valid URL'),
   body('isActive').optional().isBoolean().withMessage('isActive must be boolean')

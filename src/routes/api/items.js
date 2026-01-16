@@ -34,6 +34,39 @@ const upload = multer({
   }
 });
 
+// Multer error handler middleware
+const handleMulterError = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: 'File too large. Maximum file size is 10MB. Please compress your image or choose a smaller file.',
+          code: 'FILE_TOO_LARGE'
+        }
+      });
+    }
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: `Upload error: ${err.message}`,
+        code: 'UPLOAD_ERROR'
+      }
+    });
+  }
+  if (err) {
+    // Handle fileFilter errors
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: err.message || 'File upload error',
+        code: 'FILE_UPLOAD_ERROR'
+      }
+    });
+  }
+  next();
+};
+
 /**
  * List items with filters
  * GET /api/items?menuId=&branchId=&availability=
@@ -79,7 +112,7 @@ router.get('/:id', requireOwnership('items'), asyncHandler(async (req, res) => {
  * Create item
  * POST /api/items
  */
-router.post('/', upload.single('itemImage'), [
+router.post('/', upload.single('itemImage'), handleMulterError, [
   body('name').trim().notEmpty().withMessage('Item name required'),
   body('price').notEmpty().withMessage('Price is required').bail().isFloat({ min: 0 }).withMessage('Price must be a positive number'),
   body('menuId').optional().isUUID().withMessage('menuId must be a valid UUID'),
@@ -206,7 +239,7 @@ router.post('/', upload.single('itemImage'), [
  * Update item
  * PUT /api/items/:id
  */
-router.put('/:id', requireOwnership('items'), upload.single('itemImage'), [
+router.put('/:id', requireOwnership('items'), upload.single('itemImage'), handleMulterError, [
   body('name').optional().notEmpty().withMessage('Item name cannot be empty'),
   body('price').optional().isFloat({ min: 0 }).withMessage('Price must be a positive number'),
   body('availability').optional().isIn(['available', 'out_of_stock', 'hidden']).withMessage('Invalid availability'),
