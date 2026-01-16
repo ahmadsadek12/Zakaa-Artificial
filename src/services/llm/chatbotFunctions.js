@@ -598,23 +598,9 @@ async function executeFunction(functionName, args, context) {
           };
         }
         
-        // Validate minimum schedule time if cart has items with min_schedule_hours
-        if (maxMinScheduleHours > 0) {
-          const validation = dateTimeParser.validateMinScheduleTime(parsedDate, maxMinScheduleHours);
-          
-          if (!validation.valid) {
-            return {
-              success: false,
-              error: `${validation.message}. Please choose a time at least ${maxMinScheduleHours} hours from now.`
-            };
-          }
-        }
-        
-        // Check for double-booking: If cart has "only scheduled" items, check if they're already scheduled at this time
+        // Get all "only scheduled" items in cart for validation
+        const onlyScheduledItems = [];
         if (cart.items && cart.items.length > 0) {
-          const onlyScheduledItems = [];
-          
-          // Get all "only scheduled" items in cart
           for (const cartItem of cart.items) {
             const [items] = await queryMySQL(
               'SELECT * FROM items WHERE id = ?',
@@ -627,88 +613,151 @@ async function executeFunction(functionName, args, context) {
                 onlyScheduledItems.push({
                   itemId: item.id,
                   itemName: item.name,
-                  durationMinutes: item.duration_minutes || 60 // Default 60 minutes if not set
+                  durationMinutes: item.duration_minutes || 60,
+                  minScheduleHours: item.min_schedule_hours || 0,
+                  availableFrom: item.available_from,
+                  availableTo: item.available_to,
+                  daysAvailable: item.days_available,
+                  quantity: item.quantity // null = infinite, number = limited instances
                 });
               }
             }
           }
+        }
+        
+        // Validation order:
+        // 1. Check minimum schedule hours
+        // 2. Check if within available hours (item's available_from/available_to)
+        // 3. Check quantity limits (how many reservations exist vs item quantity)
+        
+        // Step 1: Validate minimum schedule time for each item
+        for (const scheduledItem of onlyScheduledItems) {
+          if (scheduledItem.minScheduleHours > 0) {
+            const validation = dateTimeParser.validateMinScheduleTime(parsedDate, scheduledItem.minScheduleHours);
+            
+            if (!validation.valid) {
+              return {
+                success: false,
+                error: `${validation.message}. Please choose a time at least ${scheduledItem.minScheduleHours} hours from now.`
+              };
+            }
+          }
+        }
+        
+        // Step 2: Check if scheduled time is within item's available hours
+        for (const scheduledItem of onlyScheduledItems) {
+          if (scheduledItem.availableFrom && scheduledItem.availableTo) {
+            const scheduledTime = parsedDate.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+            const [scheduledHour, scheduledMinute] = scheduledTime.split(':').map(Number);
+            const scheduledTimeMinutes = scheduledHour * 60 + scheduledMinute;
+            
+            const [availableFromHour, availableFromMinute] = scheduledItem.availableFrom.split(':').map(Number);
+            const [availableToHour, availableToMinute] = scheduledItem.availableTo.split(':').map(Number);
+            const availableFromMinutes = availableFromHour * 60 + availableFromMinute;
+            const availableToMinutes = availableToHour * 60 + availableToMinute;
+            
+            if (scheduledTimeMinutes < availableFromMinutes || scheduledTimeMinutes > availableToMinutes) {
+              return {
+                success: false,
+                error: `Sorry, "${scheduledItem.itemName}" is only available between ${scheduledItem.availableFrom.substring(0, 5)} and ${scheduledItem.availableTo.substring(0, 5)}. Please choose a time within these hours.`
+              };
+            }
+          }
           
-          // Check for existing orders at the same time for "only scheduled" items
-          if (onlyScheduledItems.length > 0) {
-            for (const scheduledItem of onlyScheduledItems) {
-              // Calculate time window (start and end time considering item duration)
-              const scheduledStart = new Date(parsedDate);
-              const scheduledEnd = new Date(scheduledStart.getTime() + scheduledItem.durationMinutes * 60 * 1000);
+          // Check days_available constraint
+          if (scheduledItem.daysAvailable) {
+            let daysArray = [];
+            try {
+              daysArray = typeof scheduledItem.daysAvailable === 'string' 
+                ? JSON.parse(scheduledItem.daysAvailable) 
+                : scheduledItem.daysAvailable;
+            } catch (e) {
+              daysArray = [];
+            }
+            
+            if (Array.isArray(daysArray) && daysArray.length > 0) {
+              const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+              const scheduledDay = dayNames[parsedDate.getDay()];
               
-              // Format dates for MySQL (YYYY-MM-DD HH:MM:SS)
-              const scheduledStartStr = scheduledStart.toISOString().slice(0, 19).replace('T', ' ');
-              const scheduledEndStr = scheduledEnd.toISOString().slice(0, 19).replace('T', ' ');
-              
-              // Check for existing orders with this item at overlapping times
-              // Exclude rejected and cancelled orders
-              // We need to check if the scheduled time windows overlap
-              // Two time windows overlap if: start1 < end2 AND end1 > start2
-              const [existingOrders] = await queryMySQL(
-                `SELECT o.id, o.scheduled_for, o.status, oi.item_id, oi.quantity, i.duration_minutes
-                 FROM orders o
-                 INNER JOIN order_items oi ON o.id = oi.order_id
-                 INNER JOIN items i ON oi.item_id = i.id
-                 WHERE o.business_id = ?
-                   AND oi.item_id = ?
-                   AND o.scheduled_for IS NOT NULL
-                   AND o.status NOT IN ('rejected', 'canceled', 'cancelled')
-                   AND o.scheduled_for < ?
-                   AND DATE_ADD(o.scheduled_for, INTERVAL COALESCE(i.duration_minutes, 60) MINUTE) > ?
-                 ORDER BY o.scheduled_for ASC`,
-                [
-                  business.id,
-                  scheduledItem.itemId,
-                  scheduledEndStr,
-                  scheduledStartStr
-                ]
-              );
-              
-              if (existingOrders && existingOrders.length > 0) {
-                // Found conflicting order(s)
-                const conflictingOrder = existingOrders[0];
-                const conflictingTime = new Date(conflictingOrder.scheduled_for);
-                const formattedConflictingTime = dateTimeParser.formatDate(conflictingTime, context.language || 'english');
-                
-                // Check item quantity - if item has quantity > 1, multiple bookings might be allowed
-                const [itemDetails] = await queryMySQL(
-                  'SELECT quantity FROM items WHERE id = ?',
-                  [scheduledItem.itemId]
-                );
-                
-                const itemQuantity = itemDetails && itemDetails.length > 0 ? itemDetails[0].quantity : null;
-                
-                // If item has quantity (limited instances), check total quantity booked
-                if (itemQuantity !== null && itemQuantity > 1) {
-                  // Count total quantity already booked at this time
-                  let totalBookedQuantity = 0;
-                  for (const order of existingOrders) {
-                    totalBookedQuantity += parseInt(order.quantity || 1);
-                  }
-                  
-                  // Count quantity in current cart
-                  const cartItem = cart.items.find(ci => ci.item_id === scheduledItem.itemId);
-                  const cartQuantity = parseInt(cartItem?.quantity || 1);
-                  
-                  // Check if adding this would exceed available quantity
-                  if (totalBookedQuantity + cartQuantity > itemQuantity) {
-                    return {
-                      success: false,
-                      error: `Sorry, "${scheduledItem.itemName}" is already fully booked at ${formattedConflictingTime}. Only ${itemQuantity} instance(s) available, and ${totalBookedQuantity} are already scheduled. Please choose a different time.`
-                    };
-                  }
-                } else if (itemQuantity === 1 || itemQuantity === null) {
-                  // Single instance item (or unlimited but we treat as single for "only scheduled")
-                  return {
-                    success: false,
-                    error: `Sorry, "${scheduledItem.itemName}" is already scheduled at ${formattedConflictingTime}. This item can only be scheduled once at a time. Please choose a different time.`
-                  };
-                }
+              if (!daysArray.includes(scheduledDay)) {
+                return {
+                  success: false,
+                  error: `Sorry, "${scheduledItem.itemName}" is not available on ${scheduledDay}. Available days: ${daysArray.join(', ')}.`
+                };
               }
+            }
+          }
+        }
+        
+        // Step 3: Check quantity limits (how many reservations exist vs item quantity)
+        for (const scheduledItem of onlyScheduledItems) {
+          // Calculate time window (start and end time considering item duration)
+          const scheduledStart = new Date(parsedDate);
+          const scheduledEnd = new Date(scheduledStart.getTime() + scheduledItem.durationMinutes * 60 * 1000);
+          
+          // Format dates for MySQL (YYYY-MM-DD HH:MM:SS)
+          const scheduledStartStr = scheduledStart.toISOString().slice(0, 19).replace('T', ' ');
+          const scheduledEndStr = scheduledEnd.toISOString().slice(0, 19).replace('T', ' ');
+          
+          // Check for existing orders with this item at overlapping times
+          // Exclude rejected and cancelled orders
+          const [existingOrders] = await queryMySQL(
+            `SELECT o.id, o.scheduled_for, o.status, oi.item_id, oi.quantity, i.duration_minutes
+             FROM orders o
+             INNER JOIN order_items oi ON o.id = oi.order_id
+             INNER JOIN items i ON oi.item_id = i.id
+             WHERE o.business_id = ?
+               AND oi.item_id = ?
+               AND o.scheduled_for IS NOT NULL
+               AND o.status NOT IN ('rejected', 'canceled', 'cancelled')
+               AND o.scheduled_for < ?
+               AND DATE_ADD(o.scheduled_for, INTERVAL COALESCE(i.duration_minutes, 60) MINUTE) > ?
+             ORDER BY o.scheduled_for ASC`,
+            [
+              business.id,
+              scheduledItem.itemId,
+              scheduledEndStr,
+              scheduledStartStr
+            ]
+          );
+          
+          // item.quantity: null = infinite, number = limited instances
+          // If quantity is null, allow unlimited bookings (no conflict check needed)
+          if (scheduledItem.quantity !== null && scheduledItem.quantity !== undefined) {
+            // Item has limited quantity - check if we can fit this booking
+            let totalBookedQuantity = 0;
+            if (existingOrders && existingOrders.length > 0) {
+              for (const order of existingOrders) {
+                totalBookedQuantity += parseInt(order.quantity || 1);
+              }
+            }
+            
+            // Count quantity in current cart
+            const cartItem = cart.items.find(ci => ci.item_id === scheduledItem.itemId);
+            const cartQuantity = parseInt(cartItem?.quantity || 1);
+            
+            // Check if adding this would exceed available quantity
+            if (totalBookedQuantity + cartQuantity > scheduledItem.quantity) {
+              const formattedTime = dateTimeParser.formatDate(parsedDate, context.language || 'english');
+              return {
+                success: false,
+                error: `Sorry, "${scheduledItem.itemName}" is already fully booked at ${formattedTime}. Only ${scheduledItem.quantity} instance(s) available, and ${totalBookedQuantity} are already scheduled. Please choose a different time.`
+              };
+            }
+          } else {
+            // Quantity is null = infinite, but for "only scheduled" items, we still check for single instance conflicts
+            // (unless quantity is explicitly set to a number > 1)
+            if (existingOrders && existingOrders.length > 0) {
+              // Check if there's a conflict (for single-instance items, even if quantity is null)
+              // This prevents double-booking when quantity is not set (defaults to single instance for "only scheduled")
+              const conflictingOrder = existingOrders[0];
+              const conflictingTime = new Date(conflictingOrder.scheduled_for);
+              const formattedConflictingTime = dateTimeParser.formatDate(conflictingTime, context.language || 'english');
+              
+              return {
+                success: false,
+                error: `Sorry, "${scheduledItem.itemName}" is already scheduled at ${formattedConflictingTime}. This item can only be scheduled once at a time. Please choose a different time.`
+              };
             }
           }
         }

@@ -85,27 +85,44 @@ function parseDateTime(text, timezone = 'Asia/Beirut', openingHours = []) {
   let hour = null;
   let minute = 0;
   
-  // Pattern: 7pm, 6:30pm, 19:00, 7:30 PM
-  const timeMatch = lowerText.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?\b/i);
+  // Pattern: 7pm, 6:30pm, 19:00, 7:30 PM, 7 p.m., 7pm
+  // Improved regex to better capture time with optional spaces
+  const timeMatch = lowerText.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.|a m|p m)?\b/i);
   if (timeMatch) {
     hour = parseInt(timeMatch[1]);
     minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-    const meridiem = timeMatch[3] ? timeMatch[3].toLowerCase().replace(/\./g, '') : null;
+    const meridiem = timeMatch[3] ? timeMatch[3].toLowerCase().replace(/\./g, '').replace(/\s/g, '') : null;
     
     // Convert to 24-hour format
     if (meridiem === 'pm' && hour < 12) {
       hour += 12;
     } else if (meridiem === 'am' && hour === 12) {
       hour = 0;
-    } else if (!meridiem && hour < 12 && hour >= 1) {
-      // If no AM/PM specified and hour is 1-11, assume PM for typical restaurant hours
-      hour += 12;
+    } else if (!meridiem) {
+      // If no AM/PM specified:
+      // - If hour is 0-11, assume PM for typical restaurant hours (1pm, 2pm, etc.)
+      // - If hour is 12-23, use as-is (12 = noon, 13 = 1pm, etc.)
+      if (hour >= 1 && hour <= 11) {
+        hour += 12; // Assume PM
+      }
+      // If hour is 0, it's midnight (00:00), keep as 0
+      // If hour is 12-23, use as-is (already 24-hour format)
     }
   }
   
-  // Set time if parsed
+  // Set time if parsed (use local time, not UTC)
   if (hour !== null) {
+    // Set hours/minutes in local timezone (not UTC)
     resultDate.setHours(hour, minute, 0, 0);
+    
+    // Log for debugging
+    logger.debug('Time parsed', {
+      input: text,
+      parsedHour: hour,
+      parsedMinute: minute,
+      resultDate: resultDate.toISOString(),
+      localTime: resultDate.toLocaleString('en-US', { timeZone: timezone })
+    });
   } else {
     // Default to next available opening time
     const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][resultDate.getDay()];
