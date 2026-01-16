@@ -605,7 +605,9 @@ async function executeFunction(functionName, args, context) {
           { scheduled_for: parsedDate }
         );
         
-        const formattedDate = dateTimeParser.formatDate(parsedDate, updatedCart.language || 'english');
+        // Use detected language from context instead of cart language
+        const language = context.language || 'english';
+        const formattedDate = dateTimeParser.formatDate(parsedDate, language);
         
         logger.info('Scheduled time set via function call', { 
           scheduledTimeText, 

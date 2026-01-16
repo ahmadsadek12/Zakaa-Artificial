@@ -221,7 +221,7 @@ async function processChatbotResponse({
             WHERE id = ? AND status = 'cart' AND notes = '__cart__'
           `, [
             customerPhoneNumber,
-            language || 'arabic',
+            language || 'english',
             orderSource,
             cart.customer_name,
             cart.notes && cart.notes !== '__cart__' ? cart.notes : null,

@@ -146,9 +146,9 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
       ).join('\n')}`
     : '';
   
-  // Determine response language - use detected language, not default
-  // This ensures the AI responds in the same language the customer is using
-  const responseLanguage = language || business.default_language || 'english';
+  // Determine response language - use detected language from message
+  // Respond in Arabic only if Arabic script was detected, otherwise English
+  const responseLanguage = language || 'english';
   
   // Build language-specific greeting templates
   const languageGreetings = {
@@ -179,7 +179,7 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
     businessContext += ` Status: ${openStatus.isOpen ? 'Open' : `Closed (${openStatus.reason})`}`;
   }
   
-  // Language instruction map (only English and Arabic)
+  // Language instruction map
   const languageInstructions = {
     'arabic': 'You MUST respond ONLY in Arabic (عربي). Use Arabic script for all responses.',
     'english': 'You MUST respond ONLY in English.'
@@ -189,9 +189,10 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
   const systemPrompt = `${businessContext}
 
 **CRITICAL: LANGUAGE INSTRUCTION**
+You understand all languages including Lebanese Arabic (both Arabic script and written in English/Latin letters). 
+You can communicate with customers in Lebanese dialect, English, or any language they use.
 ${languageInstructions[responseLanguage] || languageInstructions['english']}
-DO NOT mix languages. ALL text must be in ${responseLanguage}.
-If customer asks to change language, tell them only English and Arabic are available.
+DO NOT mix languages. ALL text in your response must be in ${responseLanguage}.
 
 Cart: ${cartSummary}
 

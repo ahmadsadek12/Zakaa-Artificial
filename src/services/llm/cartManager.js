@@ -120,7 +120,6 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
       location_name: order.location_name,
       customer_name: order.customer_name,
       notes: order.notes,
-      language: order.language_used,
       created_at: order.created_at,
       updated_at: order.updated_at
     };
@@ -246,7 +245,6 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
       delivery_address_location_id: null,
       customer_name: null,
       notes: null,
-      language: null,
       created_at: new Date(),
       updated_at: new Date()
     };
@@ -298,11 +296,6 @@ async function updateCart(businessId, branchId, customerPhoneNumber, updates) {
       // We use location_address field now, so don't update notes at all for carts
       updateFields.push('notes = ?');
       values.push('__cart__'); // Always keep the cart marker
-    }
-    
-    if (updates.language !== undefined) {
-      updateFields.push('language_used = ?');
-      values.push(updates.language);
     }
     
     if (updates.location_latitude !== undefined) {

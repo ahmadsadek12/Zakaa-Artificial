@@ -145,184 +145,26 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
       messages: messageHistory.map(m => ({ role: m.role, textPreview: m.text.substring(0, 50) }))
     });
     
-    // Get or create cart (to check existing language preference)
+    // Get or create cart
     const cart = await cartManager.getCart(
       business.id, 
       branch?.id || business.id, 
       customerPhoneNumber
     );
     
-    // Determine language preference
-    // Default to English unless explicitly set to Arabic
-    let language = cart.language || 'english';
-    const isFirstMessage = messageHistory.length === 0;
+    // Automatically detect language from incoming message
+    // Respond in Arabic only if Arabic script is detected, otherwise English
+    const detectedLanguage = await languageDetector.detectLanguage(message);
+    const language = detectedLanguage === 'arabic' ? 'arabic' : 'english';
     
-    logger.info('Language check', { 
+    logger.info('Language detection', { 
       customerPhoneNumber, 
-      cartLanguage: cart.language, 
-      isFirstMessage,
-      messageHistoryLength: messageHistory.length
+      messagePreview: message.substring(0, 50),
+      detectedLanguage,
+      responseLanguage: language
     });
     
-    if (isFirstMessage) {
-      logger.info('First message detected - sending language selection', { customerPhoneNumber });
-      
-      // First message in conversation - ask for language preference
-      // Parse business.languages (JSON array) to get available languages
-      let availableLanguages = ['english']; // default
-      try {
-        if (business.languages) {
-          availableLanguages = typeof business.languages === 'string' 
-            ? JSON.parse(business.languages) 
-            : business.languages;
-        }
-      } catch (e) {
-        logger.warn('Could not parse business languages, using default', { error: e.message });
-      }
-      
-      // Build language options text
-      const languageMap = {
-        'english': 'English',
-        'arabic': 'عربي',
-        'arabizi': 'Lebanese',
-        'french': 'Français'
-      };
-      
-      const languageOptions = availableLanguages
-        .map((lang, idx) => `${idx + 1}. ${languageMap[lang] || lang}`)
-        .join('\n');
-      
-      const welcomeMessage = `Welcome to ${business.business_name}! 🌟\n\nPlease choose your preferred language:\n\n${languageOptions}`;
-      
-      logger.info('Sending language selection message', { 
-        customerPhoneNumber, 
-        messageLength: welcomeMessage.length 
-      });
-      
-      // Return simple language selection message
-      return {
-        text: welcomeMessage,
-        language: 'english',
-        cart: cart
-      };
-    }
-    
-    // Check if message is a language selection response (number 1-4)
-    // Only trigger this if:
-    // 1. Language is not yet set
-    // 2. Message is a single digit 1-4
-    // 3. Conversation is still early (within first 3 messages from customer)
-    const languageSelectionMatch = message.trim().match(/^[1-4]$/);
-    const customerMessageCount = messageHistory.filter(m => m.role === 'customer').length;
-    
-    logger.info('Language selection check', {
-      customerPhoneNumber,
-      languageSet: !!language,
-      messageMatches: !!languageSelectionMatch,
-      customerMessageCount,
-      willProcessAsLanguageSelection: !language && languageSelectionMatch && customerMessageCount <= 3
-    });
-    
-    if (!language && languageSelectionMatch && customerMessageCount <= 3) {
-      logger.info('Processing language selection', { 
-        message, 
-        customerMessageCount, 
-        customerPhoneNumber 
-      });
-      
-      // User is selecting language (number 1-4)
-      let availableLanguages = ['english'];
-      try {
-        if (business.languages) {
-          availableLanguages = typeof business.languages === 'string' 
-            ? JSON.parse(business.languages) 
-            : business.languages;
-        }
-      } catch (e) {
-        availableLanguages = ['english'];
-      }
-      
-      const selectedIndex = parseInt(languageSelectionMatch[0]) - 1;
-      logger.info('Language selection details', {
-        customerPhoneNumber,
-        selectedNumber: languageSelectionMatch[0],
-        selectedIndex,
-        availableLanguages,
-        isValidSelection: selectedIndex >= 0 && selectedIndex < availableLanguages.length
-      });
-      
-      if (selectedIndex >= 0 && selectedIndex < availableLanguages.length) {
-        language = availableLanguages[selectedIndex];
-        
-        logger.info('Updating cart with selected language', { 
-          customerPhoneNumber, 
-          language 
-        });
-        
-        // Save language preference to cart
-        await cartManager.updateCart(business.id, branch?.id || business.id, customerPhoneNumber, {
-          language
-        });
-        
-        // Return confirmation in selected language
-        const confirmationMap = {
-          'english': `Great! I'll assist you in English. How can I help you today?`,
-          'arabic': `رائع! سأساعدك بالعربية. كيف يمكنني مساعدتك اليوم؟`,
-          'arabizi': `Ktir mnih! Ra7 se3dak bil lebneniye. Kifak, shu baddak?`,
-          'french': `Parfait! Je vais vous assister en français. Comment puis-je vous aider aujourd'hui?`
-        };
-        
-        logger.info('Language confirmed and saved', { 
-          customerPhoneNumber, 
-          language,
-          confirmationMessage: confirmationMap[language]
-        });
-        
-        return {
-          text: confirmationMap[language] || confirmationMap['english'],
-          language: language,
-          cart: cart
-        };
-      }
-    }
-    
-    // Check if user is requesting language change
-    const lowerMessage = message.toLowerCase();
-    const requestsArabic = lowerMessage.includes('arabic') || lowerMessage.includes('عربي') || lowerMessage.includes('arabi');
-    const requestsEnglish = lowerMessage.includes('english') || lowerMessage.includes('انجليزي') || lowerMessage.includes('inglizi');
-    
-    if (requestsArabic && language !== 'arabic') {
-      language = 'arabic';
-      logger.info('User requested Arabic language', { customerPhoneNumber });
-      await cartManager.updateCart(business.id, branch?.id || business.id, customerPhoneNumber, {
-        language: 'arabic'
-      });
-      
-      return {
-        text: 'تمام! رح حكيك بالعربي. كيف فيني ساعدك؟',
-        language: 'arabic',
-        cart: cart
-      };
-    } else if (requestsEnglish && language !== 'english') {
-      language = 'english';
-      logger.info('User requested English language', { customerPhoneNumber });
-      await cartManager.updateCart(business.id, branch?.id || business.id, customerPhoneNumber, {
-        language: 'english'
-      });
-      
-      return {
-        text: 'Great! I\'ll assist you in English. How can I help you today?',
-        language: 'english',
-        cart: cart
-      };
-    }
-    
-    logger.info('Using language preference', { 
-      customerPhoneNumber, 
-      language 
-    });
-    
-    logger.info('Building prompt with language', { customerPhoneNumber, language });
+    logger.info('Building prompt with detected language', { customerPhoneNumber, language });
     
     // Build prompt with full context
     const prompt = await promptBuilder.buildPrompt({
@@ -378,7 +220,7 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
     let orderId = null;
     
     // Handle function calls (can be multiple)
-    const context = { business, branch, customerPhoneNumber };
+    const context = { business, branch, customerPhoneNumber, language };
     
     // Keep processing until we get a final text response (max 5 iterations to prevent infinite loops)
     let iterations = 0;
