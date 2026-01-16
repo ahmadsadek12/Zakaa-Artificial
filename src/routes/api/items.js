@@ -26,10 +26,18 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024 // 10MB (will be compressed before upload to ~500KB-1MB)
   },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
+    // Allow all image types including HEIC/HEIF (Apple device photos)
+    const allowedMimeTypes = [
+      'image/heic',
+      'image/heif',
+      'image/heic-sequence',
+      'image/heif-sequence'
+    ];
+    
+    if (file.mimetype.startsWith('image/') || allowedMimeTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Only image files are allowed'));
+      cb(new Error('Only image files are allowed (JPEG, PNG, GIF, WebP, HEIC, etc.)'));
     }
   }
 });

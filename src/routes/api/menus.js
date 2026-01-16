@@ -28,11 +28,19 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024 // 10MB (larger for PDFs, images will be compressed)
   },
   fileFilter: (req, file, cb) => {
-    // Allow images and PDFs
-    if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
+    // Allow all image types including HEIC/HEIF (Apple device photos) and PDFs
+    const allowedMimeTypes = [
+      'image/heic',
+      'image/heif',
+      'image/heic-sequence',
+      'image/heif-sequence',
+      'application/pdf'
+    ];
+    
+    if (file.mimetype.startsWith('image/') || allowedMimeTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Only image files and PDFs are allowed'));
+      cb(new Error('Only image files (JPEG, PNG, GIF, WebP, HEIC, etc.) and PDFs are allowed'));
     }
   }
 });
