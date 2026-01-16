@@ -171,6 +171,9 @@ async function processMessage(message, value) {
         responseMessage += `\n\n✅ Your order has been placed! Order #${response.orderId.substring(0, 8).toUpperCase()}`;
       }
       
+      // Determine which WhatsApp provider to use
+      const whatsappProvider = process.env.WHATSAPP_PROVIDER;
+      
       // Send PDFs first if any
       if (response.pdfsToSend && response.pdfsToSend.length > 0) {
         const { sendDocument } = require('./messageSender');
