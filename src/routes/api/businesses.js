@@ -53,13 +53,13 @@ router.get('/me', asyncHandler(async (req, res) => {
  * PUT /api/businesses/me
  */
 router.put('/me', [
-  body('businessName').optional().notEmpty().withMessage('Business name cannot be empty'),
+  body('businessName').optional({ checkFalsy: true }).notEmpty().withMessage('Business name cannot be empty'),
   body('businessType').optional().isIn(['f & b', 'services', 'products']).withMessage('Invalid business type'),
   body('email').optional({ checkFalsy: true }).isEmail().withMessage('Valid email required'),
   body('contactPhoneNumber').optional({ checkFalsy: true }).isString().withMessage('Contact phone must be a string'),
-  body('defaultLanguage').optional().isIn(['arabic', 'arabizi', 'english', 'french']).withMessage('Invalid language'),
+  body('defaultLanguage').optional({ checkFalsy: true }).isIn(['arabic', 'arabizi', 'english', 'french']).withMessage('Invalid language'),
   body('languages').optional().isArray().withMessage('Languages must be an array'),
-  body('timezone').optional().notEmpty().withMessage('Timezone cannot be empty'),
+  body('timezone').optional({ checkFalsy: true }).notEmpty().withMessage('Timezone cannot be empty'),
   body('businessDescription').optional({ checkFalsy: true }).isString(),
   body('locationLatitude').optional({ checkFalsy: true }).isDecimal().withMessage('Latitude must be a valid decimal'),
   body('locationLongitude').optional({ checkFalsy: true }).isDecimal().withMessage('Longitude must be a valid decimal'),
