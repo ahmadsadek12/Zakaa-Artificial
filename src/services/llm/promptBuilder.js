@@ -121,6 +121,24 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
       }).join('\n')
     : 'Opening hours not specified';
   
+  // Build menus text with PDF information
+  let menusText = '';
+  if (menus.length > 0) {
+    menusText = menus.map(menu => {
+      let menuInfo = `**${menu.name}**`;
+      if (menu.description) {
+        menuInfo += `: ${menu.description}`;
+      }
+      if (menu.menu_pdf_url) {
+        menuInfo += `\n  [PDF Menu available: ${menu.menu_pdf_url}]`;
+      }
+      if (menu.menu_link) {
+        menuInfo += `\n  [External link: ${menu.menu_link}]`;
+      }
+      return menuInfo;
+    }).join('\n\n');
+  }
+  
   // Build items text (grouped by menu if applicable)
   let itemsText = '';
   if (items.length > 0) {
@@ -234,8 +252,13 @@ Save FULL address exactly as provided with set_delivery_address().
 - When customer adds an "only scheduled" item, inform them they must schedule it using set_scheduled_time()
 - When confirming order, if cart contains "only scheduled" items without scheduled_for, require scheduling first
 
+Available Menus:
+${menusText || 'No menus available'}
+
 Rules:
 - Use get_menu_items() to show menu/catalog
+- Use send_menu_pdf() when customer asks for menu in PDF format, wants to download menu PDF, or requests menu as PDF
+- Use send_item_image() when customer asks to see a picture of an item
 - Use add_item_to_cart() when customer wants items/services
 - Use set_delivery_address() for delivery addresses
 ${(isFoodAndBeverage && business.allow_scheduled_orders) || isServices ? '- Use set_scheduled_time() when customer wants to schedule (parse natural language)\n' : ''}- Use confirm_order() only when: cart has items + delivery type set + address (if delivery)${(isFoodAndBeverage && business.allow_scheduled_orders) || isServices ? ' + scheduled time (if scheduling or if cart has "only scheduled" items)' : ' + scheduled time (if cart has "only scheduled" items)'}

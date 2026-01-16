@@ -154,9 +154,48 @@ async function sendPhoto({ chatId, imageUrl, caption = '', options = {} }) {
   }
 }
 
+/**
+ * Send document/PDF via Telegram
+ * @param {Object} params - Document parameters
+ * @param {string|number} params.chatId - Telegram chat ID
+ * @param {string} params.documentUrl - URL of the document/PDF to send
+ * @param {string} params.caption - Optional caption for the document
+ * @param {Object} params.options - Additional options
+ */
+async function sendDocument({ chatId, documentUrl, caption = '', options = {} }) {
+  try {
+    const bot = getTelegramBot();
+    if (!bot) {
+      throw new Error('Telegram bot not initialized');
+    }
+    
+    const result = await bot.sendDocument(chatId, documentUrl, {
+      caption,
+      ...options
+    });
+    
+    logger.info('Telegram document sent successfully', {
+      chatId,
+      messageId: result.message_id,
+      documentUrl
+    });
+    
+    return result;
+  } catch (error) {
+    logger.error('Error sending Telegram document:', {
+      chatId,
+      documentUrl,
+      error: error.message,
+      code: error.response?.statusCode || error.code
+    });
+    throw error;
+  }
+}
+
 module.exports = {
   getTelegramBot,
   sendMessage,
   sendMessageWithRetry,
-  sendPhoto
+  sendPhoto,
+  sendDocument
 };

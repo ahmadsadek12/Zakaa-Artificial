@@ -253,7 +253,26 @@ async function processMessage(message) {
         responseMessage += `\n\n✅ Your order has been placed! Order #${response.orderId.substring(0, 8).toUpperCase()}`;
       }
       
-      // Send images first if any
+      // Send PDFs first if any
+      if (response.pdfsToSend && response.pdfsToSend.length > 0) {
+        for (const pdf of response.pdfsToSend) {
+          try {
+            await telegramMessageSender.sendDocument({
+              chatId,
+              documentUrl: pdf.url,
+              caption: pdf.caption || ''
+            });
+          } catch (pdfError) {
+            logger.error('Failed to send PDF via Telegram:', {
+              chatId,
+              documentUrl: pdf.url,
+              error: pdfError.message
+            });
+          }
+        }
+      }
+      
+      // Send images if any
       if (response.imagesToSend && response.imagesToSend.length > 0) {
         for (const image of response.imagesToSend) {
           try {

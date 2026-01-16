@@ -282,6 +282,17 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
             });
           }
           
+          // Track PDF URLs from function results
+          if (result.shouldSendPdf && result.pdfUrl) {
+            if (!context.pdfsToSend) {
+              context.pdfsToSend = [];
+            }
+            context.pdfsToSend.push({
+              url: result.pdfUrl,
+              caption: result.message || `Menu PDF for ${result.menuName || 'menu'}`
+            });
+          }
+          
           functionResults.push({
             tool_call_id: toolCall.id,
             result: result
@@ -356,7 +367,8 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
       cart: updatedCart,
       orderCreated,
       orderId,
-      imagesToSend: context.imagesToSend || []
+      imagesToSend: context.imagesToSend || [],
+      pdfsToSend: context.pdfsToSend || []
     };
   } catch (error) {
     logger.error('Error in chatbot service:', {

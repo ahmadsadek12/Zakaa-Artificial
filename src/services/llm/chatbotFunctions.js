@@ -220,6 +220,23 @@ function getAvailableFunctions() {
           required: ['itemName']
         }
       }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'send_menu_pdf',
+        description: 'Send a menu PDF to the customer. Use this when customer asks for the menu in PDF format, wants to download the menu PDF, requests the menu as a PDF file, or asks to see the menu PDF.',
+        parameters: {
+          type: 'object',
+          properties: {
+            menuName: {
+              type: 'string',
+              description: 'The name of the menu to send the PDF for. If not specified or "all", send the first available menu PDF.'
+            }
+          },
+          required: []
+        }
+      }
     }
   ];
 }
@@ -1099,6 +1116,60 @@ async function executeFunction(functionName, args, context) {
           imageUrl: item.item_image_url,
           itemName: item.name,
           shouldSendImage: true
+        };
+      }
+      
+      case 'send_menu_pdf': {
+        const { menuName } = args;
+        
+        // Find menus with PDFs
+        let menus;
+        if (menuName) {
+          menus = await queryMySQL(
+            `SELECT * FROM menus 
+             WHERE business_id = ? AND is_active = true AND deleted_at IS NULL
+             AND menu_pdf_url IS NOT NULL
+             AND (LOWER(name) LIKE ? OR LOWER(name) = ?)
+             ORDER BY CASE WHEN LOWER(name) = ? THEN 1 ELSE 2 END
+             LIMIT 1`,
+            [
+              business.id,
+              `%${menuName.toLowerCase()}%`,
+              menuName.toLowerCase(),
+              menuName.toLowerCase()
+            ]
+          );
+        } else {
+          // Get first menu with PDF
+          menus = await queryMySQL(
+            `SELECT * FROM menus 
+             WHERE business_id = ? AND is_active = true AND deleted_at IS NULL
+             AND menu_pdf_url IS NOT NULL
+             ORDER BY name
+             LIMIT 1`,
+            [business.id]
+          );
+        }
+        
+        if (menus.length === 0) {
+          return {
+            success: false,
+            error: menuName 
+              ? `Sorry, there's no PDF available for menu "${menuName}" at the moment.`
+              : `Sorry, there's no menu PDF available at the moment.`,
+            pdfUrl: null
+          };
+        }
+        
+        const menu = menus[0];
+        
+        // Return the PDF URL - the chatbot will send it
+        return {
+          success: true,
+          message: `Here's the PDF menu for ${menu.name}:`,
+          pdfUrl: menu.menu_pdf_url,
+          menuName: menu.name,
+          shouldSendPdf: true
         };
       }
       

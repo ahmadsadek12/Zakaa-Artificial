@@ -246,7 +246,107 @@ async function sendImage({ to, from, imageUrl, caption = '', maxRetries = 3 }) {
   }
 }
 
+/**
+ * Send WhatsApp document/PDF via Twilio
+ * @param {Object} params - Document parameters
+ * @param {string} params.to - Recipient in Twilio format (whatsapp:+96176891114)
+ * @param {string} params.from - Twilio number in Twilio format (whatsapp:+14155238886)
+ * @param {string} params.documentUrl - URL of the document/PDF to send
+ * @param {string} params.caption - Optional caption for the document
+ * @param {number} params.maxRetries - Maximum retry attempts (default: 3)
+ * @returns {Promise<Object>} - Twilio message object
+ */
+async function sendDocument({ to, from, documentUrl, caption = '', maxRetries = 3 }) {
+  try {
+    if (!to || !from || !documentUrl) {
+      throw new Error('to, from, and documentUrl are required');
+    }
+    
+    // Ensure Twilio format (whatsapp: prefix)
+    const toNumber = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
+    const fromNumber = from.startsWith('whatsapp:') ? from : `whatsapp:${from}`;
+    
+    const client = getTwilioClient();
+    
+    let lastError;
+    
+    // Retry logic with exponential backoff
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const twilioMessage = await client.messages.create({
+          from: fromNumber,
+          to: toNumber,
+          mediaUrl: [documentUrl], // Twilio expects an array for mediaUrl
+          body: caption || undefined // Caption goes in the body
+        });
+        
+        logger.info('Twilio WhatsApp document sent successfully', {
+          to: toNumber,
+          messageSid: twilioMessage.sid,
+          documentUrl,
+          attempt: attempt + 1
+        });
+        
+        return twilioMessage;
+      } catch (error) {
+        lastError = error;
+        
+        // Twilio error codes
+        const statusCode = error.status;
+        const errorCode = error.code;
+        
+        logger.warn('Twilio API document send error', {
+          attempt: attempt + 1,
+          maxRetries,
+          statusCode,
+          errorCode,
+          errorMessage: error.message,
+          retryable: isRetryableError(error)
+        });
+        
+        // Non-retryable errors (4xx except rate limits)
+        if (statusCode && statusCode >= 400 && statusCode < 500 && statusCode !== 429) {
+          logger.error('Non-retryable Twilio API document send error', {
+            statusCode,
+            errorCode,
+            error: error.message
+          });
+          throw error;
+        }
+        
+        // Check if we should retry
+        if (attempt < maxRetries && isRetryableError(error)) {
+          const delay = getRetryDelay(attempt);
+          logger.info(`Retrying Twilio document send after ${delay}ms`, {
+            attempt: attempt + 1,
+            maxRetries
+          });
+          await sleep(delay);
+          continue;
+        }
+        
+        break;
+      }
+    }
+    
+    // All retries exhausted
+    logger.error('Twilio document send failed after all retries', {
+      to: toNumber,
+      from: fromNumber,
+      documentUrl,
+      maxRetries,
+      lastError: lastError?.message
+    });
+    
+    throw lastError || new Error('Failed to send Twilio document after retries');
+  } catch (error) {
+    logger.error('Error sending Twilio WhatsApp document:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   sendMessage,
-  sendImage
+  sendImage,
+  sendDocument
 };
