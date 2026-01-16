@@ -104,32 +104,38 @@ async function getWebhookInfo(botToken) {
  * Setup Telegram bot webhook automatically
  * This function is called when a business updates their bot token
  * @param {string} botToken - Telegram bot token
+ * @param {string} businessId - Business ID (UUID) to identify which business this bot belongs to
  * @returns {Promise<Object>} Setup result with bot info and webhook status
  */
-async function setupTelegramBotWebhook(botToken) {
+async function setupTelegramBotWebhook(botToken, businessId) {
   try {
+    if (!businessId) {
+      throw new Error('Business ID is required for webhook setup');
+    }
+
     // Step 1: Validate the bot token
-    logger.info('Validating Telegram bot token...');
+    logger.info('Validating Telegram bot token...', { businessId });
     const botInfo = await validateBotToken(botToken);
     
     logger.info('Bot token validated successfully', {
       botId: botInfo.id,
       botUsername: botInfo.username,
-      botName: botInfo.first_name
+      botName: botInfo.first_name,
+      businessId
     });
 
-    // Step 2: Determine webhook URL
-    // In production (EC2), use the API_BASE_URL from constants
-    // In development, skip webhook setup (use ngrok manually)
-    const webhookUrl = `${CONSTANTS.API_BASE_URL}/webhook/telegram`;
+    // Step 2: Determine webhook URL with unique businessId
+    // Each business gets a unique webhook URL so we can route messages correctly
+    const webhookUrl = `${CONSTANTS.API_BASE_URL}/webhook/telegram/${businessId}`;
 
     // Step 3: Set the webhook
-    logger.info('Setting Telegram webhook...', { webhookUrl });
+    logger.info('Setting Telegram webhook...', { webhookUrl, businessId });
     await setWebhook(botToken, webhookUrl);
 
     logger.info('Telegram bot webhook configured successfully', {
       botUsername: botInfo.username,
-      webhookUrl
+      webhookUrl,
+      businessId
     });
 
     return {
@@ -143,7 +149,8 @@ async function setupTelegramBotWebhook(botToken) {
     };
   } catch (error) {
     logger.error('Failed to setup Telegram bot webhook', {
-      error: error.message
+      error: error.message,
+      businessId
     });
     
     // Return structured error

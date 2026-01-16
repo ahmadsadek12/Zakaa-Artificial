@@ -16,13 +16,13 @@ const unavailableMessageSent = new Map();
  * Process incoming Telegram update
  * Telegram sends updates with message, callback_query, etc.
  */
-async function processTelegramUpdate(update) {
+async function processTelegramUpdate(update, businessId = null) {
   try {
     // Handle different update types
     if (update.message) {
-      await processMessage(update.message);
+      await processMessage(update.message, businessId);
     } else if (update.callback_query) {
-      await processCallbackQuery(update.callback_query);
+      await processCallbackQuery(update.callback_query, businessId);
     } else {
       logger.debug('Unhandled Telegram update type', {
         updateId: update.update_id,
@@ -39,7 +39,7 @@ async function processTelegramUpdate(update) {
 /**
  * Process incoming message
  */
-async function processMessage(message) {
+async function processMessage(message, businessId = null) {
   try {
     // Skip edited messages
     if (message.edit_date) {
@@ -69,12 +69,12 @@ async function processMessage(message) {
       username: from.username,
       firstName: from.first_name,
       textLength: text.length,
-      messageId
+      messageId,
+      businessId
     });
     
-    // Resolve business context - for now, we'll use the test business
-    // In production, you might store telegram_bot_id in the database and match it
-    const business = await resolveBusinessFromTelegram();
+    // Resolve business context using the businessId from the webhook URL
+    const business = await resolveBusinessFromTelegram(businessId);
     
     if (!business) {
       logger.warn('Could not resolve business for Telegram message', { chatId });
@@ -337,7 +337,7 @@ async function processMessage(message) {
 /**
  * Process callback query (button clicks)
  */
-async function processCallbackQuery(callbackQuery) {
+async function processCallbackQuery(callbackQuery, businessId = null) {
   try {
     const chatId = callbackQuery.message.chat.id;
     const data = callbackQuery.data;
@@ -346,7 +346,8 @@ async function processCallbackQuery(callbackQuery) {
     logger.info('Received Telegram callback query', {
       chatId,
       data,
-      queryId
+      queryId,
+      businessId
     });
     
     // Answer callback query to remove loading state
@@ -366,21 +367,30 @@ async function processCallbackQuery(callbackQuery) {
 
 /**
  * Resolve business from Telegram bot
- * For now, we'll match by bot token or use a default test business
+ * Matches business by ID from the webhook URL
  */
-async function resolveBusinessFromTelegram() {
+async function resolveBusinessFromTelegram(businessId) {
   try {
-    // Find the test business by email
-    const business = await userRepository.findByEmail('test@zakaa.com');
+    if (!businessId) {
+      logger.warn('No businessId provided in Telegram webhook');
+      return null;
+    }
+    
+    // Find the business by ID
+    const business = await userRepository.findById(businessId);
     
     if (business && business.user_type === 'business') {
+      logger.info('Resolved business from Telegram webhook', {
+        businessId: business.id,
+        businessName: business.business_name || business.email
+      });
       return business;
     }
     
-    logger.warn('Test business not found');
+    logger.warn('Business not found for Telegram message', { businessId });
     return null;
   } catch (error) {
-    logger.error('Error resolving business from Telegram:', error);
+    logger.error('Error resolving business from Telegram:', { businessId, error: error.message });
     return null;
   }
 }

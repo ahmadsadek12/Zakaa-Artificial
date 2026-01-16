@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import { Plus, Edit, Trash2, MapPin, Mail, Lock, Phone, Building2, Key } from 'lucide-react'
+import { Plus, Edit, Trash2, MapPin, Mail, Lock, Phone, Building2, Key, Eye, EyeOff } from 'lucide-react'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
@@ -9,6 +9,7 @@ export default function Branches() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingBranch, setEditingBranch] = useState(null)
+  const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -280,14 +281,31 @@ export default function Branches() {
                     <label className="label">
                       Password {editingBranch ? '(leave empty to keep current)' : '*'}
                     </label>
-                    <input
-                      type="password"
-                      className="input"
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      required={!editingBranch}
-                      minLength={8}
-                    />
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        className="input pr-10"
+                        value={formData.password}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        required={!editingBranch}
+                        minLength={8}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? (
+                          <EyeOff size={20} className="text-gray-400" />
+                        ) : (
+                          <Eye size={20} className="text-gray-400" />
+                        )}
+                      </button>
+                    </div>
+                    {!editingBranch && (
+                      <p className="text-xs text-gray-500 mt-1">Minimum 8 characters</p>
+                    )}
                   </div>
                 </div>
               </div>

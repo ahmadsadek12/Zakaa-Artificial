@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
-import { Save, Building2, CreditCard, Phone, MapPin, Globe, MessageSquare, Key, Clock } from 'lucide-react'
+import { Save, Building2, CreditCard, Phone, MapPin, Globe, MessageSquare, Key, Clock, Eye, EyeOff } from 'lucide-react'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
@@ -28,6 +28,16 @@ export default function Settings() {
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
   const [activeTab, setActiveTab] = useState('business')
+  const [passwordData, setPasswordData] = useState({
+    current_password: '',
+    new_password: '',
+    confirm_password: ''
+  })
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false
+  })
 
   useEffect(() => {
     if (user) {
@@ -102,6 +112,53 @@ export default function Settings() {
     }
   }
 
+  const handlePasswordChange = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setSaved(false)
+
+    // Validate passwords match
+    if (passwordData.new_password !== passwordData.confirm_password) {
+      alert('New passwords do not match')
+      setLoading(false)
+      return
+    }
+
+    // Validate password strength
+    if (passwordData.new_password.length < 8) {
+      alert('Password must be at least 8 characters long')
+      setLoading(false)
+      return
+    }
+
+    try {
+      const token = localStorage.getItem('token')
+      await axios.put(
+        `${API_URL}/api/businesses/me/password`,
+        {
+          current_password: passwordData.current_password,
+          new_password: passwordData.new_password,
+          confirm_password: passwordData.confirm_password
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      
+      setSaved(true)
+      setPasswordData({
+        current_password: '',
+        new_password: '',
+        confirm_password: ''
+      })
+      setTimeout(() => setSaved(false), 3000)
+      alert('Password changed successfully')
+    } catch (error) {
+      console.error('Error changing password:', error)
+      alert(error.response?.data?.error?.message || 'Failed to change password')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -144,6 +201,17 @@ export default function Settings() {
           >
             <MessageSquare size={18} />
             Bot Configuration
+          </button>
+          <button
+            onClick={() => setActiveTab('password')}
+            className={`${
+              activeTab === 'password'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2`}
+          >
+            <Key size={18} />
+            Password
           </button>
           <button
             onClick={() => setActiveTab('subscription')}
@@ -473,6 +541,114 @@ export default function Settings() {
           </div>
         )}
 
+        {/* Password Tab */}
+        {activeTab === 'password' && (
+          <div className="card space-y-6">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Key size={24} />
+                Change Password
+              </h2>
+              <form onSubmit={handlePasswordChange} className="space-y-4">
+                <div>
+                  <label className="label">Current Password</label>
+                  <div className="relative">
+                    <input
+                      type={showPasswords.current ? 'text' : 'password'}
+                      value={passwordData.current_password}
+                      onChange={(e) => setPasswordData({ ...passwordData, current_password: e.target.value })}
+                      className="input pr-10"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                      tabIndex={-1}
+                    >
+                      {showPasswords.current ? (
+                        <EyeOff size={20} className="text-gray-400" />
+                      ) : (
+                        <Eye size={20} className="text-gray-400" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label">New Password</label>
+                  <div className="relative">
+                    <input
+                      type={showPasswords.new ? 'text' : 'password'}
+                      value={passwordData.new_password}
+                      onChange={(e) => setPasswordData({ ...passwordData, new_password: e.target.value })}
+                      className="input pr-10"
+                      required
+                      minLength={8}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                      tabIndex={-1}
+                    >
+                      {showPasswords.new ? (
+                        <EyeOff size={20} className="text-gray-400" />
+                      ) : (
+                        <Eye size={20} className="text-gray-400" />
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Minimum 8 characters</p>
+                </div>
+
+                <div>
+                  <label className="label">Confirm New Password</label>
+                  <div className="relative">
+                    <input
+                      type={showPasswords.confirm ? 'text' : 'password'}
+                      value={passwordData.confirm_password}
+                      onChange={(e) => setPasswordData({ ...passwordData, confirm_password: e.target.value })}
+                      className="input pr-10"
+                      required
+                      minLength={8}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                      tabIndex={-1}
+                    >
+                      {showPasswords.confirm ? (
+                        <EyeOff size={20} className="text-gray-400" />
+                      ) : (
+                        <Eye size={20} className="text-gray-400" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-4 border-t border-gray-200">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="btn btn-primary flex items-center gap-2"
+                  >
+                    {loading ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    ) : (
+                      <>
+                        <Key size={18} />
+                        <span>Change Password</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* Subscription Tab */}
         {activeTab === 'subscription' && (
           <div className="card">
@@ -501,7 +677,7 @@ export default function Settings() {
         )}
 
         {/* Save Button & Success Message */}
-        {activeTab !== 'subscription' && (
+        {activeTab !== 'subscription' && activeTab !== 'password' && (
           <>
             {saved && (
               <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">

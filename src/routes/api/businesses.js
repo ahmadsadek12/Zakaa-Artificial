@@ -12,6 +12,7 @@ const { encryptToken, decryptToken } = require('../../../utils/encryption');
 const logger = require('../../utils/logger');
 const CONSTANTS = require('../../config/constants');
 const { setupTelegramBotWebhook } = require('../../services/telegram/telegramWebhookSetup');
+const bcrypt = require('bcryptjs');
 
 // All routes require authentication and business/admin/branch access
 router.use(authenticate);
@@ -200,7 +201,7 @@ router.put('/me', [
         userId: req.user.id
       });
       
-      const webhookSetup = await setupTelegramBotWebhook(updateData.telegramBotToken);
+      const webhookSetup = await setupTelegramBotWebhook(updateData.telegramBotToken, req.user.id);
       
       if (!webhookSetup.success) {
         logger.warn('Failed to setup Telegram webhook automatically', {
@@ -275,6 +276,60 @@ router.put('/me', [
       }
     });
   }
+}));
+
+/**
+ * Change business password
+ * PUT /api/businesses/me/password
+ */
+router.put('/me/password', [
+  body('current_password').notEmpty().withMessage('Current password is required'),
+  body('new_password').isLength({ min: 8 }).withMessage('New password must be at least 8 characters long'),
+  body('confirm_password').custom((value, { req }) => {
+    if (value !== req.body.new_password) {
+      throw new Error('Passwords do not match');
+    }
+    return true;
+  })
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+
+  const { current_password, new_password } = req.body;
+  
+  // Get current password hash
+  const users = await userRepository.findById(req.user.id);
+  if (!users || !users.password_hash) {
+    return res.status(404).json({
+      success: false,
+      error: { message: 'User not found or has no password set' }
+    });
+  }
+  
+  // Verify current password
+  const isValid = await bcrypt.compare(current_password, users.password_hash);
+  
+  if (!isValid) {
+    return res.status(401).json({
+      success: false,
+      error: { message: 'Current password is incorrect' }
+    });
+  }
+  
+  // Update password
+  await userRepository.updatePassword(req.user.id, new_password);
+  
+  logger.info(`Business password changed: ${req.user.id}`);
+  
+  res.json({
+    success: true,
+    data: { message: 'Password updated successfully' }
+  });
 }));
 
 /**
