@@ -8,6 +8,10 @@ const userRepository = require('../../repositories/userRepository');
 const { generateUUID } = require('../../utils/uuid');
 const { getMongoCollection } = require('../../config/database');
 
+// Track which conversations have already received the "unavailable" message
+// Key: `${businessId}:${customerPhoneNumber}`, Value: true
+const unavailableMessageSent = new Map();
+
 /**
  * Process incoming Telegram update
  * Telegram sends updates with message, callback_query, etc.
@@ -85,17 +89,53 @@ async function processMessage(message) {
     // MySQL returns 0/1 (tinyint), not boolean - convert to boolean
     const chatbotEnabled = Boolean(business.chatbot_enabled);
     if (!chatbotEnabled) {
-      logger.info('Chatbot is disabled for this business', { 
-        businessId: business.id, 
-        chatId,
-        chatbot_enabled: business.chatbot_enabled,
-        chatbotEnabled
-      });
-      await telegramMessageSender.sendMessage({
-        chatId,
-        message: 'Our chatbot is currently unavailable. Please contact us directly at ' + (business.contact_phone_number || business.whatsapp_phone_number || 'our phone number') + '. Thank you!'
-      });
+      const conversationKey = `${business.id}:${customerPhoneNumber}`;
+      const alreadySent = unavailableMessageSent.has(conversationKey);
+      
+      if (!alreadySent) {
+        // Send "unavailable" message only once
+        logger.info('Chatbot is disabled - sending unavailable message', { 
+          businessId: business.id, 
+          chatId,
+          chatbot_enabled: business.chatbot_enabled
+        });
+        await telegramMessageSender.sendMessage({
+          chatId,
+          message: 'Our chatbot is currently unavailable. An agent will be with you soon.'
+        });
+        // Mark as sent for this conversation
+        unavailableMessageSent.set(conversationKey, true);
+      } else {
+        // Already sent - just log the message and allow agent to respond manually
+        logger.info('Chatbot disabled - message logged for agent response', {
+          businessId: business.id,
+          chatId
+        });
+      }
+      
+      // Log message to MongoDB so agents can see it (non-blocking)
+      logMessage({
+        business_id: business.id,
+        branch_id: branch?.id || business.id,
+        customer_phone_number: customerPhoneNumber,
+        whatsapp_user_id: customerPhoneNumber,
+        direction: 'inbound',
+        channel: 'telegram',
+        message_type: 'text',
+        text: text,
+        meta_message_id: messageId.toString(),
+        timestamp: new Date()
+      }).catch(err => logger.debug('Failed to log message (non-critical):', err));
+      
+      // Don't send chatbot response - allow agent to respond manually
       return;
+    }
+    
+    // Clear the unavailable message flag if chatbot is now enabled
+    // (in case it was disabled and re-enabled)
+    const conversationKey = `${business.id}:${customerPhoneNumber}`;
+    if (unavailableMessageSent.has(conversationKey)) {
+      unavailableMessageSent.delete(conversationKey);
     }
     
     // Use business as branch (no separate branch for Telegram bot)

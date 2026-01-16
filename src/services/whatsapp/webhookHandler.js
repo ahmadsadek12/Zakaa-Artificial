@@ -8,6 +8,10 @@ const messageSender = require('./messageSender');
 const cartManager = require('../llm/cartManager');
 const { generateUUID } = require('../../utils/uuid');
 
+// Track which conversations have already received the "unavailable" message
+// Key: `${businessId}:${customerPhoneNumber}`, Value: true
+const unavailableMessageSent = new Map();
+
 /**
  * Process incoming webhook
  */
@@ -58,19 +62,62 @@ async function processMessage(message, value) {
     // MySQL returns 0/1 (tinyint), not boolean - convert to boolean
     const chatbotEnabled = Boolean(business.chatbot_enabled);
     if (!chatbotEnabled) {
-      logger.info('Chatbot is disabled for this business', { 
-        businessId: business.id, 
-        from: message.from,
-        chatbot_enabled: business.chatbot_enabled,
-        chatbotEnabled
+      const conversationKey = `${business.id}:${message.from}`;
+      const alreadySent = unavailableMessageSent.has(conversationKey);
+      
+      if (!alreadySent) {
+        // Send "unavailable" message only once
+        logger.info('Chatbot is disabled - sending unavailable message', { 
+          businessId: business.id, 
+          from: message.from,
+          chatbot_enabled: business.chatbot_enabled
+        });
+        await messageSender.sendMessage({
+          business,
+          branch,
+          to: message.from,
+          message: 'Our chatbot is currently unavailable. An agent will be with you soon.'
+        });
+        // Mark as sent for this conversation
+        unavailableMessageSent.set(conversationKey, true);
+      } else {
+        // Already sent - just log the message and allow agent to respond manually
+        logger.info('Chatbot disabled - message logged for agent response', {
+          businessId: business.id,
+          from: message.from
+        });
+      }
+      
+      // Extract message details and log for agent visibility
+      const from = message.from;
+      const messageId = message.id;
+      const messageType = message.type;
+      const timestamp = parseInt(message.timestamp);
+      const text = message.text?.body || '';
+      
+      // Log message to MongoDB so agents can see it
+      await logMessage({
+        businessId: business.id,
+        branchId: branch?.id,
+        customerPhoneNumber: from,
+        whatsappUserId: from,
+        direction: 'inbound',
+        channel: 'whatsapp',
+        messageType,
+        text,
+        metaMessageId: messageId,
+        timestamp: new Date(timestamp * 1000)
       });
-      await messageSender.sendMessage({
-        business,
-        branch,
-        to: message.from,
-        message: 'Our chatbot is currently unavailable. Please contact us directly at ' + (business.contact_phone_number || business.whatsapp_phone_number || 'our phone number') + '. Thank you!'
-      });
+      
+      // Don't send chatbot response - allow agent to respond manually
       return;
+    }
+    
+    // Clear the unavailable message flag if chatbot is now enabled
+    // (in case it was disabled and re-enabled)
+    const conversationKey = `${business.id}:${message.from}`;
+    if (unavailableMessageSent.has(conversationKey)) {
+      unavailableMessageSent.delete(conversationKey);
     }
     
     // Extract message details
