@@ -11,6 +11,7 @@ const userRepository = require('../../repositories/userRepository');
 const { encryptToken, decryptToken } = require('../../../utils/encryption');
 const logger = require('../../utils/logger');
 const CONSTANTS = require('../../config/constants');
+const { setupTelegramBotWebhook } = require('../../services/telegram/telegramWebhookSetup');
 
 // All routes require authentication and business/admin/branch access
 router.use(authenticate);
@@ -168,27 +169,66 @@ router.put('/me', [
   
   try {
     const updatedUser = await userRepository.update(req.user.id, updateData);
-  delete updatedUser.password_hash;
+    delete updatedUser.password_hash;
+    
+    // If Telegram bot token was updated, automatically set up webhook
+    if (updateData.telegramBotToken) {
+      logger.info('Telegram bot token updated, setting up webhook automatically...', {
+        userId: req.user.id
+      });
+      
+      const webhookSetup = await setupTelegramBotWebhook(updateData.telegramBotToken);
+      
+      if (!webhookSetup.success) {
+        logger.warn('Failed to setup Telegram webhook automatically', {
+          userId: req.user.id,
+          error: webhookSetup.error
+        });
+        
+        // Return error to user so they know the token is invalid
+        return res.status(400).json({
+          success: false,
+          error: {
+            message: 'Telegram bot token is invalid or webhook setup failed',
+            details: webhookSetup.error
+          }
+        });
+      }
+      
+      logger.info('Telegram webhook configured successfully', {
+        userId: req.user.id,
+        botUsername: webhookSetup.botInfo.username,
+        webhookUrl: webhookSetup.webhookUrl
+      });
+      
+      // Add webhook info to response
+      updatedUser.telegram_webhook_status = {
+        configured: true,
+        botUsername: webhookSetup.botInfo.username,
+        botName: webhookSetup.botInfo.name,
+        webhookUrl: webhookSetup.webhookUrl
+      };
+    }
   
-  // Convert MySQL boolean (tinyint) fields to proper JavaScript booleans
-  if (updatedUser.chatbot_enabled !== undefined) {
-    updatedUser.chatbot_enabled = Boolean(updatedUser.chatbot_enabled);
-  }
-  if (updatedUser.is_active !== undefined) {
-    updatedUser.is_active = Boolean(updatedUser.is_active);
-  }
-  if (updatedUser.allow_scheduled_orders !== undefined) {
-    updatedUser.allow_scheduled_orders = Boolean(updatedUser.allow_scheduled_orders);
-  }
-  if (updatedUser.allow_delivery !== undefined) {
-    updatedUser.allow_delivery = Boolean(updatedUser.allow_delivery);
-  }
-  if (updatedUser.allow_takeaway !== undefined) {
-    updatedUser.allow_takeaway = Boolean(updatedUser.allow_takeaway);
-  }
-  if (updatedUser.allow_on_site !== undefined) {
-    updatedUser.allow_on_site = Boolean(updatedUser.allow_on_site);
-  }
+    // Convert MySQL boolean (tinyint) fields to proper JavaScript booleans
+    if (updatedUser.chatbot_enabled !== undefined) {
+      updatedUser.chatbot_enabled = Boolean(updatedUser.chatbot_enabled);
+    }
+    if (updatedUser.is_active !== undefined) {
+      updatedUser.is_active = Boolean(updatedUser.is_active);
+    }
+    if (updatedUser.allow_scheduled_orders !== undefined) {
+      updatedUser.allow_scheduled_orders = Boolean(updatedUser.allow_scheduled_orders);
+    }
+    if (updatedUser.allow_delivery !== undefined) {
+      updatedUser.allow_delivery = Boolean(updatedUser.allow_delivery);
+    }
+    if (updatedUser.allow_takeaway !== undefined) {
+      updatedUser.allow_takeaway = Boolean(updatedUser.allow_takeaway);
+    }
+    if (updatedUser.allow_on_site !== undefined) {
+      updatedUser.allow_on_site = Boolean(updatedUser.allow_on_site);
+    }
   
     logger.info(`Business profile updated: ${req.user.id}`, { chatbot_enabled: updatedUser.chatbot_enabled });
     

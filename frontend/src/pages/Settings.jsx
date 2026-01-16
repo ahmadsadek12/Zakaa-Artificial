@@ -75,6 +75,13 @@ export default function Settings() {
       })
       console.log('Update response:', response.data)
       console.log('chatbot_enabled in response:', response.data?.data?.business?.chatbot_enabled, 'type:', typeof response.data?.data?.business?.chatbot_enabled)
+      
+      // Show special message if Telegram webhook was configured
+      const webhookStatus = response.data?.data?.business?.telegram_webhook_status
+      if (webhookStatus?.configured) {
+        alert(`✅ Settings saved!\n\nTelegram Bot Connected:\n• Bot: @${webhookStatus.botUsername}\n• Name: ${webhookStatus.botName}\n• Webhook: ${webhookStatus.webhookUrl}\n\nYour bot is ready to receive messages!`)
+      }
+      
       await fetchUser()
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
