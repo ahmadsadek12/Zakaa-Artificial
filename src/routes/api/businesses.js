@@ -140,12 +140,13 @@ router.put('/me', [
   const updateData = {};
   const allowedFields = [
     'businessName', 'businessType', 'email', 'contactPhoneNumber',
-    'defaultLanguage', 'languages', 'timezone', 'businessDescription',
+    'defaultLanguage', 'timezone', 'businessDescription',
     'locationLatitude', 'locationLongitude', 'deliveryRadiusKm',
     'whatsappPhoneNumberId', 'whatsappBusinessAccountId', 'telegramBotToken',
     'allowScheduledOrders', 'allowDelivery', 'allowTakeaway', 'allowOnSite',
     'chatbotEnabled'
   ];
+  // Note: 'languages' field removed - language preferences no longer stored
   
   for (const field of allowedFields) {
     if (req.body[field] !== undefined) {
