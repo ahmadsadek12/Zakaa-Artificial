@@ -85,6 +85,9 @@ async function processMessage(message) {
       return;
     }
     
+    // Use business as branch (no separate branch for Telegram bot)
+    const branch = null;
+    
     // Check if chatbot is enabled for this business
     // MySQL returns 0/1 (tinyint), not boolean - convert to boolean
     const chatbotEnabled = Boolean(business.chatbot_enabled);
@@ -137,9 +140,6 @@ async function processMessage(message) {
     if (unavailableMessageSent.has(conversationKey)) {
       unavailableMessageSent.delete(conversationKey);
     }
-    
-    // Use business as branch (no separate branch for Telegram bot)
-    const branch = null;
     
     // Handle location sharing
     if (location) {
