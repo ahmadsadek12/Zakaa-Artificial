@@ -46,8 +46,9 @@ async function uploadToS3(fileBuffer, fileName, mimetype, folder = '') {
     Bucket: S3_CONFIG.bucket,
     Key: key,
     Body: fileBuffer,
-    ContentType: mimetype,
-    ACL: 'public-read'
+    ContentType: mimetype
+    // Note: ACL removed - bucket policy handles public access
+    // Modern S3 buckets (created after April 2023) have ACLs disabled by default
   };
   
   try {
