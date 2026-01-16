@@ -27,6 +27,7 @@ const tableRoutes = require('./routes/api/tables');
 const reservationRoutes = require('./routes/api/reservations');
 const webhookRoutes = require('./routes/webhook/whatsapp');
 const telegramWebhookRoutes = require('./routes/webhook/telegram');
+const messagesRoutes = require('./routes/api/messages');
 
 const app = express();
 
@@ -146,6 +147,7 @@ app.use('/api/carts', cartRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/tables', tableRoutes);
 app.use('/api/reservations', reservationRoutes);
+app.use('/api/messages', messagesRoutes);
 app.use('/webhook/whatsapp', webhookRoutes);
 app.use('/webhook/telegram', telegramWebhookRoutes);
 

@@ -116,8 +116,47 @@ async function sendMessageWithRetry({ chatId, message, options = {}, maxRetries 
   throw lastError;
 }
 
+/**
+ * Send photo/image via Telegram
+ * @param {Object} params - Photo parameters
+ * @param {string|number} params.chatId - Telegram chat ID
+ * @param {string} params.imageUrl - URL of the image to send
+ * @param {string} params.caption - Optional caption for the image
+ * @param {Object} params.options - Additional options
+ */
+async function sendPhoto({ chatId, imageUrl, caption = '', options = {} }) {
+  try {
+    const bot = getTelegramBot();
+    if (!bot) {
+      throw new Error('Telegram bot not initialized');
+    }
+    
+    const result = await bot.sendPhoto(chatId, imageUrl, {
+      caption,
+      ...options
+    });
+    
+    logger.info('Telegram photo sent successfully', {
+      chatId,
+      messageId: result.message_id,
+      imageUrl
+    });
+    
+    return result;
+  } catch (error) {
+    logger.error('Error sending Telegram photo:', {
+      chatId,
+      imageUrl,
+      error: error.message,
+      code: error.response?.statusCode || error.code
+    });
+    throw error;
+  }
+}
+
 module.exports = {
   getTelegramBot,
   sendMessage,
-  sendMessageWithRetry
+  sendMessageWithRetry,
+  sendPhoto
 };
