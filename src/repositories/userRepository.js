@@ -106,7 +106,7 @@ async function update(userId, updateData) {
     businessType: 'business_type',
     businessDescription: 'business_description',
     defaultLanguage: 'default_language',
-    languages: 'languages',
+    // languages field removed - column doesn't exist, language preferences no longer stored
     timezone: 'timezone',
     locationLatitude: 'location_latitude',
     locationLongitude: 'location_longitude',
@@ -139,15 +139,15 @@ async function update(userId, updateData) {
   const values = [];
   
   for (const [key, value] of Object.entries(updateData)) {
+    // Skip languages field - column doesn't exist, language preferences no longer stored
+    if (key === 'languages') {
+      continue;
+    }
+    
     const dbKey = fieldMap[key] || key.replace(/([A-Z])/g, '_$1').toLowerCase();
     if (allowedFields.includes(dbKey) && value !== undefined) {
       updates.push(`${dbKey} = ?`);
-      // Handle JSON fields
-      if (key === 'languages' && Array.isArray(value)) {
-        values.push(JSON.stringify(value));
-      } else {
-        values.push(value);
-      }
+      values.push(value);
     }
   }
   
