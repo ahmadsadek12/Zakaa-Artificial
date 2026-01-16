@@ -23,7 +23,7 @@ router.use(tenantIsolation);
 const upload = multer({
   storage: multer.memoryStorage(), // Always use memory to compress before upload
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB (will be compressed before upload)
+    fileSize: 10 * 1024 * 1024 // 10MB (will be compressed before upload to ~500KB-1MB)
   },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
