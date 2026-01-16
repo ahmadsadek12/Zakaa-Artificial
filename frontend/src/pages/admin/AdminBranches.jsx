@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { 
-  Store, Plus, Search, Edit2, Trash2, Building2, 
+  Store, Search, Edit2, Trash2, Building2, 
   ShoppingCart, MessageSquare, X, Mail, Phone, MapPin 
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
@@ -89,36 +89,6 @@ export default function AdminBranches() {
     }
   }
 
-  const handleCreate = () => {
-    if (!selectedBusinessId) {
-      alert('Please select a business first')
-      return
-    }
-    
-    setModalMode('create')
-    setSelectedBranch(null)
-    setFormData({
-      email: '',
-      password: '',
-      business_name: '',
-      business_description: '',
-      contact_phone_number: '',
-      whatsapp_phone_number: '',
-      whatsapp_phone_number_id: '',
-      whatsapp_access_token: '',
-      location: {
-        city: '',
-        street: '',
-        building: '',
-        floor: '',
-        notes: '',
-        latitude: '',
-        longitude: ''
-      },
-      is_active: true
-    })
-    setShowModal(true)
-  }
 
   const handleEdit = (branch) => {
     setModalMode('edit')
@@ -154,12 +124,8 @@ export default function AdminBranches() {
       const headers = { Authorization: `Bearer ${token}` }
       
       if (modalMode === 'create') {
-        await axios.post(
-          `${API_URL}/api/admin/businesses/${selectedBusinessId}/branches`,
-          formData,
-          { headers }
-        )
-        alert('Branch created successfully')
+        // Create mode removed - branches should be created from business page
+        return
       } else {
         const updateData = { ...formData }
         if (!updateData.password) {
@@ -219,10 +185,6 @@ export default function AdminBranches() {
           <h1 className="text-3xl font-bold text-gray-900">Branches</h1>
           <p className="text-gray-600 mt-2">Manage all branches across businesses</p>
         </div>
-        <button onClick={handleCreate} className="btn btn-primary">
-          <Plus size={20} />
-          Add Branch
-        </button>
       </div>
 
       {/* Filters */}
