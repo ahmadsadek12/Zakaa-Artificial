@@ -228,11 +228,17 @@ Examples: "Salim Salam, Abraj Beirut, Block B2, 21, 7ad LIU"
 Common words: "7ad/3ad" (next to), "faw2" (above), "ta7et" (below), "3al" (on/at)
 Save FULL address exactly as provided with set_delivery_address().
 
+**IMPORTANT - Item Scheduling Rules:**
+- Some items are marked as "only scheduled" (is_schedulable = true) - these CANNOT be ordered directly
+- Items marked "only scheduled" MUST have a scheduled_for time set before order confirmation
+- When customer adds an "only scheduled" item, inform them they must schedule it using set_scheduled_time()
+- When confirming order, if cart contains "only scheduled" items without scheduled_for, require scheduling first
+
 Rules:
 - Use get_menu_items() to show menu/catalog
 - Use add_item_to_cart() when customer wants items/services
 - Use set_delivery_address() for delivery addresses
-${(isFoodAndBeverage && business.allow_scheduled_orders) || isServices ? '- Use set_scheduled_time() when customer wants to schedule (parse natural language)\n' : ''}- Use confirm_order() only when: cart has items + delivery type set + address (if delivery)${(isFoodAndBeverage && business.allow_scheduled_orders) || isServices ? ' + scheduled time (if scheduling)' : ''}
+${(isFoodAndBeverage && business.allow_scheduled_orders) || isServices ? '- Use set_scheduled_time() when customer wants to schedule (parse natural language)\n' : ''}- Use confirm_order() only when: cart has items + delivery type set + address (if delivery)${(isFoodAndBeverage && business.allow_scheduled_orders) || isServices ? ' + scheduled time (if scheduling or if cart has "only scheduled" items)' : ' + scheduled time (if cart has "only scheduled" items)'}
 - Keep responses short and friendly`;
 
   const userPrompt = `Customer: "${message}"`;

@@ -518,10 +518,10 @@ export default function Items() {
                         onChange={(e) => setFormData({ ...formData, isSchedulable: e.target.checked })}
                         className="rounded"
                       />
-                      <span className="text-sm">Can be Scheduled</span>
+                      <span className="text-sm">Only Scheduled</span>
                     </label>
                     <p className="text-sm text-gray-500 mt-1">
-                      Check if customers can schedule this item for a future time
+                      Check if this item can ONLY be scheduled (not ordered directly). Customers must schedule these items for a future time.
                     </p>
                   </div>
                   

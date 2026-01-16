@@ -263,6 +263,17 @@ async function executeFunction(functionName, args, context) {
           item = items[0];
         }
         
+        // Check if item is "only scheduled" (is_schedulable = true means ONLY scheduled, not direct order)
+        if (item.is_schedulable) {
+          // Item can only be scheduled, inform customer
+          return {
+            success: true,
+            message: `Added ${quantity}x ${item.name} to your cart. Note: This item can only be scheduled for a future time. Please use the scheduling function to set a date and time.`,
+            cart: await cartManager.getCart(business.id, branchId, customerPhoneNumber),
+            requiresScheduling: true
+          };
+        }
+        
         const cart = await cartManager.addItemToCart(
           business.id,
           branchId,
@@ -646,6 +657,37 @@ async function executeFunction(functionName, args, context) {
           return {
             success: false,
             error: 'Cannot confirm order: Please provide your delivery address first.'
+          };
+        }
+        
+        // Check if cart has items that are "only scheduled" (is_schedulable = true)
+        // These items MUST have a scheduled_for time before confirming
+        let hasOnlyScheduledItems = false;
+        let onlyScheduledItemNames = [];
+        
+        if (cart.items && cart.items.length > 0) {
+          for (const cartItem of cart.items) {
+            const [items] = await queryMySQL(
+              'SELECT * FROM items WHERE id = ?',
+              [cartItem.item_id]
+            );
+            
+            if (items && items.length > 0) {
+              const item = items[0];
+              if (item.is_schedulable) {
+                hasOnlyScheduledItems = true;
+                onlyScheduledItemNames.push(item.name);
+              }
+            }
+          }
+        }
+        
+        // If cart has "only scheduled" items, require scheduled_for time
+        if (hasOnlyScheduledItems && !cart.scheduled_for) {
+          return {
+            success: false,
+            error: `Cannot confirm order: The following items can only be scheduled: ${onlyScheduledItemNames.join(', ')}. Please use the scheduling function to set a date and time first.`,
+            requiresScheduling: true
           };
         }
         
