@@ -58,7 +58,12 @@ router.put('/me', [
   body('email').optional({ checkFalsy: true }).isEmail().withMessage('Valid email required'),
   body('contactPhoneNumber').optional({ checkFalsy: true }).isString().withMessage('Contact phone must be a string'),
   body('defaultLanguage').optional({ checkFalsy: true }).isIn(['arabic', 'arabizi', 'english', 'french']).withMessage('Invalid language'),
-  body('languages').optional().isArray().withMessage('Languages must be an array'),
+  body('languages').optional({ checkFalsy: true }).custom((value) => {
+    // Accept null, undefined, or array
+    if (value === null || value === undefined) return true;
+    if (Array.isArray(value)) return true;
+    throw new Error('Languages must be an array or null');
+  }),
   body('timezone').optional({ checkFalsy: true }).notEmpty().withMessage('Timezone cannot be empty'),
   body('businessDescription').optional({ checkFalsy: true }).isString(),
   body('locationLatitude').optional({ checkFalsy: true }).isDecimal().withMessage('Latitude must be a valid decimal'),
@@ -99,8 +104,20 @@ router.put('/me', [
     throw new Error('Allow on site must be true or false');
   }).toBoolean()
 ], asyncHandler(async (req, res) => {
+  // Log the request body for debugging
+  logger.info('Business update request received', {
+    userId: req.user.id,
+    bodyKeys: Object.keys(req.body),
+    body: req.body
+  });
+  
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    logger.warn('Business update validation failed', {
+      userId: req.user.id,
+      errors: errors.array()
+    });
+    
     return res.status(400).json({
       success: false,
       error: { 
