@@ -98,7 +98,7 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
       id: order.id,
       business_id: order.business_id,
       user_id: order.user_id, // Use user_id instead of branch_id
-      branch_id: order.branch_id, // Keep for backward compatibility
+      branch_id: order.branch_id || null, // Column removed - return null for compatibility
       customer_phone_number: order.customer_phone_number,
       status: isCart ? 'cart' : order.status, // Return 'cart' if notes='__cart__', otherwise actual status
       items: items.map(item => ({
@@ -199,28 +199,21 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
       // #endregion
     }
     
-    // Ensure insertBranchId is never null (branch_id is NOT NULL in DB)
-    if (!insertBranchId) {
-      // Final fallback: get any branch_id from branches table
-      const [finalBranch] = await connection.query(`SELECT id FROM branches LIMIT 1`);
-      if (finalBranch.length > 0) {
-        insertBranchId = finalBranch[0].id;
-      } else {
-        throw new Error('No branches found in database - cannot create cart without valid branch_id');
-      }
-    }
+    // Note: branch_id column was removed from orders table
+    // Businesses can create orders directly without requiring branches
+    // insertBranchId logic kept for backward compatibility but not used in INSERT
     
-    // Insert with user_id (new column) and branch_id (required for FK constraint, workaround)
+    // Insert with user_id (branch_id column removed - no longer needed)
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:202',message:'Before INSERT into orders',data:{orderId,businessId,insertUserId,insertBranchId,customerPhoneNumber},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'B'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:202',message:'Before INSERT into orders',data:{orderId,businessId,insertUserId,customerPhoneNumber},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'B'})}).catch(()=>{});
     // #endregion
     try {
       await connection.query(`
         INSERT INTO orders (
-          id, business_id, user_id, branch_id, customer_phone_number,
+          id, business_id, user_id, customer_phone_number,
           status, subtotal, delivery_price, total, delivery_type, notes
-        ) VALUES (?, ?, ?, ?, ?, 'cart', 0, 0, 0, 'takeaway', '__cart__')
-      `, [orderId, businessId, insertUserId, insertBranchId, customerPhoneNumber]);
+        ) VALUES (?, ?, ?, ?, 'cart', 0, 0, 0, 'takeaway', '__cart__')
+      `, [orderId, businessId, insertUserId, customerPhoneNumber]);
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:173',message:'INSERT successful',data:{orderId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
       // #endregion
@@ -241,7 +234,7 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
       id: orderId,
       business_id: businessId,
       user_id: insertUserId, // user_id now used
-      branch_id: insertBranchId, // branch_id is deprecated, kept for backward compatibility
+      branch_id: null, // branch_id column removed from orders table
       customer_phone_number: customerPhoneNumber,
       status: 'cart', // Return 'cart' for API compatibility (DB has 'pending' with notes='__cart__')
       items: [],
