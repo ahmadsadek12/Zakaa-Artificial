@@ -13,7 +13,6 @@ const { queryMySQL } = require('../../config/database');
 const telegramMessageSender = require('../../services/telegram/telegramMessageSender');
 const whatsappMessageSender = require('../../services/whatsapp/messageSender');
 const twilioMessageSender = require('../../services/whatsapp/twilioMessageSender');
-const { decryptToken } = require('../../utils/encryption');
 
 // All routes require authentication and business/admin access
 router.use(authenticate);
