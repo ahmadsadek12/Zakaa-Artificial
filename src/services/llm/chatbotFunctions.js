@@ -640,6 +640,10 @@ async function executeFunction(functionName, args, context) {
               const scheduledStart = new Date(parsedDate);
               const scheduledEnd = new Date(scheduledStart.getTime() + scheduledItem.durationMinutes * 60 * 1000);
               
+              // Format dates for MySQL (YYYY-MM-DD HH:MM:SS)
+              const scheduledStartStr = scheduledStart.toISOString().slice(0, 19).replace('T', ' ');
+              const scheduledEndStr = scheduledEnd.toISOString().slice(0, 19).replace('T', ' ');
+              
               // Check for existing orders with this item at overlapping times
               // Exclude rejected and cancelled orders
               // We need to check if the scheduled time windows overlap
@@ -653,15 +657,14 @@ async function executeFunction(functionName, args, context) {
                    AND oi.item_id = ?
                    AND o.scheduled_for IS NOT NULL
                    AND o.status NOT IN ('rejected', 'canceled', 'cancelled')
-                   AND o.scheduled_for < DATE_ADD(?, INTERVAL ? MINUTE)
+                   AND o.scheduled_for < ?
                    AND DATE_ADD(o.scheduled_for, INTERVAL COALESCE(i.duration_minutes, 60) MINUTE) > ?
                  ORDER BY o.scheduled_for ASC`,
                 [
                   business.id,
                   scheduledItem.itemId,
-                  scheduledEnd,
-                  scheduledItem.durationMinutes,
-                  scheduledStart
+                  scheduledEndStr,
+                  scheduledStartStr
                 ]
               );
               
