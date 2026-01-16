@@ -73,11 +73,24 @@ router.put('/me', [
   }),
   body('timezone').optional({ checkFalsy: true }).notEmpty().withMessage('Timezone cannot be empty'),
   body('businessDescription').optional({ checkFalsy: true }).isString(),
-  body('locationLatitude').optional({ checkFalsy: true }).isDecimal().withMessage('Latitude must be a valid decimal'),
-  body('locationLongitude').optional({ checkFalsy: true }).isDecimal().withMessage('Longitude must be a valid decimal'),
-  body('deliveryRadiusKm').optional({ checkFalsy: true }).isDecimal({ min: 0 }).withMessage('Delivery radius must be positive'),
+  body('locationLatitude').optional({ checkFalsy: true }).custom((value) => {
+    if (!value || value === '') return true; // Allow empty
+    if (isNaN(value)) throw new Error('Latitude must be a valid number');
+    return true;
+  }),
+  body('locationLongitude').optional({ checkFalsy: true }).custom((value) => {
+    if (!value || value === '') return true; // Allow empty
+    if (isNaN(value)) throw new Error('Longitude must be a valid number');
+    return true;
+  }),
+  body('deliveryRadiusKm').optional({ checkFalsy: true }).custom((value) => {
+    if (!value || value === '') return true; // Allow empty
+    if (isNaN(value) || parseFloat(value) < 0) throw new Error('Delivery radius must be a positive number');
+    return true;
+  }),
   body('whatsappPhoneNumberId').optional({ checkFalsy: true }).isString(),
   body('whatsappBusinessAccountId').optional({ checkFalsy: true }).isString(),
+  body('whatsappAccessToken').optional({ checkFalsy: true }).isString(),
   body('telegramBotToken').optional({ checkFalsy: true }).isString(),
   body('chatbotEnabled').optional().custom((value) => {
     // Accept boolean or string "true"/"false"
@@ -143,7 +156,7 @@ router.put('/me', [
     'businessName', 'businessType', 'email', 'contactPhoneNumber',
     'defaultLanguage', 'timezone', 'businessDescription',
     'locationLatitude', 'locationLongitude', 'deliveryRadiusKm',
-    'whatsappPhoneNumberId', 'whatsappBusinessAccountId', 'telegramBotToken',
+    'whatsappPhoneNumberId', 'whatsappBusinessAccountId', 'whatsappAccessToken', 'telegramBotToken',
     'allowScheduledOrders', 'allowDelivery', 'allowTakeaway', 'allowOnSite',
     'chatbotEnabled'
   ];
@@ -159,7 +172,17 @@ router.put('/me', [
         } else {
           updateData[field] = req.body[field];
         }
-      } else {
+      } 
+      // Encrypt WhatsApp Access Token
+      else if (field === 'whatsappAccessToken' && req.body[field]) {
+        try {
+          updateData['whatsappAccessTokenEncrypted'] = encryptToken(req.body[field]);
+          logger.info('WhatsApp access token encrypted', { userId: req.user.id });
+        } catch (error) {
+          logger.error('Failed to encrypt WhatsApp token:', error);
+        }
+      }
+      else {
         updateData[field] = req.body[field];
       }
     }

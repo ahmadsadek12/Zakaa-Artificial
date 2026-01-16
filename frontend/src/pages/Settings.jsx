@@ -21,6 +21,7 @@ export default function Settings() {
     timezone: 'Asia/Beirut',
     whatsappPhoneNumberId: '',
     whatsappBusinessAccountId: '',
+    whatsappAccessToken: '',
     telegramBotToken: '',
     chatbotEnabled: true,
   })
@@ -46,6 +47,7 @@ export default function Settings() {
         timezone: user.timezone || 'Asia/Beirut',
         whatsappPhoneNumberId: user.whatsapp_phone_number_id || '',
         whatsappBusinessAccountId: user.whatsapp_business_account_id || '',
+        whatsappAccessToken: user.whatsapp_access_token || '',
         telegramBotToken: user.telegram_bot_token || '',
         chatbotEnabled: user.chatbot_enabled !== undefined ? user.chatbot_enabled : true,
       })
@@ -423,6 +425,20 @@ export default function Settings() {
                     placeholder="1234567890123456"
                   />
                   <p className="text-sm text-gray-500 mt-1">Your WABA ID from Meta Business Manager</p>
+                </div>
+                <div>
+                  <label className="label flex items-center gap-2">
+                    <Key size={16} />
+                    WhatsApp Access Token
+                  </label>
+                  <input
+                    type="password"
+                    className="input font-mono"
+                    value={formData.whatsappAccessToken}
+                    onChange={(e) => setFormData({ ...formData, whatsappAccessToken: e.target.value })}
+                    placeholder="EAAxxxxxxxxxxxxx..."
+                  />
+                  <p className="text-sm text-gray-500 mt-1">Your permanent access token from Meta Business Suite</p>
                 </div>
               </div>
             </div>
