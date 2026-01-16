@@ -141,8 +141,17 @@ router.post('/', upload.fields([
       try {
         const fileName = `${generateUUID()}-${pdfFile.originalname}`;
         menuPdfUrl = await uploadToS3(pdfFile.buffer, fileName, pdfFile.mimetype, 'menus');
+        logger.info('Menu PDF uploaded successfully', { 
+          menuPdfUrl, 
+          fileName,
+          fileSize: pdfFile.buffer.length
+        });
       } catch (error) {
-        logger.warn('S3 PDF upload failed, skipping PDF:', error.message);
+        logger.error('S3 PDF upload failed, skipping PDF:', { 
+          error: error.message, 
+          stack: error.stack,
+          fileName: pdfFile.originalname
+        });
       }
     }
   }
@@ -167,8 +176,18 @@ router.post('/', upload.fields([
             const fileName = `${generateUUID()}-${originalName}.jpg`;
             const imageUrl = await uploadToS3(compressedBuffer, fileName, 'image/jpeg', 'menus');
             menuImageUrls.push(imageUrl);
+            logger.info('Menu image uploaded successfully', { 
+              imageUrl, 
+              fileName,
+              originalSize: imageFile.buffer.length,
+              compressedSize: compressedBuffer.length
+            });
           } catch (error) {
-            logger.warn('S3 image upload failed, skipping image:', error.message);
+            logger.error('S3 image upload failed, skipping image:', { 
+              error: error.message, 
+              stack: error.stack,
+              fileName: imageFile.originalname
+            });
           }
         }
       }

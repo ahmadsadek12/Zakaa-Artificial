@@ -195,8 +195,18 @@ router.post('/', upload.single('itemImage'), handleMulterError, [
         const originalName = req.file.originalname.replace(/\.[^/.]+$/, '');
         const fileName = `${generateUUID()}-${originalName}.jpg`;
         itemImageUrl = await uploadToS3(compressedBuffer, fileName, 'image/jpeg', 'items');
+        logger.info('Item image uploaded successfully', { 
+          itemImageUrl, 
+          fileName,
+          originalSize: req.file.buffer.length,
+          compressedSize: compressedBuffer.length
+        });
       } catch (error) {
-        logger.warn('S3 upload failed, skipping image:', error.message);
+        logger.error('S3 upload failed, skipping image:', { 
+          error: error.message, 
+          stack: error.stack,
+          fileName: req.file.originalname
+        });
         // Continue without image if S3 upload fails
       }
     } else {
