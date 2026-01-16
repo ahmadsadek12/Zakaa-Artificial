@@ -190,11 +190,11 @@ async function update(itemId, businessId, updateData) {
 }
 
 /**
- * Soft delete item (mark as unavailable)
+ * Soft delete item (set deleted_at timestamp)
  */
 async function softDelete(itemId, businessId) {
   await queryMySQL(
-    'UPDATE items SET is_available = false WHERE id = ? AND business_id = ?',
+    'UPDATE items SET deleted_at = CURRENT_TIMESTAMP, availability = \'hidden\' WHERE id = ? AND business_id = ?',
     [itemId, businessId]
   );
 }
