@@ -54,7 +54,13 @@ router.get('/me', asyncHandler(async (req, res) => {
  */
 router.put('/me', [
   body('businessName').optional({ checkFalsy: true }).notEmpty().withMessage('Business name cannot be empty'),
-  body('businessType').optional().isIn(['f & b', 'services', 'products']).withMessage('Invalid business type'),
+  body('businessType').optional().custom((value) => {
+    if (!value) return true; // Optional field
+    // Accept both formats: 'f & b' or 'food and beverage'
+    const validTypes = ['f & b', 'food and beverage', 'services', 'products'];
+    if (validTypes.includes(value.toLowerCase())) return true;
+    throw new Error('Invalid business type. Must be one of: f & b, services, products');
+  }),
   body('email').optional({ checkFalsy: true }).isEmail().withMessage('Valid email required'),
   body('contactPhoneNumber').optional({ checkFalsy: true }).isString().withMessage('Contact phone must be a string'),
   body('defaultLanguage').optional({ checkFalsy: true }).isIn(['arabic', 'arabizi', 'english', 'french']).withMessage('Invalid language'),
@@ -143,7 +149,12 @@ router.put('/me', [
   
   for (const field of allowedFields) {
     if (req.body[field] !== undefined) {
-      updateData[field] = req.body[field];
+      // Normalize businessType: 'food and beverage' -> 'f & b'
+      if (field === 'businessType' && req.body[field] === 'food and beverage') {
+        updateData[field] = 'f & b';
+      } else {
+        updateData[field] = req.body[field];
+      }
     }
   }
   
