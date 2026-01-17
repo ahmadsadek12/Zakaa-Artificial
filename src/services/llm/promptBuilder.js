@@ -280,7 +280,6 @@ You can communicate with customers in Lebanese dialect, English, or any language
 ${languageInstructions[responseLanguage] || languageInstructions['english']}
 DO NOT mix languages. ALL text in your response must be in ${responseLanguage}.
 
-${'' // Don't show cart in prompt - only mention it when customer asks}
 
 ${!openStatus.isOpen && isFoodAndBeverage ? `
 IMPORTANT - We're Closed:
