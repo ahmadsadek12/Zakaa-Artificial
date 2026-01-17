@@ -80,47 +80,127 @@ router.get('/', [
 router.get('/:id', asyncHandler(async (req, res) => {
   const cartId = req.params.id;
   
-  // Get cart details
-  const [carts] = await queryMySQL(`
-    SELECT 
-      o.*,
-      u.business_name as branch_name,
-      TIMESTAMPDIFF(MINUTE, o.updated_at, NOW()) as minutes_since_update,
-      120 - TIMESTAMPDIFF(MINUTE, o.updated_at, NOW()) as minutes_until_timeout
-    FROM orders o
-    LEFT JOIN users u ON o.user_id = u.id
-    WHERE o.id = ?
-      AND o.business_id = ?
-      AND o.status = 'cart'
-      AND o.notes = '__cart__'
-  `, [cartId, req.businessId]);
-  
-  if (!carts || carts.length === 0) {
-    return res.status(404).json({
-      success: false,
-      error: { message: 'Cart not found' }
+  try {
+    // Get cart details - try with location columns first, fallback if they don't exist
+    let carts;
+    try {
+      carts = await queryMySQL(`
+        SELECT 
+          o.id,
+          o.customer_phone_number,
+          o.customer_name,
+          o.delivery_type,
+          o.subtotal,
+          o.delivery_price,
+          o.total,
+          o.notes,
+          o.scheduled_for,
+          o.language_used,
+          o.order_source,
+          o.created_at,
+          o.updated_at,
+          o.location_latitude,
+          o.location_longitude,
+          o.location_name,
+          o.location_address,
+          u.business_name as branch_name,
+          TIMESTAMPDIFF(MINUTE, o.updated_at, NOW()) as minutes_since_update,
+          120 - TIMESTAMPDIFF(MINUTE, o.updated_at, NOW()) as minutes_until_timeout
+        FROM orders o
+        LEFT JOIN users u ON o.user_id = u.id
+        WHERE o.id = ?
+          AND o.business_id = ?
+          AND o.status = 'cart'
+          AND o.notes = '__cart__'
+      `, [cartId, req.businessId]);
+    } catch (locationError) {
+      // If location columns don't exist, retry without them
+      if (locationError.code === 'ER_BAD_FIELD_ERROR' && locationError.message.includes('location_')) {
+        logger.warn('Location columns not found, fetching cart without location data', { cartId });
+        carts = await queryMySQL(`
+          SELECT 
+            o.id,
+            o.customer_phone_number,
+            o.customer_name,
+            o.delivery_type,
+            o.subtotal,
+            o.delivery_price,
+            o.total,
+            o.notes,
+            o.scheduled_for,
+            o.language_used,
+            o.order_source,
+            o.created_at,
+            o.updated_at,
+            NULL as location_latitude,
+            NULL as location_longitude,
+            NULL as location_name,
+            NULL as location_address,
+            u.business_name as branch_name,
+            TIMESTAMPDIFF(MINUTE, o.updated_at, NOW()) as minutes_since_update,
+            120 - TIMESTAMPDIFF(MINUTE, o.updated_at, NOW()) as minutes_until_timeout
+          FROM orders o
+          LEFT JOIN users u ON o.user_id = u.id
+          WHERE o.id = ?
+            AND o.business_id = ?
+            AND o.status = 'cart'
+            AND o.notes = '__cart__'
+        `, [cartId, req.businessId]);
+      } else {
+        throw locationError;
+      }
+    }
+    
+    if (!carts || carts.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Cart not found' }
+      });
+    }
+    
+    const cart = carts[0];
+    
+    // Get cart items
+    try {
+      cart.items = await queryMySQL(`
+        SELECT 
+          oi.id,
+          oi.order_id,
+          oi.item_id,
+          oi.quantity,
+          oi.price_at_time,
+          oi.name_at_time,
+          oi.notes,
+          i.name,
+          i.description,
+          i.item_image_url
+        FROM order_items oi
+        LEFT JOIN items i ON oi.item_id = i.id
+        WHERE oi.order_id = ?
+        ORDER BY oi.id
+      `, [cartId]);
+    } catch (itemsError) {
+      logger.error('Error fetching cart items:', {
+        cartId,
+        error: itemsError.message,
+        stack: itemsError.stack
+      });
+      cart.items = []; // Set empty array if items query fails
+    }
+    
+    res.json({
+      success: true,
+      data: { cart }
     });
+  } catch (error) {
+    logger.error('Error fetching cart details:', {
+      cartId,
+      businessId: req.businessId,
+      error: error.message,
+      stack: error.stack
+    });
+    throw error;
   }
-  
-  const cart = carts[0];
-  
-  // Get cart items
-  cart.items = await queryMySQL(`
-    SELECT 
-      oi.*,
-      i.name,
-      i.description,
-      i.item_image_url
-    FROM order_items oi
-    LEFT JOIN items i ON oi.item_id = i.id
-    WHERE oi.order_id = ?
-    ORDER BY oi.id
-  `, [cartId]);
-  
-  res.json({
-    success: true,
-    data: { cart }
-  });
 }));
 
 /**

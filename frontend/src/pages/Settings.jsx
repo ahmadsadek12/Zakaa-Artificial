@@ -98,20 +98,46 @@ export default function Settings() {
         { headers: { Authorization: `Bearer ${token}` } }
       )
       
+      // Initialize with default values for all days
+      const defaultHours = {
+        monday: { open: '', close: '', closed: false },
+        tuesday: { open: '', close: '', closed: false },
+        wednesday: { open: '', close: '', closed: false },
+        thursday: { open: '', close: '', closed: false },
+        friday: { open: '', close: '', closed: false },
+        saturday: { open: '', close: '', closed: false },
+        sunday: { open: '', close: '', closed: false }
+      }
+      
       if (response.data.success && response.data.data.openingHours) {
-        const hours = {}
+        // Merge fetched hours with defaults to ensure all days are present
+        const hours = { ...defaultHours }
         response.data.data.openingHours.forEach(h => {
-          hours[h.day_of_week] = {
-            open: h.open_time ? h.open_time.substring(0, 5) : '',
-            close: h.close_time ? h.close_time.substring(0, 5) : '',
-            closed: h.is_closed || false
+          if (h.day_of_week && defaultHours.hasOwnProperty(h.day_of_week)) {
+            hours[h.day_of_week] = {
+              open: h.open_time ? h.open_time.substring(0, 5) : '',
+              close: h.close_time ? h.close_time.substring(0, 5) : '',
+              closed: h.is_closed || false
+            }
           }
         })
         setOpeningHours(hours)
+      } else {
+        // If no opening hours exist, use defaults
+        setOpeningHours(defaultHours)
       }
     } catch (error) {
       console.error('Error fetching opening hours:', error)
-      // Don't show error if no opening hours exist yet
+      // On error, ensure we still have default values
+      setOpeningHours({
+        monday: { open: '', close: '', closed: false },
+        tuesday: { open: '', close: '', closed: false },
+        wednesday: { open: '', close: '', closed: false },
+        thursday: { open: '', close: '', closed: false },
+        friday: { open: '', close: '', closed: false },
+        saturday: { open: '', close: '', closed: false },
+        sunday: { open: '', close: '', closed: false }
+      })
     }
   }
   
@@ -598,37 +624,40 @@ export default function Settings() {
                 Opening Hours
               </h2>
               <form onSubmit={handleOpeningHoursSubmit} className="space-y-4">
-                {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
-                  <div key={day} className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg">
-                    <div className="w-24">
-                      <label className="font-medium text-gray-900 capitalize">{day}</label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={openingHours[day].closed}
-                        onChange={(e) => {
-                          setOpeningHours(prev => ({
-                            ...prev,
-                            [day]: { ...prev[day], closed: e.target.checked }
-                          }))
-                        }}
-                        className="rounded"
-                      />
-                      <span className="text-sm text-gray-600">Closed</span>
-                    </div>
-                    {!openingHours[day].closed && (
+                {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => {
+                  // Ensure day exists in openingHours with default values
+                  const dayHours = openingHours[day] || { open: '', close: '', closed: false }
+                  return (
+                    <div key={day} className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg">
+                      <div className="w-24">
+                        <label className="font-medium text-gray-900 capitalize">{day}</label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={dayHours.closed}
+                          onChange={(e) => {
+                            setOpeningHours(prev => ({
+                              ...prev,
+                              [day]: { ...(prev[day] || { open: '', close: '', closed: false }), closed: e.target.checked }
+                            }))
+                          }}
+                          className="rounded"
+                        />
+                        <span className="text-sm text-gray-600">Closed</span>
+                      </div>
+                      {!dayHours.closed && (
                       <>
                         <div className="flex-1">
                           <label className="text-sm text-gray-600 mb-1 block">Open Time</label>
                           <input
                             type="time"
                             className="input"
-                            value={openingHours[day].open}
+                            value={dayHours.open}
                             onChange={(e) => {
                               setOpeningHours(prev => ({
                                 ...prev,
-                                [day]: { ...prev[day], open: e.target.value }
+                                [day]: { ...(prev[day] || { open: '', close: '', closed: false }), open: e.target.value }
                               }))
                             }}
                           />
@@ -638,11 +667,11 @@ export default function Settings() {
                           <input
                             type="time"
                             className="input"
-                            value={openingHours[day].close}
+                            value={dayHours.close}
                             onChange={(e) => {
                               setOpeningHours(prev => ({
                                 ...prev,
-                                [day]: { ...prev[day], close: e.target.value }
+                                [day]: { ...(prev[day] || { open: '', close: '', closed: false }), close: e.target.value }
                               }))
                             }}
                           />
@@ -650,7 +679,8 @@ export default function Settings() {
                       </>
                     )}
                   </div>
-                ))}
+                )
+                })}
                 <div className="flex justify-end pt-4 border-t border-gray-200">
                   <button
                     type="submit"
