@@ -39,6 +39,7 @@ export default function Settings() {
     new: false,
     confirm: false
   })
+  const [passwordMessage, setPasswordMessage] = useState({ type: '', text: '' })
 
   useEffect(() => {
     if (user) {
@@ -118,17 +119,25 @@ export default function Settings() {
     e.preventDefault()
     setLoading(true)
     setSaved(false)
+    setPasswordMessage({ type: '', text: '' })
 
     // Validate passwords match
     if (passwordData.new_password !== passwordData.confirm_password) {
-      alert('New passwords do not match')
+      setPasswordMessage({ type: 'error', text: 'New passwords do not match' })
       setLoading(false)
       return
     }
 
     // Validate password strength
     if (passwordData.new_password.length < 8) {
-      alert('Password must be at least 8 characters long')
+      setPasswordMessage({ type: 'error', text: 'Password must be at least 8 characters long' })
+      setLoading(false)
+      return
+    }
+
+    // Validate current password is provided
+    if (!passwordData.current_password) {
+      setPasswordMessage({ type: 'error', text: 'Current password is required' })
       setLoading(false)
       return
     }
@@ -136,7 +145,7 @@ export default function Settings() {
     try {
       const token = localStorage.getItem('token')
       if (!token) {
-        alert('You must be logged in to change your password')
+        setPasswordMessage({ type: 'error', text: 'You must be logged in to change your password' })
         setLoading(false)
         return
       }
@@ -152,24 +161,25 @@ export default function Settings() {
       )
       
       if (response.data.success) {
-        setSaved(true)
+        setPasswordMessage({ type: 'success', text: 'Password changed successfully' })
         setPasswordData({
           current_password: '',
           new_password: '',
           confirm_password: ''
         })
-        setTimeout(() => setSaved(false), 3000)
-        alert('Password changed successfully')
+        setTimeout(() => {
+          setPasswordMessage({ type: '', text: '' })
+        }, 5000)
       } else {
-        alert(response.data.error?.message || 'Failed to change password')
+        setPasswordMessage({ type: 'error', text: response.data.error?.message || 'Failed to change password' })
       }
     } catch (error) {
       console.error('Error changing password:', error)
       const errorMessage = error.response?.data?.error?.message || 
-                          error.response?.data?.error?.errors?.map(e => e.message).join(', ') ||
+                          error.response?.data?.error?.errors?.map(e => e.message || e.msg).join(', ') ||
                           error.message || 
                           'Failed to change password'
-      alert(errorMessage)
+      setPasswordMessage({ type: 'error', text: errorMessage })
     } finally {
       setLoading(false)
     }
@@ -581,6 +591,20 @@ export default function Settings() {
                 Change Password
               </h2>
               <form onSubmit={handlePasswordChange} className="space-y-4">
+                {/* Password Change Messages */}
+                {passwordMessage.text && (
+                  <div className={`p-4 rounded-lg ${
+                    passwordMessage.type === 'success' 
+                      ? 'bg-green-50 border border-green-200 text-green-800' 
+                      : 'bg-red-50 border border-red-200 text-red-800'
+                  }`}>
+                    <p className="font-medium">
+                      {passwordMessage.type === 'success' ? '✓ ' : '✗ '}
+                      {passwordMessage.text}
+                    </p>
+                  </div>
+                )}
+
                 <div>
                   <label className="label">Current Password</label>
                   <div className="relative">

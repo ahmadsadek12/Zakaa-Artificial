@@ -171,11 +171,26 @@ async function update(userId, updateData) {
  * Update password
  */
 async function updatePassword(userId, newPassword) {
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length === 0) {
+    throw new Error('New password is required and must be a non-empty string');
+  }
+  
   const hashedPassword = await bcrypt.hash(newPassword, 10);
-  await queryMySQL(
+  
+  if (!hashedPassword || hashedPassword.length === 0) {
+    throw new Error('Failed to hash password');
+  }
+  
+  const result = await queryMySQL(
     'UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
     [hashedPassword, userId]
   );
+  
+  if (result.affectedRows === 0) {
+    throw new Error('No user found with the provided ID');
+  }
+  
+  return result;
 }
 
 /**

@@ -353,18 +353,40 @@ router.put('/me/password', [
   
   // Update password
   try {
+    // Hash and update the password
     await userRepository.updatePassword(req.user.id, new_password);
+    
+    // Verify the password was updated correctly by checking it
+    const updatedUser = await userRepository.findById(req.user.id);
+    if (!updatedUser || !updatedUser.password_hash) {
+      logger.error('Password update verification failed: password_hash not found after update', { userId: req.user.id });
+      return res.status(500).json({
+        success: false,
+        error: { message: 'Failed to update password. Please try again.' }
+      });
+    }
+    
+    // Verify the new password matches the stored hash
+    const isNewPasswordValid = await bcrypt.compare(new_password, updatedUser.password_hash);
+    if (!isNewPasswordValid) {
+      logger.error('Password update verification failed: new password does not match stored hash', { userId: req.user.id });
+      return res.status(500).json({
+        success: false,
+        error: { message: 'Password update failed verification. Please try again.' }
+      });
+    }
+    
     logger.info(`Business password changed successfully: ${req.user.id}`);
     
     res.json({
       success: true,
-      data: { message: 'Password updated successfully' }
+      data: { message: 'Password changed successfully' }
     });
   } catch (error) {
-    logger.error('Error updating password:', { userId: req.user.id, error: error.message });
+    logger.error('Error updating password:', { userId: req.user.id, error: error.message, stack: error.stack });
     return res.status(500).json({
       success: false,
-      error: { message: 'Failed to update password. Please try again.' }
+      error: { message: 'Failed to change password. Please try again.' }
     });
   }
 }));
