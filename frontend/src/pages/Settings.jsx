@@ -719,8 +719,15 @@ export default function Settings() {
                 <div className="flex justify-end pt-4 border-t border-gray-200">
                   <button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || !user}
                     className="btn btn-primary flex items-center gap-2"
+                    onClick={(e) => {
+                      console.log('🔵 Save button clicked')
+                      if (!user) {
+                        e.preventDefault()
+                        alert('User not loaded. Please refresh the page.')
+                      }
+                    }}
                   >
                     <Save size={18} />
                     {loading ? 'Saving...' : 'Save Opening Hours'}
