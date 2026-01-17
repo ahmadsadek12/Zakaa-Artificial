@@ -723,9 +723,6 @@ function getCartSummary(cart) {
   
   return summary;
 }
-  
-  return summary;
-}
 
 module.exports = {
   getCart,
