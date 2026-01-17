@@ -448,9 +448,9 @@ async function executeFunction(functionName, args, context) {
         const { deliveryType } = args;
         const updateData = { delivery_type: deliveryType };
         
-        // Set delivery price if delivery
+        // Set delivery price if delivery - use business delivery_price if available, otherwise 0
         if (deliveryType === 'delivery') {
-          updateData.delivery_price = 5.00; // Default, can be configurable
+          updateData.delivery_price = parseFloat(business.delivery_price || 0);
         } else {
           updateData.delivery_price = 0;
         }
@@ -462,7 +462,7 @@ async function executeFunction(functionName, args, context) {
           updateData
         );
         
-        logger.info('Delivery type updated via function call', { deliveryType, cartId: cart.id });
+        logger.info('Delivery type updated via function call', { deliveryType, cartId: cart.id, deliveryPrice: updateData.delivery_price });
         
         const typeName = deliveryType === 'delivery' ? 'Delivery' : 
                          deliveryType === 'takeaway' ? 'Takeaway' : 'On-site';
@@ -879,7 +879,15 @@ async function executeFunction(functionName, args, context) {
             
             if (items && items.length > 0) {
               const item = items[0];
-              if (item.is_schedulable) {
+              // Explicitly check for is_schedulable = true (handles both boolean true and numeric 1 from MySQL)
+              // Only items with is_schedulable explicitly set to true/1 are "only scheduled"
+              // null, undefined, false, 0, '0', 'false' should all be treated as false
+              const isSchedulable = item.is_schedulable === true 
+                || item.is_schedulable === 1 
+                || item.is_schedulable === '1' 
+                || item.is_schedulable === 'true';
+              
+              if (isSchedulable) {
                 hasOnlyScheduledItems = true;
                 onlyScheduledItemNames.push(item.name);
               }
@@ -896,11 +904,14 @@ async function executeFunction(functionName, args, context) {
           };
         }
         
+        // Show cart summary during checkout/confirmation
+        const cartSummary = cartManager.getCartSummary(cart);
+        
         // Confirm order (this will be handled by conversationManager)
         // For now, return success and let the main handler process it
         return {
           success: true,
-          message: 'Order validated. Confirming order...',
+          message: `${cartSummary}\n\nOrder validated. Confirming order...`,
           cart: cart,
           readyToConfirm: true
         };

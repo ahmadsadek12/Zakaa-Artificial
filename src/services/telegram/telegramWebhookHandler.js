@@ -238,14 +238,8 @@ async function processMessage(message, businessId = null) {
     if (response && response.text) {
       let responseMessage = response.text;
       
-      // Add cart summary if cart exists and has items
-      if (response.cart && response.cart.items && response.cart.items.length > 0) {
-        const cartManager = require('../llm/cartManager');
-        const cartSummary = cartManager.getCartSummary(response.cart);
-        if (!responseMessage.toLowerCase().includes('cart') && !responseMessage.toLowerCase().includes('total:')) {
-          responseMessage += `\n\n${cartSummary}`;
-        }
-      }
+      // Cart summary is only shown when explicitly requested via get_cart function or during checkout
+      // (get_cart includes cart summary in the message, so no need to add it here)
       
       // Add order confirmation message if order was created
       if (response.orderCreated && response.orderId) {
