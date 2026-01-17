@@ -50,6 +50,78 @@ router.get('/db', async (req, res) => {
 });
 
 /**
+ * Debug opening hours check
+ * GET /health/opening-hours?businessId=xxx&branchId=xxx
+ */
+router.get('/opening-hours', async (req, res) => {
+  try {
+    const { businessId, branchId } = req.query;
+    
+    if (!businessId) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'businessId query parameter is required'
+      });
+    }
+    
+    const conversationManager = require('../services/llm/conversationManager');
+    const { queryMySQL } = require('../config/database');
+    
+    const now = new Date();
+    const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][now.getDay()];
+    const currentTime = now.toTimeString().substring(0, 5);
+    
+    // Get opening hours from database
+    let hours = [];
+    const targetBranchId = branchId || businessId;
+    
+    if (branchId && branchId !== businessId) {
+      hours = await queryMySQL(`
+        SELECT * FROM opening_hours 
+        WHERE owner_type = ? AND owner_id = ? AND day_of_week = ?
+      `, ['branch', branchId, dayOfWeek]);
+    }
+    
+    if (hours.length === 0) {
+      hours = await queryMySQL(`
+        SELECT * FROM opening_hours 
+        WHERE owner_type = ? AND owner_id = ? AND day_of_week = ?
+      `, ['business', businessId, dayOfWeek]);
+    }
+    
+    // Check status using the function
+    const openStatus = await conversationManager.isOpenNow(businessId, targetBranchId);
+    
+    res.json({
+      status: 'ok',
+      currentTime: {
+        date: now.toISOString(),
+        dayOfWeek,
+        time: currentTime
+      },
+      businessId,
+      branchId: targetBranchId,
+      openingHours: hours.length > 0 ? {
+        day: hours[0].day_of_week,
+        isClosed: hours[0].is_closed,
+        openTime: hours[0].open_time,
+        closeTime: hours[0].close_time,
+        lastOrderBeforeClosingMinutes: hours[0].last_order_before_closing_minutes
+      } : null,
+      openStatus,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Opening hours debug error:', error);
+    res.status(500).json({
+      status: 'error',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
  * External services health check
  * GET /health/services
  */

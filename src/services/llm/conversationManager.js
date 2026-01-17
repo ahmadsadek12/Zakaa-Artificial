@@ -66,22 +66,29 @@ async function isOpenNow(businessId, branchId) {
     const openMinutes = timeToMinutes(hour.open_time);
     const closeMinutes = timeToMinutes(hour.close_time);
     
-    const isOpen = currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
+    // Check last order before closing
+    const lastOrderBeforeClosing = hour.last_order_before_closing_minutes || 0;
+    const effectiveCloseMinutes = closeMinutes - lastOrderBeforeClosing;
+    
+    const isOpen = currentMinutes >= openMinutes && currentMinutes <= effectiveCloseMinutes;
     
     logger.info('Opening hours check result', {
       dayOfWeek,
       currentTime,
       openTime: hour.open_time.substring(0, 5),
       closeTime: hour.close_time.substring(0, 5),
+      lastOrderBeforeClosing,
+      effectiveCloseMinutes,
       isOpen,
       currentMinutes,
       openMinutes,
-      closeMinutes
+      closeMinutes,
+      reason: isOpen ? 'Open' : `Closed. Hours: ${hour.open_time.substring(0, 5)} - ${hour.close_time.substring(0, 5)} (last order before ${Math.floor(effectiveCloseMinutes / 60)}:${String(effectiveCloseMinutes % 60).padStart(2, '0')})`
     });
     
     return {
       isOpen,
-      reason: isOpen ? 'Open' : `Closed. Hours: ${hour.open_time.substring(0, 5)} - ${hour.close_time.substring(0, 5)}`
+      reason: isOpen ? 'Open' : `Closed. Hours: ${hour.open_time.substring(0, 5)} - ${hour.close_time.substring(0, 5)}${lastOrderBeforeClosing > 0 ? ` (last order ${lastOrderBeforeClosing} minutes before closing)` : ''}`
     };
   } catch (error) {
     logger.error('Error checking opening hours:', error);
