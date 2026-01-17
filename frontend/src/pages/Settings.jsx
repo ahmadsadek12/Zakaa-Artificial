@@ -143,10 +143,26 @@ export default function Settings() {
   
   const handleOpeningHoursSubmit = async (e) => {
     e.preventDefault()
+    e.stopPropagation()
+    
+    console.log('🔵 handleOpeningHoursSubmit called')
+    console.log('🔵 User:', user)
+    console.log('🔵 Opening hours state:', openingHours)
+    
+    if (!user || !user.id) {
+      alert('User not loaded. Please refresh the page.')
+      return
+    }
+    
     setLoading(true)
     
     try {
       const token = localStorage.getItem('token')
+      if (!token) {
+        alert('Not authenticated. Please log in again.')
+        return
+      }
+      
       const payload = {
         ownerType: 'business',
         ownerId: user.id,
