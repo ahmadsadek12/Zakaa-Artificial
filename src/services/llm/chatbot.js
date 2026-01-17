@@ -142,6 +142,7 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
     logger.info('Conversation history loaded', { 
       customerPhoneNumber, 
       messageCount: messageHistory.length,
+      isFirstMessage: messageHistory.length === 0,
       messages: messageHistory.map(m => ({ role: m.role, textPreview: m.text.substring(0, 50) }))
     });
     
@@ -164,7 +165,7 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
       responseLanguage: language
     });
     
-    logger.info('Building prompt with detected language', { customerPhoneNumber, language });
+    logger.info('Building prompt with detected language', { customerPhoneNumber, language, isFirstMessage: messageHistory.length === 0 });
     
     // Build prompt with full context
     const prompt = await promptBuilder.buildPrompt({
@@ -173,7 +174,8 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
       customerPhoneNumber,
       message,
       language,
-      messageHistory
+      messageHistory,
+      isFirstMessage: messageHistory.length === 0
     });
     
     // Build messages array with conversation history

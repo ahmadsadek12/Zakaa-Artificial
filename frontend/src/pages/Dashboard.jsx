@@ -175,28 +175,23 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600 mt-2">Welcome back! Here's what's happening today.</p>
-      </div>
-
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {statCards.map((stat) => {
           const Icon = stat.icon
           return (
             <Link
               key={stat.title}
               to={stat.link}
-              className="card hover:shadow-md transition-shadow cursor-pointer"
+              className="card hover:shadow-md transition-shadow cursor-pointer p-4"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">{stat.title}</p>
-                  <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-                </div>
+              <div className="flex flex-col items-center text-center space-y-2">
                 <div className={`p-3 rounded-lg ${stat.color}`}>
                   <Icon size={24} />
+                </div>
+                <div className="w-full">
+                  <p className="text-xs text-gray-600 mb-1">{stat.title}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
                 </div>
               </div>
             </Link>

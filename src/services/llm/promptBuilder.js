@@ -9,7 +9,7 @@ const logger = require('../../utils/logger');
 /**
  * Build prompt with business context and conversation state
  */
-async function buildPrompt({ business, branch, customerPhoneNumber, message, language, messageHistory = [] }) {
+async function buildPrompt({ business, branch, customerPhoneNumber, message, language, messageHistory = [], isFirstMessage = false }) {
   const ownerId = branch?.id || business.id;
   
   // Run independent database queries in parallel for better performance
@@ -198,25 +198,25 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
     french: 'Bonjour'
   };
   
-  // Build business-specific context
-  let businessContext = `You are a helpful AI assistant for ${business.business_name}, a ${businessTypeContext}.`;
+  // Build business-specific context with welcoming tone
+  let businessContext = `You are a friendly and helpful AI assistant for ${business.business_name}, a ${businessTypeContext}.`;
   
   // Add business-type-specific context
   if (isFoodAndBeverage) {
     if (openStatus.isOpen) {
-      businessContext += ` We're currently open.`;
+      businessContext += ` We're currently open and ready to serve you!`;
     } else {
-      businessContext += ` We're currently closed (${openStatus.reason}). You can still take orders for scheduled delivery/pickup.`;
+      businessContext += ` We're currently closed (${openStatus.reason}), but you can still place orders for scheduled delivery/pickup.`;
     }
     
     if (business.allow_scheduled_orders) {
-      businessContext += ` We accept scheduled orders - customers can order for a future time.`;
+      businessContext += ` We're happy to accept scheduled orders for any future time that works for you.`;
     }
   } else if (isServices) {
-    businessContext += ` We offer services that can be scheduled.`;
-    businessContext += ` Status: ${openStatus.isOpen ? 'Open' : `Closed (${openStatus.reason})`}`;
+    businessContext += ` We offer services that can be scheduled at your convenience.`;
+    businessContext += ` Status: ${openStatus.isOpen ? 'Open and ready to help' : `Closed (${openStatus.reason})`}`;
   } else {
-    businessContext += ` Status: ${openStatus.isOpen ? 'Open' : `Closed (${openStatus.reason})`}`;
+    businessContext += ` Status: ${openStatus.isOpen ? 'Open and ready to help' : `Closed (${openStatus.reason})`}`;
   }
   
   // Language instruction map
@@ -228,6 +228,14 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
   // Concise prompt - keep it short to preserve conversation history context
   const systemPrompt = `${businessContext}
 
+**PERSONALITY & TONE:**
+- Be warm, friendly, and conversational like a helpful human staff member
+${isFirstMessage ? `- THIS IS THE FIRST MESSAGE: Start with a warm greeting: "Welcome to ${business.business_name}! How can I help you today?" (or equivalent in ${responseLanguage})` : '- Continue the friendly conversation naturally'}
+- Use natural language, be enthusiastic about the business offerings
+- Show genuine interest in helping customers
+- Use casual, friendly phrases like "Great choice!", "I'd be happy to help!", "Sounds good!"
+- Keep responses concise but personable
+
 **CRITICAL: LANGUAGE INSTRUCTION**
 You understand all languages including Lebanese Arabic (both Arabic script and written in English/Latin letters). 
 You can communicate with customers in Lebanese dialect, English, or any language they use.
@@ -238,8 +246,8 @@ Cart: ${cartSummary}
 
 ${!openStatus.isOpen && isFoodAndBeverage ? `
 IMPORTANT - We're Closed:
-- Inform customer we're currently closed
-- Offer to schedule order for when we open (use set_scheduled_time function)
+- Inform customer we're currently closed in a friendly way
+- Offer to schedule their order for when we open (use set_scheduled_time function)
 - Accept natural language time like "tomorrow 7pm" or "Friday evening"
 - Opening hours:
 ${hoursText}
@@ -277,7 +285,7 @@ Rules:
 - Use add_item_to_cart() when customer wants items/services
 - Use set_delivery_address() for delivery addresses
 ${(isFoodAndBeverage && business.allow_scheduled_orders) || isServices ? '- Use set_scheduled_time() when customer wants to schedule (parse natural language)\n' : ''}- Use confirm_order() only when: cart has items + delivery type set + address (if delivery)${(isFoodAndBeverage && business.allow_scheduled_orders) || isServices ? ' + scheduled time (if scheduling or if cart has "only scheduled" items)' : ' + scheduled time (if cart has "only scheduled" items)'}
-- Keep responses short and friendly`;
+- Keep responses friendly and conversational`;
 
   const userPrompt = `Customer: "${message}"`;
 
