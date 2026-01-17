@@ -12,15 +12,26 @@ const { generateUUID } = require('../../utils/uuid');
  */
 async function isOpenNow(businessId, branchId) {
   try {
+    // Get business timezone
+    const [businesses] = await queryMySQL(
+      'SELECT timezone FROM users WHERE id = ?',
+      [businessId]
+    );
+    const businessTimezone = businesses[0]?.timezone || 'Asia/Beirut';
+    
+    // Get current time in business timezone
     const now = new Date();
-    const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][now.getDay()];
-    const currentTime = now.toTimeString().substring(0, 5); // HH:MM format
+    const nowInTimezone = new Date(now.toLocaleString('en-US', { timeZone: businessTimezone }));
+    const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][nowInTimezone.getDay()];
+    const currentTime = nowInTimezone.toTimeString().substring(0, 5); // HH:MM format in business timezone
     
     logger.info('Checking opening hours', {
       businessId,
       branchId,
-      dayOfWeek,
-      currentTime
+      businessTimezone,
+      utcTime: now.toISOString(),
+      localTime: currentTime,
+      dayOfWeek
     });
     
     // Check branch hours first if branchId is different from businessId
