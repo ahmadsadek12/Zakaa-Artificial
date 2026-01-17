@@ -90,13 +90,19 @@ export default function Settings() {
 
     try {
       const token = localStorage.getItem('token')
-      console.log('Sending formData:', formData)
-      console.log('chatbotEnabled being sent:', formData.chatbotEnabled, 'type:', typeof formData.chatbotEnabled)
+      console.log('📤 Sending formData:', formData)
+      console.log('📤 businessName:', formData.businessName, 'type:', typeof formData.businessName)
+      console.log('📤 deliveryPrice:', formData.deliveryPrice, 'type:', typeof formData.deliveryPrice)
+      console.log('📤 chatbotEnabled being sent:', formData.chatbotEnabled, 'type:', typeof formData.chatbotEnabled)
+      
       const response = await axios.put(`${API_URL}/api/businesses/me`, formData, {
         headers: { Authorization: `Bearer ${token}` }
       })
-      console.log('Update response:', response.data)
-      console.log('chatbot_enabled in response:', response.data?.data?.business?.chatbot_enabled, 'type:', typeof response.data?.data?.business?.chatbot_enabled)
+      
+      console.log('✅ Update response:', response.data)
+      console.log('✅ business_name in response:', response.data?.data?.business?.business_name)
+      console.log('✅ delivery_price in response:', response.data?.data?.business?.delivery_price)
+      console.log('✅ chatbot_enabled in response:', response.data?.data?.business?.chatbot_enabled, 'type:', typeof response.data?.data?.business?.chatbot_enabled)
       
       // Show special message if Telegram webhook was configured
       const webhookStatus = response.data?.data?.business?.telegram_webhook_status
