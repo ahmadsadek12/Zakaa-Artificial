@@ -60,7 +60,7 @@ async function runMigration() {
         FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
         INDEX idx_item_id (item_id),
         INDEX idx_duration (duration_minutes)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
     `);
     console.log('✓ Created item_duration_tiers table');
     
