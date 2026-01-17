@@ -1040,6 +1040,16 @@ async function executeFunction(functionName, args, context) {
         const conversationManager = require('./conversationManager');
         const openStatus = await conversationManager.isOpenNow(business.id, branchId);
         
+        logger.info('confirm_order: Checking order confirmation', {
+          businessId: business.id,
+          branchId,
+          isOpen: openStatus.isOpen,
+          reason: openStatus.reason,
+          hasScheduledTime: !!cart.scheduled_for,
+          scheduledFor: cart.scheduled_for,
+          deliveryType: cart.delivery_type
+        });
+        
         // Check if cart has items that are "only scheduled" (is_schedulable = true)
         let hasOnlyScheduledItems = false;
         let onlyScheduledItemNames = [];
@@ -1064,8 +1074,9 @@ async function executeFunction(functionName, args, context) {
                 hasOnlyScheduledItems = true;
                 onlyScheduledItemNames.push(item.name);
                 
-                // "Only scheduled" items MUST have a scheduled_for time
-                if (!cart.scheduled_for) {
+                // "Only scheduled" items MUST have a scheduled_for time ONLY if business is closed
+                // If business is open, allow immediate orders for schedulable items
+                if (!cart.scheduled_for && !openStatus.isOpen) {
                   requiresScheduling = true;
                 }
               }
@@ -1073,18 +1084,13 @@ async function executeFunction(functionName, args, context) {
           }
         }
         
-        // If cart has "only scheduled" items without scheduled time, check if business is open
-        // If business is open, allow immediate order. If closed, require scheduling.
+        // If cart has "only scheduled" items without scheduled time AND business is closed, require scheduling
         if (requiresScheduling) {
-          if (!openStatus.isOpen) {
-            return {
-              success: false,
-              error: `We're currently closed. The following items need to be scheduled: ${onlyScheduledItemNames.join(', ')}. Please use the scheduling function to set a date and time when we're open.`,
-              requiresScheduling: true
-            };
-          }
-          // Business is open, so allow immediate order for "only scheduled" items
-          requiresScheduling = false;
+          return {
+            success: false,
+            error: `We're currently closed. The following items need to be scheduled: ${onlyScheduledItemNames.join(', ')}. Please use the scheduling function to set a date and time when we're open.`,
+            requiresScheduling: true
+          };
         }
         
         // If order is scheduled, validate opening hours for that day
