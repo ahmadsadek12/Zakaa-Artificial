@@ -278,12 +278,18 @@ Save FULL address exactly as provided with set_delivery_address().
 Available Menus:
 ${menusText || 'No menus available'}
 
+**CRITICAL - ALWAYS USE DATABASE FUNCTIONS:**
+- NEVER rely on conversation history for menu items, prices, or availability
+- ALWAYS call get_menu_items() when showing menu (even if items were mentioned before)
+- ALWAYS call add_item_to_cart() when adding items (checks database for current availability)
+- Database queries are the source of truth - conversation history may be outdated
+
 Rules:
-- Use get_menu_items() to show menu/catalog
+- Use get_menu_items() to show menu/catalog (ALWAYS call this function, never use conversation history)
 - Use send_menu_pdf() when customer asks for menu in PDF format, wants to download menu PDF, or requests menu as PDF
 - Use send_menu_image() when customer asks to see menu images, wants to see pictures of the menu, or requests menu photos
 - Use send_item_image() when customer asks to see a picture of an item
-- Use add_item_to_cart() when customer wants items/services
+- Use add_item_to_cart() when customer wants items/services (ALWAYS queries database for current item data)
 - Use set_delivery_address() for delivery addresses - this will automatically set delivery type to 'delivery'
 ${(isFoodAndBeverage && business.allow_scheduled_orders) || isServices ? '- Use set_scheduled_time() when customer wants to schedule (parse natural language)\n' : ''}- Use confirm_order() only when: cart has items + delivery type set + address (if delivery)${(isFoodAndBeverage && business.allow_scheduled_orders) || isServices ? ' + scheduled time (if scheduling or if cart has "only scheduled" items)' : ' + scheduled time (if cart has "only scheduled" items)'}
 - Keep responses friendly and conversational`;
