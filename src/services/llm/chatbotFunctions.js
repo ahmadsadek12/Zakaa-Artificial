@@ -283,7 +283,7 @@ function getAvailableFunctions() {
       type: 'function',
       function: {
         name: 'get_closing_time',
-        description: 'Get the closing time for today or a specific day. Use this when customer asks "when do you close?", "what time do you close?", or "closing time".',
+        description: 'Check if restaurant is currently open or closed, and get closing time. Use this IMMEDIATELY when customer asks "are you open?", "are you closed?", "when do you close?", "what time do you close?", or any question about current status. This is the PRIMARY way to check open/closed status.',
         parameters: {
           type: 'object',
           properties: {},
