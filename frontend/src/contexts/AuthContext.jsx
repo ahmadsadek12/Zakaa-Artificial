@@ -37,13 +37,25 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const response = await axios.post(`${API_URL}/api/auth/login`, { email, password })
-    const { token, user } = response.data.data
-    console.log('🔐 Login successful, user data:', user)
-    console.log('🔐 User type:', user.userType)
+    const { token, user: loginUser } = response.data.data
+    console.log('🔐 Login successful, initial user data:', loginUser)
+    console.log('🔐 User type:', loginUser.userType)
     localStorage.setItem('token', token)
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-    setUser(user)
-    return { token, user }
+    
+    // Fetch full user data after login to get all fields (delivery_price, business_name, etc.)
+    try {
+      const fullUserResponse = await axios.get(`${API_URL}/api/auth/me`)
+      const fullUser = fullUserResponse.data.data.user
+      console.log('🔐 Full user data fetched:', fullUser)
+      setUser(fullUser)
+      return { token, user: fullUser }
+    } catch (error) {
+      console.error('❌ Error fetching full user data after login:', error)
+      // Fallback to login user data if fetch fails
+      setUser(loginUser)
+      return { token, user: loginUser }
+    }
   }
 
   const register = async (userData) => {
