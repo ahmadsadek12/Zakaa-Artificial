@@ -89,10 +89,11 @@ async function create(itemData) {
         id, business_id, menu_id, user_id, name, description,
         item_type, is_schedulable, min_schedule_hours,
         price, cost, preparation_time_minutes, duration_minutes, quantity, is_reusable,
+        is_rental, track_quantity,
         available_from, available_to, days_available,
         ingredients, availability, item_image_url,
         times_ordered, times_delivered
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       itemId,
       itemData.businessId,
@@ -109,6 +110,8 @@ async function create(itemData) {
       itemData.durationMinutes || null,
       itemData.quantity !== undefined ? itemData.quantity : null,
       itemData.isReusable !== undefined ? (itemData.isReusable === true || itemData.isReusable === 'true') : true,
+      itemData.isRental !== undefined ? (itemData.isRental === true || itemData.isRental === 'true') : false,
+      itemData.trackQuantity !== undefined ? (itemData.trackQuantity === true || itemData.trackQuantity === 'true') : false,
       itemData.availableFrom || null,
       itemData.availableTo || null,
       itemData.daysAvailable ? JSON.stringify(itemData.daysAvailable) : null,
@@ -149,6 +152,8 @@ async function update(itemId, businessId, updateData) {
     durationMinutes: 'duration_minutes',
     quantity: 'quantity',
     isReusable: 'is_reusable',
+    isRental: 'is_rental',
+    trackQuantity: 'track_quantity',
     availableFrom: 'available_from',
     availableTo: 'available_to',
     daysAvailable: 'days_available',

@@ -385,6 +385,10 @@ async function updateCart(businessId, branchId, customerPhoneNumber, updates) {
 /**
  * Add item to cart
  */
+/**
+ * Add item to cart
+ * Supports rental items with booking date, time, and duration tier
+ */
 async function addItemToCart(businessId, branchId, customerPhoneNumber, item) {
   const cart = await getCart(businessId, branchId, customerPhoneNumber);
   const connection = await getMySQLConnection();
@@ -392,39 +396,77 @@ async function addItemToCart(businessId, branchId, customerPhoneNumber, item) {
   try {
     await connection.beginTransaction();
     
-    // Check if item already in cart (use connection.query for transaction isolation)
-    const [existingItems] = await connection.query(`
-      SELECT * FROM order_items 
-      WHERE order_id = ? AND item_id = ?
-    `, [cart.id, item.itemId]);
+    // For rental items, don't update existing - each booking is separate
+    const isRentalBooking = item.bookingDate && item.bookingStartTime && item.durationTierId;
     
-    if (existingItems.length > 0) {
-      // Update quantity
-      const existingItem = existingItems[0];
-      const newQuantity = existingItem.quantity + (item.quantity || 1);
+    // Check if item already in cart (only for non-rental items)
+    if (!isRentalBooking) {
+      const [existingItems] = await connection.query(`
+        SELECT * FROM order_items 
+        WHERE order_id = ? AND item_id = ? AND booking_date IS NULL
+      `, [cart.id, item.itemId]);
       
-      await connection.query(`
-        UPDATE order_items 
-        SET quantity = ?
-        WHERE id = ?
-      `, [newQuantity, existingItem.id]);
-    } else {
-      // Add new item
-      const orderItemId = generateUUID();
-      await connection.query(`
-        INSERT INTO order_items (
-          id, order_id, item_id, quantity, price_at_time, name_at_time, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      `, [
-        orderItemId,
-        cart.id,
-        item.itemId,
-        item.quantity || 1,
-        item.price,
-        item.name,
-        item.notes || null
-      ]);
+      if (existingItems.length > 0) {
+        // Update quantity
+        const existingItem = existingItems[0];
+        const newQuantity = existingItem.quantity + (item.quantity || 1);
+        
+        await connection.query(`
+          UPDATE order_items 
+          SET quantity = ?
+          WHERE id = ?
+        `, [newQuantity, existingItem.id]);
+        
+        // Recalculate totals
+        const [items] = await connection.query(`
+          SELECT quantity, price_at_time 
+          FROM order_items 
+          WHERE order_id = ?
+        `, [cart.id]);
+        
+        const subtotal = items.reduce((sum, item) => sum + (parseFloat(item.price_at_time) * item.quantity), 0);
+        const deliveryPrice = parseFloat(cart.delivery_price || 0);
+        const total = subtotal + deliveryPrice;
+        
+        await connection.query(`
+          UPDATE orders 
+          SET subtotal = ?, total = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `, [subtotal, total, cart.id]);
+        
+        await connection.commit();
+        
+        return await getCart(businessId, branchId, customerPhoneNumber);
+      }
     }
+    
+    // Add new item (either first time or rental booking)
+    const orderItemId = generateUUID();
+    
+    // Calculate booking end time for rental items
+    let bookingEndTime = null;
+    if (isRentalBooking && item.durationMinutes) {
+      bookingEndTime = addMinutesToTime(item.bookingStartTime, item.durationMinutes);
+    }
+    
+    await connection.query(`
+      INSERT INTO order_items (
+        id, order_id, item_id, quantity, price_at_time, name_at_time, notes,
+        booking_date, booking_start_time, booking_end_time, duration_tier_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      orderItemId,
+      cart.id,
+      item.itemId,
+      item.quantity || 1,
+      item.price,
+      item.name,
+      item.notes || null,
+      item.bookingDate || null,
+      item.bookingStartTime || null,
+      bookingEndTime,
+      item.durationTierId || null
+    ]);
     
     // Recalculate totals (use connection.query to see items within transaction)
     const [items] = await connection.query(`
@@ -452,6 +494,15 @@ async function addItemToCart(businessId, branchId, customerPhoneNumber, item) {
   } finally {
     connection.release();
   }
+}
+
+// Helper function to add minutes to time
+function addMinutesToTime(timeString, minutesToAdd) {
+  const [hours, minutes, seconds = '00'] = timeString.split(':').map(Number);
+  const totalMinutes = hours * 60 + minutes + minutesToAdd;
+  const newHours = Math.floor(totalMinutes / 60) % 24;
+  const newMinutes = totalMinutes % 60;
+  return `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
 /**
@@ -633,7 +684,21 @@ function getCartSummary(cart) {
   let summary = '📋 **Your Cart:**\n\n';
   
   for (const item of cart.items) {
-    summary += `• ${item.name} x${item.quantity} - $${(item.price * item.quantity).toFixed(2)}\n`;
+    summary += `• ${item.name} x${item.quantity} - $${(item.price * item.quantity).toFixed(2)}`;
+    
+    // Add booking details for rental items
+    if (item.booking_date && item.booking_start_time) {
+      const bookingDate = new Date(item.booking_date).toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric' 
+      });
+      const startTime = item.booking_start_time.substring(0, 5); // HH:MM
+      const endTime = item.booking_end_time ? item.booking_end_time.substring(0, 5) : '';
+      summary += `\n  📅 ${bookingDate} at ${startTime}${endTime ? ` - ${endTime}` : ''}`;
+    }
+    
+    summary += '\n';
   }
   
   summary += `\nSubtotal: $${parseFloat(cart.subtotal).toFixed(2)}\n`;
@@ -655,6 +720,9 @@ function getCartSummary(cart) {
   }
   
   summary += `\n**Total: $${parseFloat(cart.total).toFixed(2)}**`;
+  
+  return summary;
+}
   
   return summary;
 }

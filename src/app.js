@@ -20,6 +20,7 @@ const menuRoutes = require('./routes/api/menus');
 const itemRoutes = require('./routes/api/items');
 const policyRoutes = require('./routes/api/policies');
 const openingHoursRoutes = require('./routes/api/openingHours');
+const durationTiersRoutes = require('./routes/api/durationTiers');
 const orderRoutes = require('./routes/api/orders');
 const cartRoutes = require('./routes/api/carts');
 const analyticsRoutes = require('./routes/api/analytics');
@@ -142,6 +143,7 @@ app.use('/api/menus', menuRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/policies', policyRoutes);
 app.use('/api/opening-hours', openingHoursRoutes);
+app.use('/api', durationTiersRoutes); // Handles /api/items/:itemId/duration-tiers and /api/duration-tiers/:id
 app.use('/api/orders', orderRoutes);
 app.use('/api/carts', cartRoutes);
 app.use('/api/analytics', analyticsRoutes);
