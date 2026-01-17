@@ -717,6 +717,66 @@ async function executeFunction(functionName, args, context) {
         };
       }
       
+      case 'set_order_notes': {
+        const { notes } = args;
+        
+        if (!notes || typeof notes !== 'string' || notes.trim().length === 0) {
+          return {
+            success: false,
+            error: 'Please provide valid notes for your order.'
+          };
+        }
+        
+        // Update cart with notes
+        // Store notes as: '__cart__\nNOTES: {notes}' to preserve cart marker
+        const connection = await getMySQLConnection();
+        try {
+          await connection.beginTransaction();
+          
+          // Get current cart to check if it exists
+          const cart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
+          
+          if (!cart || !cart.id) {
+            await connection.rollback();
+            return {
+              success: false,
+              error: 'Cannot add notes: Your cart is empty. Please add items first.'
+            };
+          }
+          
+          // Update notes: keep '__cart__' marker and add customer notes
+          const notesWithMarker = `__cart__\nNOTES: ${notes.trim()}`;
+          
+          await connection.query(`
+            UPDATE orders 
+            SET notes = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND (notes = '__cart__' OR notes LIKE '__cart__%')
+          `, [notesWithMarker, cart.id]);
+          
+          await connection.commit();
+        } catch (error) {
+          await connection.rollback();
+          logger.error('Error setting order notes:', error);
+          throw error;
+        } finally {
+          connection.release();
+        }
+        
+        // Get updated cart
+        const updatedCart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
+        
+        logger.info('Order notes set via function call', { 
+          cartId: updatedCart.id,
+          notes: notes.trim()
+        });
+        
+        return {
+          success: true,
+          message: `Order notes saved: "${notes.trim()}"`,
+          cart: updatedCart
+        };
+      }
+      
       case 'set_scheduled_time': {
         const { scheduledTimeText } = args;
         const dateTimeParser = require('./dateTimeParser');
