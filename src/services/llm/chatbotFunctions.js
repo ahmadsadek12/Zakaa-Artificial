@@ -676,8 +676,8 @@ async function executeFunction(functionName, args, context) {
           }
         }
         
-        // Get opening hours for validation
-        const openingHours = await queryMySQL(`
+        // Get opening hours for validation - fetch all days first for date parsing
+        const allOpeningHours = await queryMySQL(`
           SELECT * FROM opening_hours 
           WHERE owner_type = ? AND owner_id = ? 
           ORDER BY 
@@ -696,7 +696,7 @@ async function executeFunction(functionName, args, context) {
         const parsedDate = dateTimeParser.parseDateTime(
           scheduledTimeText,
           business.timezone || 'Asia/Beirut',
-          openingHours
+          allOpeningHours
         );
         
         if (!parsedDate) {
@@ -704,6 +704,65 @@ async function executeFunction(functionName, args, context) {
             success: false,
             error: `Sorry, I couldn't understand "${scheduledTimeText}" or it's outside our opening hours. Please provide a time when we're open.`
           };
+        }
+        
+        // Get opening hours for the SPECIFIC day being scheduled
+        const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][parsedDate.getDay()];
+        
+        // Check branch hours first if branchId is different from businessId
+        let dayOpeningHours = [];
+        if (branchId && branchId !== business.id) {
+          dayOpeningHours = await queryMySQL(`
+            SELECT * FROM opening_hours 
+            WHERE owner_type = ? AND owner_id = ? AND day_of_week = ?
+          `, ['branch', branchId, dayOfWeek]);
+        }
+        
+        // If no branch hours, check business-level hours
+        if (dayOpeningHours.length === 0) {
+          dayOpeningHours = await queryMySQL(`
+            SELECT * FROM opening_hours 
+            WHERE owner_type = ? AND owner_id = ? AND day_of_week = ?
+          `, ['business', business.id, dayOfWeek]);
+        }
+        
+        // Validate that the scheduled day is open
+        if (dayOpeningHours.length === 0 || dayOpeningHours[0].is_closed) {
+          return {
+            success: false,
+            error: `Sorry, we're closed on ${dayOfWeek}. Please choose a day when we're open.`
+          };
+        }
+        
+        const dayHours = dayOpeningHours[0];
+        if (!dayHours.open_time || !dayHours.close_time) {
+          // No specific hours set, allow scheduling
+        } else {
+          // Validate scheduled time is within opening hours
+          const scheduledTime = parsedDate.toTimeString().substring(0, 5); // HH:MM
+          const openTime = dayHours.open_time.substring(0, 5);
+          const closeTime = dayHours.close_time.substring(0, 5);
+          
+          // Convert to minutes for comparison
+          const timeToMinutes = (timeStr) => {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours * 60 + minutes;
+          };
+          
+          const scheduledMinutes = timeToMinutes(scheduledTime);
+          const openMinutes = timeToMinutes(openTime);
+          const closeMinutes = timeToMinutes(closeTime);
+          
+          // Check last order before closing
+          const lastOrderBeforeClosing = dayHours.last_order_before_closing_minutes || 0;
+          const effectiveCloseMinutes = closeMinutes - lastOrderBeforeClosing;
+          
+          if (scheduledMinutes < openMinutes || scheduledMinutes > effectiveCloseMinutes) {
+            return {
+              success: false,
+              error: `Sorry, we're open from ${openTime} to ${closeTime} on ${dayOfWeek}. Please choose a time within our opening hours.`
+            };
+          }
         }
         
         // Get all "only scheduled" items in cart for validation
@@ -926,11 +985,9 @@ async function executeFunction(functionName, args, context) {
         const conversationManager = require('./conversationManager');
         const openStatus = await conversationManager.isOpenNow(business.id, branchId);
         
-        // Check if cart has items that are schedulable
-        // If business is open, schedulable items can be ordered immediately
-        // If business is closed, schedulable items must be scheduled
-        let hasSchedulableItems = false;
-        let schedulableItemNames = [];
+        // Check if cart has items that are "only scheduled" (is_schedulable = true)
+        let hasOnlyScheduledItems = false;
+        let onlyScheduledItemNames = [];
         let requiresScheduling = false;
         
         if (cart.items && cart.items.length > 0) {
@@ -949,11 +1006,11 @@ async function executeFunction(functionName, args, context) {
                 || item.is_schedulable === 'true';
               
               if (isSchedulable) {
-                hasSchedulableItems = true;
-                schedulableItemNames.push(item.name);
+                hasOnlyScheduledItems = true;
+                onlyScheduledItemNames.push(item.name);
                 
-                // Only require scheduling if business is closed
-                if (!openStatus.isOpen && !cart.scheduled_for) {
+                // "Only scheduled" items MUST have a scheduled_for time
+                if (!cart.scheduled_for) {
                   requiresScheduling = true;
                 }
               }
@@ -961,11 +1018,76 @@ async function executeFunction(functionName, args, context) {
           }
         }
         
-        // If business is closed and cart has schedulable items, require scheduled_for time
+        // If cart has "only scheduled" items without scheduled time, require scheduling
         if (requiresScheduling) {
           return {
             success: false,
-            error: `We're currently closed. The following items need to be scheduled: ${schedulableItemNames.join(', ')}. Please use the scheduling function to set a date and time when we're open.`,
+            error: `The following items can only be scheduled: ${onlyScheduledItemNames.join(', ')}. Please use the scheduling function to set a date and time first.`,
+            requiresScheduling: true
+          };
+        }
+        
+        // If order is scheduled, validate opening hours for that day
+        if (cart.scheduled_for) {
+          const scheduledDate = new Date(cart.scheduled_for);
+          const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][scheduledDate.getDay()];
+          
+          // Check branch hours first if branchId is different from businessId
+          let dayOpeningHours = [];
+          if (branchId && branchId !== business.id) {
+            dayOpeningHours = await queryMySQL(`
+              SELECT * FROM opening_hours 
+              WHERE owner_type = ? AND owner_id = ? AND day_of_week = ?
+            `, ['branch', branchId, dayOfWeek]);
+          }
+          
+          // If no branch hours, check business-level hours
+          if (dayOpeningHours.length === 0) {
+            dayOpeningHours = await queryMySQL(`
+              SELECT * FROM opening_hours 
+              WHERE owner_type = ? AND owner_id = ? AND day_of_week = ?
+            `, ['business', business.id, dayOfWeek]);
+          }
+          
+          if (dayOpeningHours.length === 0 || dayOpeningHours[0].is_closed) {
+            return {
+              success: false,
+              error: `Cannot confirm order: We're closed on ${dayOfWeek}. Please reschedule for a day when we're open.`
+            };
+          }
+          
+          const dayHours = dayOpeningHours[0];
+          if (dayHours.open_time && dayHours.close_time) {
+            const scheduledTime = scheduledDate.toTimeString().substring(0, 5); // HH:MM
+            const openTime = dayHours.open_time.substring(0, 5);
+            const closeTime = dayHours.close_time.substring(0, 5);
+            
+            // Convert to minutes for comparison
+            const timeToMinutes = (timeStr) => {
+              const [hours, minutes] = timeStr.split(':').map(Number);
+              return hours * 60 + minutes;
+            };
+            
+            const scheduledMinutes = timeToMinutes(scheduledTime);
+            const openMinutes = timeToMinutes(openTime);
+            const closeMinutes = timeToMinutes(closeTime);
+            
+            // Check last order before closing
+            const lastOrderBeforeClosing = dayHours.last_order_before_closing_minutes || 0;
+            const effectiveCloseMinutes = closeMinutes - lastOrderBeforeClosing;
+            
+            if (scheduledMinutes < openMinutes || scheduledMinutes > effectiveCloseMinutes) {
+              return {
+                success: false,
+                error: `Cannot confirm order: Scheduled time ${scheduledTime} is outside our opening hours (${openTime} - ${closeTime}) on ${dayOfWeek}. Please reschedule.`
+              };
+            }
+          }
+        } else if (!openStatus.isOpen) {
+          // Order is not scheduled and business is closed
+          return {
+            success: false,
+            error: `We're currently closed (${openStatus.reason}). Please schedule your order for when we're open.`,
             requiresScheduling: true
           };
         }
