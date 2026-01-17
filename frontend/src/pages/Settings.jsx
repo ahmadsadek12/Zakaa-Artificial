@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import { Save, Building2, CreditCard, Phone, MapPin, Globe, MessageSquare, Key, Clock, Eye, EyeOff } from 'lucide-react'
-import MapPicker from '../components/MapPicker'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
@@ -422,23 +421,6 @@ export default function Settings() {
           <div className="card space-y-6">
             <div>
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Location & Delivery Settings</h2>
-              {/* Google Maps Location Picker */}
-              <div className="mb-6">
-                <label className="label mb-2">Business Location</label>
-                <MapPicker
-                  latitude={formData.locationLatitude}
-                  longitude={formData.locationLongitude}
-                  onLocationChange={(lat, lng) => {
-                    setFormData({
-                      ...formData,
-                      locationLatitude: lat.toString(),
-                      locationLongitude: lng.toString()
-                    })
-                  }}
-                />
-              </div>
-
-              {/* Manual Coordinate Inputs (Optional) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="label">Latitude</label>
@@ -450,7 +432,7 @@ export default function Settings() {
                     onChange={(e) => setFormData({ ...formData, locationLatitude: e.target.value })}
                     placeholder="33.8938"
                   />
-                  <p className="text-sm text-gray-500 mt-1">Or enter manually</p>
+                  <p className="text-sm text-gray-500 mt-1">Your business location (for delivery radius calculation)</p>
                 </div>
                 <div>
                   <label className="label">Longitude</label>
@@ -462,7 +444,7 @@ export default function Settings() {
                     onChange={(e) => setFormData({ ...formData, locationLongitude: e.target.value })}
                     placeholder="35.5018"
                   />
-                  <p className="text-sm text-gray-500 mt-1">Or enter manually</p>
+                  <p className="text-sm text-gray-500 mt-1">Your business location (for delivery radius calculation)</p>
                 </div>
                 <div className="md:col-span-2">
                   <label className="label">Delivery Radius (km)</label>
