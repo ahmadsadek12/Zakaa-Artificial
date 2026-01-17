@@ -27,9 +27,21 @@ async function addDeliveryPriceToUsers() {
       } catch (error) {
         // If it fails due to foreign key constraint, temporarily drop and recreate it
         if (error.code === 'ER_FK_INCOMPATIBLE_COLUMNS' || error.errno === 3780) {
-          logger.warn('Foreign key constraint issue detected. Temporarily dropping constraints...');
+          logger.warn('Foreign key constraint issue detected. Fixing column type mismatches first...');
           
-          // Find all foreign key constraints that reference users.id BEFORE dropping
+          // Get the type of users.id
+          const [userIdType] = await connection.query(`
+            SELECT COLUMN_TYPE 
+            FROM information_schema.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'users' 
+              AND COLUMN_NAME = 'id'
+          `);
+          
+          const usersIdType = userIdType[0]?.COLUMN_TYPE || 'CHAR(36)';
+          logger.info(`users.id type: ${usersIdType}`);
+          
+          // Find all foreign key constraints that reference users.id
           const [fkConstraints] = await connection.query(`
             SELECT 
               TABLE_NAME,
@@ -41,9 +53,41 @@ async function addDeliveryPriceToUsers() {
               AND TABLE_SCHEMA = DATABASE()
           `);
           
-          logger.info(`Found ${fkConstraints.length} foreign key constraints to temporarily drop`);
+          logger.info(`Found ${fkConstraints.length} foreign key constraints`);
           
-          // Store constraint details before dropping
+          // First, fix column type mismatches in referencing tables
+          const tablesToFix = new Set();
+          for (const fk of fkConstraints) {
+            tablesToFix.add(fk.TABLE_NAME);
+          }
+          
+          for (const tableName of tablesToFix) {
+            try {
+              const [colInfo] = await connection.query(`
+                SELECT COLUMN_NAME, COLUMN_TYPE 
+                FROM information_schema.COLUMNS 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                  AND TABLE_NAME = ? 
+                  AND COLUMN_NAME IN ('user_id', 'business_user_id', 'parent_user_id')
+              `, [tableName]);
+              
+              for (const col of colInfo) {
+                if (col.COLUMN_TYPE !== usersIdType) {
+                  logger.info(`Fixing ${tableName}.${col.COLUMN_NAME} type from ${col.COLUMN_TYPE} to ${usersIdType}`);
+                  await connection.query(`
+                    ALTER TABLE \`${tableName}\` 
+                    MODIFY COLUMN \`${col.COLUMN_NAME}\` ${usersIdType}
+                  `);
+                  logger.info(`✅ Fixed ${tableName}.${col.COLUMN_NAME} type`);
+                }
+              }
+            } catch (e) {
+              logger.warn(`Could not fix columns in ${tableName}:`, e.message);
+            }
+          }
+          
+          // Now drop foreign key constraints
+          logger.info('Dropping foreign key constraints...');
           const constraintsToRecreate = [];
           for (const fk of fkConstraints) {
             constraintsToRecreate.push({
@@ -63,12 +107,46 @@ async function addDeliveryPriceToUsers() {
             }
           }
           
-          // Now add the column
-          await connection.query(`
-            ALTER TABLE users
-            ADD COLUMN delivery_price DECIMAL(10,2) DEFAULT 0.00 AFTER delivery_radius_km;
-          `);
-          logger.info('✅ Successfully added delivery_price column to users table!');
+          // Now add the column (try without AFTER clause to avoid position issues)
+          try {
+            await connection.query(`
+              ALTER TABLE users
+              ADD COLUMN delivery_price DECIMAL(10,2) DEFAULT 0.00
+            `);
+            logger.info('✅ Successfully added delivery_price column to users table!');
+          } catch (e) {
+            if (e.code === 'ER_DUP_FIELDNAME') {
+              logger.info('Column already exists, skipping...');
+            } else {
+              throw e;
+            }
+          }
+          
+          // Recreate foreign key constraints
+          logger.info('Recreating foreign key constraints...');
+          for (const fk of constraintsToRecreate) {
+            try {
+              // Determine ON DELETE action based on table and column
+              let onDelete = 'CASCADE';
+              if (fk.table === 'reservations' && fk.column === 'user_id') {
+                onDelete = 'SET NULL';
+              }
+              if (fk.table === 'users' && fk.column === 'parent_user_id') {
+                onDelete = 'CASCADE';
+              }
+              
+              await connection.query(`
+                ALTER TABLE \`${fk.table}\` 
+                ADD CONSTRAINT \`${fk.constraint}\` 
+                FOREIGN KEY (\`${fk.column}\`) 
+                REFERENCES users(id) 
+                ON DELETE ${onDelete}
+              `);
+              logger.info(`Recreated ${fk.constraint} on ${fk.table}`);
+            } catch (e) {
+              logger.warn(`Could not recreate ${fk.constraint} on ${fk.table}:`, e.message);
+            }
+          }
           
           // Recreate foreign key constraints
           for (const fk of constraintsToRecreate) {
