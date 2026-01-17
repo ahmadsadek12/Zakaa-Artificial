@@ -180,13 +180,27 @@ async function update(userId, updateData) {
   const sql = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
   logger.info('Executing SQL update:', { sql, values });
   
-  await queryMySQL(sql, values);
+  try {
+    await queryMySQL(sql, values);
+  } catch (error) {
+    // Check if error is about unknown column
+    if (error.code === 'ER_BAD_FIELD_ERROR' || error.message?.includes('Unknown column')) {
+      logger.error('Database column does not exist. Migration may be required:', {
+        error: error.message,
+        sql,
+        updates
+      });
+      throw new Error(`Database column missing. Please run migration: ${error.message}`);
+    }
+    throw error;
+  }
   
   const updatedUser = await findById(userId);
   logger.info('User after update:', { 
     userId, 
     business_name: updatedUser.business_name,
-    delivery_price: updatedUser.delivery_price 
+    delivery_price: updatedUser.delivery_price,
+    last_order_before_closing_minutes: updatedUser.last_order_before_closing_minutes
   });
   
   return updatedUser;
