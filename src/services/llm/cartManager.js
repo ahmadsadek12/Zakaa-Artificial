@@ -745,6 +745,11 @@ function getCartSummary(cart) {
     summary += `\nDelivery Address: ${cart.location_address}\n`;
   }
   
+  // Add order notes if present
+  if (cart.notes && cart.notes.trim().length > 0 && cart.notes !== '__cart__') {
+    summary += `\n📝 **Notes:** ${cart.notes}\n`;
+  }
+  
   summary += `\n**Total: $${parseFloat(cart.total).toFixed(2)}**`;
   
   return summary;
