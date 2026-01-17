@@ -3,11 +3,19 @@
 
 const express = require('express');
 const router = express.Router();
-const { body, param } = require('express-validator');
+const { body, param, validationResult } = require('express-validator');
 const durationTiersRepository = require('../../repositories/durationTiersRepository');
 const itemRepository = require('../../repositories/itemRepository');
-const { validateRequest } = require('../../middleware/errorHandler');
+const { asyncHandler } = require('../../middleware/errorHandler');
+const { authenticate, requireUserType } = require('../../middleware/auth');
+const { tenantIsolation } = require('../../middleware/tenant');
 const logger = require('../../utils/logger');
+const CONSTANTS = require('../../config/constants');
+
+// All routes require authentication and business/admin/branch access
+router.use(authenticate);
+router.use(requireUserType(CONSTANTS.USER_TYPES.ADMIN, CONSTANTS.USER_TYPES.BUSINESS, CONSTANTS.USER_TYPES.BRANCH));
+router.use(tenantIsolation);
 
 /**
  * GET /api/items/:itemId/duration-tiers
@@ -15,26 +23,33 @@ const logger = require('../../utils/logger');
  */
 router.get('/items/:itemId/duration-tiers', [
   param('itemId').isUUID().withMessage('Valid item ID required')
-], validateRequest, async (req, res, next) => {
-  try {
-    const { itemId } = req.params;
-    
-    // Verify item exists and belongs to user's business
-    const item = await itemRepository.findById(itemId);
-    if (!item) {
-      return res.status(404).json({
-        success: false,
-        error: { message: 'Item not found' }
-      });
-    }
-    
-    // Check if user has access to this item
-    if (item.business_id !== req.user.id && item.user_id !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        error: { message: 'Access denied' }
-      });
-    }
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+  
+  const { itemId } = req.params;
+  
+  // Verify item exists and belongs to user's business
+  const item = await itemRepository.findById(itemId, req.businessId);
+  if (!item) {
+    return res.status(404).json({
+      success: false,
+      error: { message: 'Item not found' }
+    });
+  }
+  
+  // Check if user has access to this item
+  if (item.business_id !== req.businessId && item.user_id !== req.userId) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Access denied' }
+    });
+  }
     
     const tiers = await durationTiersRepository.getDurationTiersByItemId(itemId);
     
@@ -42,11 +57,7 @@ router.get('/items/:itemId/duration-tiers', [
       success: true,
       data: { tiers }
     });
-  } catch (error) {
-    logger.error('Error fetching duration tiers:', error);
-    next(error);
-  }
-});
+}));
 
 /**
  * POST /api/items/:itemId/duration-tiers
@@ -56,27 +67,34 @@ router.post('/items/:itemId/duration-tiers', [
   param('itemId').isUUID().withMessage('Valid item ID required'),
   body('durationMinutes').isInt({ min: 1 }).withMessage('Duration must be a positive integer'),
   body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number')
-], validateRequest, async (req, res, next) => {
-  try {
-    const { itemId } = req.params;
-    const { durationMinutes, price } = req.body;
-    
-    // Verify item exists and belongs to user's business
-    const item = await itemRepository.findById(itemId);
-    if (!item) {
-      return res.status(404).json({
-        success: false,
-        error: { message: 'Item not found' }
-      });
-    }
-    
-    // Check if user has access to this item
-    if (item.business_id !== req.user.id && item.user_id !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        error: { message: 'Access denied' }
-      });
-    }
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+  
+  const { itemId } = req.params;
+  const { durationMinutes, price } = req.body;
+  
+  // Verify item exists and belongs to user's business
+  const item = await itemRepository.findById(itemId, req.businessId);
+  if (!item) {
+    return res.status(404).json({
+      success: false,
+      error: { message: 'Item not found' }
+    });
+  }
+  
+  // Check if user has access to this item
+  if (item.business_id !== req.businessId && item.user_id !== req.userId) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Access denied' }
+    });
+  }
     
     // Verify item is marked as rental
     if (!item.is_rental) {
@@ -98,11 +116,7 @@ router.post('/items/:itemId/duration-tiers', [
       success: true,
       data: { tier }
     });
-  } catch (error) {
-    logger.error('Error creating duration tier:', error);
-    next(error);
-  }
-});
+}));
 
 /**
  * PUT /api/duration-tiers/:id
@@ -112,35 +126,42 @@ router.put('/duration-tiers/:id', [
   param('id').isUUID().withMessage('Valid tier ID required'),
   body('durationMinutes').optional().isInt({ min: 1 }).withMessage('Duration must be a positive integer'),
   body('price').optional().isFloat({ min: 0 }).withMessage('Price must be a positive number')
-], validateRequest, async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { durationMinutes, price } = req.body;
-    
-    // Get existing tier
-    const existingTier = await durationTiersRepository.getDurationTierById(id);
-    if (!existingTier) {
-      return res.status(404).json({
-        success: false,
-        error: { message: 'Duration tier not found' }
-      });
-    }
-    
-    // Verify item belongs to user's business
-    const item = await itemRepository.findById(existingTier.item_id);
-    if (!item) {
-      return res.status(404).json({
-        success: false,
-        error: { message: 'Associated item not found' }
-      });
-    }
-    
-    if (item.business_id !== req.user.id && item.user_id !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        error: { message: 'Access denied' }
-      });
-    }
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+  
+  const { id } = req.params;
+  const { durationMinutes, price } = req.body;
+  
+  // Get existing tier
+  const existingTier = await durationTiersRepository.getDurationTierById(id);
+  if (!existingTier) {
+    return res.status(404).json({
+      success: false,
+      error: { message: 'Duration tier not found' }
+    });
+  }
+  
+  // Verify item belongs to user's business
+  const item = await itemRepository.findById(existingTier.item_id, req.businessId);
+  if (!item) {
+    return res.status(404).json({
+      success: false,
+      error: { message: 'Associated item not found' }
+    });
+  }
+  
+  if (item.business_id !== req.businessId && item.user_id !== req.userId) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Access denied' }
+    });
+  }
     
     const tier = await durationTiersRepository.updateDurationTier(id, {
       durationMinutes,
@@ -153,11 +174,7 @@ router.put('/duration-tiers/:id', [
       success: true,
       data: { tier }
     });
-  } catch (error) {
-    logger.error('Error updating duration tier:', error);
-    next(error);
-  }
-});
+}));
 
 /**
  * DELETE /api/duration-tiers/:id
@@ -165,34 +182,41 @@ router.put('/duration-tiers/:id', [
  */
 router.delete('/duration-tiers/:id', [
   param('id').isUUID().withMessage('Valid tier ID required')
-], validateRequest, async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    
-    // Get existing tier
-    const existingTier = await durationTiersRepository.getDurationTierById(id);
-    if (!existingTier) {
-      return res.status(404).json({
-        success: false,
-        error: { message: 'Duration tier not found' }
-      });
-    }
-    
-    // Verify item belongs to user's business
-    const item = await itemRepository.findById(existingTier.item_id);
-    if (!item) {
-      return res.status(404).json({
-        success: false,
-        error: { message: 'Associated item not found' }
-      });
-    }
-    
-    if (item.business_id !== req.user.id && item.user_id !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        error: { message: 'Access denied' }
-      });
-    }
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+  
+  const { id } = req.params;
+  
+  // Get existing tier
+  const existingTier = await durationTiersRepository.getDurationTierById(id);
+  if (!existingTier) {
+    return res.status(404).json({
+      success: false,
+      error: { message: 'Duration tier not found' }
+    });
+  }
+  
+  // Verify item belongs to user's business
+  const item = await itemRepository.findById(existingTier.item_id, req.businessId);
+  if (!item) {
+    return res.status(404).json({
+      success: false,
+      error: { message: 'Associated item not found' }
+    });
+  }
+  
+  if (item.business_id !== req.businessId && item.user_id !== req.userId) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Access denied' }
+    });
+  }
     
     await durationTiersRepository.deleteDurationTier(id);
     
@@ -202,10 +226,6 @@ router.delete('/duration-tiers/:id', [
       success: true,
       data: { message: 'Duration tier deleted successfully' }
     });
-  } catch (error) {
-    logger.error('Error deleting duration tier:', error);
-    next(error);
-  }
-});
+}));
 
 module.exports = router;
