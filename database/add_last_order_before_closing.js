@@ -23,14 +23,25 @@ async function addLastOrderBeforeClosing() {
       return;
     }
     
-    // Add column
+    // Add column - temporarily disable foreign key checks to avoid constraint issues
     logger.info('Adding last_order_before_closing_minutes column to users table...');
-    await connection.query(`
-      ALTER TABLE users
-      ADD COLUMN last_order_before_closing_minutes INT NULL DEFAULT 30 AFTER delivery_price
-    `);
+    await connection.query('SET FOREIGN_KEY_CHECKS = 0');
     
-    logger.info('✅ Successfully added last_order_before_closing_minutes column to users table!');
+    try {
+      await connection.query(`
+        ALTER TABLE users
+        ADD COLUMN last_order_before_closing_minutes INT NULL DEFAULT 30 AFTER delivery_price
+      `);
+      logger.info('✅ Successfully added last_order_before_closing_minutes column to users table!');
+    } catch (error) {
+      if (error.code === 'ER_DUP_FIELDNAME') {
+        logger.info('✅ last_order_before_closing_minutes column already exists');
+      } else {
+        throw error;
+      }
+    } finally {
+      await connection.query('SET FOREIGN_KEY_CHECKS = 1');
+    }
     
     // Set default value of 30 minutes for existing users
     await connection.query(`
