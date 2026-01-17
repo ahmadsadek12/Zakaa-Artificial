@@ -318,7 +318,8 @@ router.put('/me', [
     logger.info(`Business profile updated: ${req.user.id}`, { 
       chatbot_enabled: updatedUser.chatbot_enabled,
       business_name: updatedUser.business_name,
-      delivery_price: updatedUser.delivery_price
+      delivery_price: updatedUser.delivery_price,
+      last_order_before_closing_minutes: updatedUser.last_order_before_closing_minutes
     });
     
     // Ensure delivery_price is included in response (might be null, which is valid)
