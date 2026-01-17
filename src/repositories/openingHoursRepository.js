@@ -31,24 +31,30 @@ async function upsert(ownerType, ownerId, hoursData) {
       [ownerType, ownerId]
     );
     
-    // Insert new hours
+    // Insert new hours - always save all days, even if empty
     for (const day of DAYS_OF_WEEK) {
       const dayData = hoursData[day];
-      if (dayData) {
-        const id = generateUUID();
-        await connection.query(`
-          INSERT INTO opening_hours (id, owner_type, owner_id, day_of_week, open_time, close_time, is_closed)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `, [
-          id,
-          ownerType,
-          ownerId,
-          day,
-          dayData.open || null,
-          dayData.close || null,
-          dayData.closed === true || dayData.isClosed === true
-        ]);
-      }
+      const id = generateUUID();
+      
+      // Determine if closed
+      const isClosed = dayData?.closed === true || dayData?.isClosed === true || false;
+      
+      // Get open/close times (convert empty strings to null)
+      const openTime = dayData?.open && dayData.open.trim() !== '' ? dayData.open.trim() : null;
+      const closeTime = dayData?.close && dayData.close.trim() !== '' ? dayData.close.trim() : null;
+      
+      await connection.query(`
+        INSERT INTO opening_hours (id, owner_type, owner_id, day_of_week, open_time, close_time, is_closed)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [
+        id,
+        ownerType,
+        ownerId,
+        day,
+        openTime,
+        closeTime,
+        isClosed
+      ]);
     }
     
     await connection.commit();

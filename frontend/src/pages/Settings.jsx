@@ -147,15 +147,21 @@ export default function Settings() {
     
     try {
       const token = localStorage.getItem('token')
+      const payload = {
+        ownerType: 'business',
+        ownerId: user.id,
+        hours: openingHours
+      }
+      
+      console.log('📤 Saving opening hours:', payload)
+      
       const response = await axios.post(
         `${API_URL}/api/opening-hours`,
-        {
-          ownerType: 'business',
-          ownerId: user.id,
-          hours: openingHours
-        },
+        payload,
         { headers: { Authorization: `Bearer ${token}` } }
       )
+      
+      console.log('✅ Opening hours save response:', response.data)
       
       // Refetch opening hours to show saved data
       if (response.data.success) {
@@ -166,7 +172,8 @@ export default function Settings() {
         alert('Failed to save opening hours')
       }
     } catch (error) {
-      console.error('Error saving opening hours:', error)
+      console.error('❌ Error saving opening hours:', error)
+      console.error('Error response:', error.response?.data)
       alert(error.response?.data?.error?.message || 'Failed to save opening hours')
     } finally {
       setLoading(false)

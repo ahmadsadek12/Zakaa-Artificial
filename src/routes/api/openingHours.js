@@ -129,9 +129,16 @@ router.post('/', [
     }
   }
   
+  logger.info(`Saving opening hours for ${ownerType}: ${ownerId}`, {
+    hoursCount: Object.keys(hours).length,
+    hours: hours
+  });
+  
   const openingHours = await openingHoursRepository.upsert(ownerType, ownerId, hours);
   
-  logger.info(`Opening hours updated for ${ownerType}: ${ownerId}`);
+  logger.info(`Opening hours updated for ${ownerType}: ${ownerId}`, {
+    savedCount: openingHours.length
+  });
   
   res.json({
     success: true,
