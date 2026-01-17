@@ -71,15 +71,9 @@ export default function Items() {
       formDataToSend.append('price', formData.price)
       if (formData.cost) formDataToSend.append('cost', formData.cost)
       
-      // Time/Duration fields (conditional)
-      if (businessType === 'f & b') {
-        if (formData.preparationTimeMinutes) {
-          formDataToSend.append('preparationTimeMinutes', formData.preparationTimeMinutes)
-        }
-      } else {
-        if (formData.durationMinutes) {
-          formDataToSend.append('durationMinutes', formData.durationMinutes)
-        }
+      // Reservation Time Limit (for all business types)
+      if (formData.durationMinutes) {
+        formDataToSend.append('durationMinutes', formData.durationMinutes)
       }
       
       // Quantity field (for all business types) - always send it to allow clearing (empty = unlimited)
@@ -161,7 +155,6 @@ export default function Items() {
       ingredients: item.ingredients || '',
       price: item.price || '',
       cost: item.cost || '',
-      preparationTimeMinutes: item.preparation_time_minutes || '',
       durationMinutes: item.duration_minutes || '',
       quantity: item.quantity || '',
       isReusable: item.is_reusable !== undefined ? item.is_reusable : true,
@@ -196,7 +189,6 @@ export default function Items() {
       ingredients: '',
       price: '',
       cost: '',
-      preparationTimeMinutes: '',
       durationMinutes: '',
       quantity: '',
       isReusable: true,
@@ -426,34 +418,23 @@ export default function Items() {
                 </div>
               </div>
 
-              {/* Time/Duration */}
+              {/* Reservation Time Limit */}
               <div className="border-b border-gray-200 pb-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Time / Duration</h3>
-                {businessType === 'f & b' ? (
-                  <div>
-                    <label className="label">Preparation Time (minutes)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      className="input"
-                      value={formData.preparationTimeMinutes}
-                      onChange={(e) => setFormData({ ...formData, preparationTimeMinutes: e.target.value })}
-                      placeholder="e.g., 15"
-                    />
-                  </div>
-                ) : (
-                  <div>
-                    <label className="label">Duration (minutes)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      className="input"
-                      value={formData.durationMinutes}
-                      onChange={(e) => setFormData({ ...formData, durationMinutes: e.target.value })}
-                      placeholder="e.g., 60"
-                    />
-                  </div>
-                )}
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Reservation Settings</h3>
+                <div>
+                  <label className="label">Reservation Time Limit (minutes)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    className="input"
+                    value={formData.durationMinutes}
+                    onChange={(e) => setFormData({ ...formData, durationMinutes: e.target.value })}
+                    placeholder="e.g., 60 (how long the reservation lasts)"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Maximum duration for this reservation (e.g., 60 = 1 hour, 90 = 1.5 hours)
+                  </p>
+                </div>
               </div>
 
               {/* Quantity (for all business types) */}
