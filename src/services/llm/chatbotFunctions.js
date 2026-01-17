@@ -1230,8 +1230,11 @@ async function executeFunction(functionName, args, context) {
               };
             }
           }
-        } else if (!openStatus.isOpen) {
-          // Order is not scheduled and business is closed
+        }
+        
+        // Check if business is closed for immediate (non-scheduled) orders
+        if (!cart.scheduled_for && !openStatus.isOpen) {
+          // Order is not scheduled and business is closed - BLOCK IT
           logger.warn('confirm_order: Attempting to confirm unscheduled order while closed', {
             isOpen: openStatus.isOpen,
             reason: openStatus.reason,
@@ -1244,7 +1247,7 @@ async function executeFunction(functionName, args, context) {
           };
         }
         
-        // Business is open and order is not scheduled - allow immediate order
+        // Business is open OR order is scheduled - allow order
         logger.info('confirm_order: Business is open, allowing immediate order confirmation', {
           isOpen: openStatus.isOpen,
           hasScheduledTime: !!cart.scheduled_for,
