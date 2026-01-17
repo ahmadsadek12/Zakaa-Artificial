@@ -202,6 +202,107 @@ function generateTimeSlots(startTime, endTime) {
 }
 
 /**
+ * Helper to convert time string (HH:MM) to minutes since midnight
+ */
+function timeToMinutes(timeString) {
+  if (!timeString) return -1;
+  const [hours, minutes] = timeString.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+/**
+ * Get opening hours for a specific day
+ */
+async function getOpeningHoursForDay(businessId, branchId, dayOfWeek) {
+  let hours = [];
+  if (branchId && branchId !== businessId) {
+    hours = await queryMySQL(`
+      SELECT * FROM opening_hours 
+      WHERE owner_type = ? AND owner_id = ? AND day_of_week = ?
+    `, ['branch', branchId, dayOfWeek]);
+  }
+  if (hours.length === 0) {
+    hours = await queryMySQL(`
+      SELECT * FROM opening_hours 
+      WHERE owner_type = ? AND owner_id = ? AND day_of_week = ?
+    `, ['business', businessId, dayOfWeek]);
+  }
+  return hours.length > 0 ? hours[0] : null;
+}
+
+/**
+ * Get all opening hours for the week
+ */
+async function getAllOpeningHours(businessId, branchId) {
+  const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  const allHours = [];
+  for (const day of daysOfWeek) {
+    const dayHours = await getOpeningHoursForDay(businessId, branchId, day);
+    if (dayHours) {
+      allHours.push(dayHours);
+    } else {
+      // If no specific hours, assume closed or default
+      allHours.push({ day_of_week: day, is_closed: true, open_time: null, close_time: null, last_order_before_closing_minutes: 0 });
+    }
+  }
+  return allHours;
+}
+
+/**
+ * Find the next time the business will be open
+ */
+async function getNextOpeningTime(businessId, branchId) {
+  // Get business timezone
+  const [businesses] = await queryMySQL(
+    'SELECT timezone FROM users WHERE id = ?',
+    [businessId]
+  );
+  const businessTimezone = businesses[0]?.timezone || 'Asia/Beirut';
+  
+  // Get current time in business timezone
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: businessTimezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    weekday: 'long'
+  });
+  
+  const parts = formatter.formatToParts(now);
+  const currentHour = parts.find(p => p.type === 'hour').value;
+  const currentMinute = parts.find(p => p.type === 'minute').value;
+  const weekday = parts.find(p => p.type === 'weekday').value.toLowerCase();
+  
+  const currentTime = `${currentHour}:${currentMinute}`;
+  const currentDayOfWeek = weekday;
+  
+  const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const currentDayIndex = daysOfWeek.indexOf(currentDayOfWeek);
+  
+  // Check today first
+  const todayHours = await getOpeningHoursForDay(businessId, branchId, currentDayOfWeek);
+  if (todayHours && !todayHours.is_closed && todayHours.open_time) {
+    const openMinutes = timeToMinutes(todayHours.open_time);
+    const currentMinutes = timeToMinutes(currentTime);
+    if (currentMinutes < openMinutes) {
+      return { day_of_week: currentDayOfWeek, open_time: todayHours.open_time };
+    }
+  }
+  
+  // Check next 7 days
+  for (let i = 1; i <= 7; i++) {
+    const nextDayIndex = (currentDayIndex + i) % 7;
+    const nextDay = daysOfWeek[nextDayIndex];
+    const nextDayHours = await getOpeningHoursForDay(businessId, branchId, nextDay);
+    if (nextDayHours && !nextDayHours.is_closed && nextDayHours.open_time) {
+      return { day_of_week: nextDay, open_time: nextDayHours.open_time };
+    }
+  }
+  return null; // No upcoming opening hours found
+}
+
+/**
  * Process chatbot response and confirm order if needed
  */
 async function processChatbotResponse({
@@ -322,5 +423,9 @@ async function processChatbotResponse({
 module.exports = {
   isOpenNow,
   getAvailableTimeSlots,
-  processChatbotResponse
+  processChatbotResponse,
+  timeToMinutes,
+  getOpeningHoursForDay,
+  getAllOpeningHours,
+  getNextOpeningTime
 };
