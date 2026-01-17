@@ -124,7 +124,11 @@ export default function Settings() {
 
   const handlePasswordChange = async (e) => {
     e.preventDefault()
+    e.stopPropagation()
     console.log('🔐 Password change form submitted')
+    console.log('🔐 Event:', e)
+    console.log('🔐 Event default prevented:', e.defaultPrevented)
+    
     setLoading(true)
     setSaved(false)
     setPasswordMessage({ type: '', text: '' })
@@ -616,7 +620,15 @@ export default function Settings() {
                 <Key size={24} />
                 Change Password
               </h2>
-              <form onSubmit={handlePasswordChange} className="space-y-4">
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handlePasswordChange(e)
+                }} 
+                className="space-y-4"
+                noValidate
+              >
                 {/* Password Change Messages */}
                 {passwordMessage.text && (
                   <div className={`p-4 rounded-lg ${
@@ -711,8 +723,13 @@ export default function Settings() {
 
                 <div className="flex justify-end pt-4 border-t border-gray-200">
                   <button
-                    type="submit"
+                    type="button"
                     disabled={loading}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handlePasswordChange(e)
+                    }}
                     className="btn btn-primary flex items-center gap-2"
                   >
                     {loading ? (
