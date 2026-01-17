@@ -19,11 +19,23 @@ async function isOpenNow(businessId, branchId) {
     );
     const businessTimezone = businesses[0]?.timezone || 'Asia/Beirut';
     
-    // Get current time in business timezone
+    // Get current time in business timezone using Intl.DateTimeFormat
     const now = new Date();
-    const nowInTimezone = new Date(now.toLocaleString('en-US', { timeZone: businessTimezone }));
-    const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][nowInTimezone.getDay()];
-    const currentTime = nowInTimezone.toTimeString().substring(0, 5); // HH:MM format in business timezone
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: businessTimezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      weekday: 'long'
+    });
+    
+    const parts = formatter.formatToParts(now);
+    const hour = parts.find(p => p.type === 'hour').value;
+    const minute = parts.find(p => p.type === 'minute').value;
+    const weekday = parts.find(p => p.type === 'weekday').value.toLowerCase();
+    
+    const currentTime = `${hour}:${minute}`;
+    const dayOfWeek = weekday;
     
     logger.info('Checking opening hours', {
       businessId,
