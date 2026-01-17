@@ -456,6 +456,40 @@ async function executeFunction(functionName, args, context) {
         };
       }
       
+      case 'clear_cart': {
+        await cartManager.clearCart(business.id, branchId, customerPhoneNumber);
+        
+        // Also clear delivery-related fields
+        const cart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
+        const { getMySQLConnection } = require('../../config/database');
+        const connection = await getMySQLConnection();
+        
+        try {
+          await connection.query(`
+            UPDATE orders 
+            SET delivery_type = NULL, 
+                location_address = NULL,
+                location_latitude = NULL,
+                location_longitude = NULL,
+                location_name = NULL,
+                scheduled_for = NULL,
+                notes = '__cart__',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `, [cart.id]);
+        } finally {
+          connection.release();
+        }
+        
+        const clearedCart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
+        
+        return {
+          success: true,
+          message: 'Your cart has been cleared. It\'s now empty and ready for new items.',
+          cart: clearedCart
+        };
+      }
+      
       case 'update_delivery_type': {
         const { deliveryType } = args;
         const updateData = { delivery_type: deliveryType };
