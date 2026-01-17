@@ -16,6 +16,7 @@ export default function Settings() {
     locationLatitude: '',
     locationLongitude: '',
     deliveryRadiusKm: '10',
+    deliveryPrice: '0',
     defaultLanguage: 'english',
     languages: ['english', 'arabic'],
     timezone: 'Asia/Beirut',
@@ -52,6 +53,7 @@ export default function Settings() {
         locationLatitude: user.location_latitude || '',
         locationLongitude: user.location_longitude || '',
         deliveryRadiusKm: user.delivery_radius_km || '10',
+        deliveryPrice: user.delivery_price || '0',
         defaultLanguage: user.default_language || 'english',
         languages: user.languages ? (typeof user.languages === 'string' ? JSON.parse(user.languages) : user.languages) : ['english', 'arabic'],
         timezone: user.timezone || 'Asia/Beirut',
@@ -397,6 +399,21 @@ export default function Settings() {
                   />
                   <p className="text-sm text-gray-500 mt-1">
                     Maximum distance you deliver to (in kilometers). Leave blank for unlimited.
+                  </p>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="label">Delivery Price</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="input"
+                    value={formData.deliveryPrice}
+                    onChange={(e) => setFormData({ ...formData, deliveryPrice: e.target.value })}
+                    placeholder="0.00"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    The price charged for delivery orders. This will be automatically added to the order total when customers choose delivery.
                   </p>
                 </div>
               </div>

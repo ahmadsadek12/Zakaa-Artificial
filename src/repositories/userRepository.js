@@ -130,7 +130,8 @@ async function update(userId, updateData) {
     locationId: 'location_id',
     locationLatitude: 'location_latitude',
     locationLongitude: 'location_longitude',
-    deliveryRadiusKm: 'delivery_radius_km'
+    deliveryRadiusKm: 'delivery_radius_km',
+    deliveryPrice: 'delivery_price'
   };
   
   const allowedFields = Object.values(fieldMap);

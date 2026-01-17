@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS users (
   location_latitude DECIMAL(10,8),
   location_longitude DECIMAL(11,8),
   delivery_radius_km DECIMAL(6,2) DEFAULT 10.00,
+  delivery_price DECIMAL(10,2) DEFAULT 0.00,
   
   FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL,
   FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE,

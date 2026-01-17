@@ -89,6 +89,11 @@ router.put('/me', [
     if (isNaN(value) || parseFloat(value) < 0) throw new Error('Delivery radius must be a positive number');
     return true;
   }),
+  body('deliveryPrice').optional({ checkFalsy: true }).custom((value) => {
+    if (!value || value === '') return true; // Allow empty
+    if (isNaN(value) || parseFloat(value) < 0) throw new Error('Delivery price must be a positive number');
+    return true;
+  }),
   body('whatsappPhoneNumberId').optional({ checkFalsy: true }).isString(),
   body('whatsappBusinessAccountId').optional({ checkFalsy: true }).isString(),
   body('whatsappAccessToken').optional({ checkFalsy: true }).isString(),
@@ -156,7 +161,7 @@ router.put('/me', [
   const allowedFields = [
     'businessName', 'businessType', 'email', 'contactPhoneNumber',
     'defaultLanguage', 'timezone', 'businessDescription',
-    'locationLatitude', 'locationLongitude', 'deliveryRadiusKm',
+    'locationLatitude', 'locationLongitude', 'deliveryRadiusKm', 'deliveryPrice',
     'whatsappPhoneNumberId', 'whatsappBusinessAccountId', 'whatsappAccessToken', 'telegramBotToken',
     'allowScheduledOrders', 'allowDelivery', 'allowTakeaway', 'allowOnSite',
     'chatbotEnabled'
