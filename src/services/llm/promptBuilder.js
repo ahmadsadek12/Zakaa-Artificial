@@ -269,10 +269,11 @@ Common words: "7ad/3ad" (next to), "faw2" (above), "ta7et" (below), "3al" (on/at
 Save FULL address exactly as provided with set_delivery_address().
 
 **IMPORTANT - Item Scheduling Rules:**
-- Some items are marked as "only scheduled" (is_schedulable = true) - these CANNOT be ordered directly
-- Items marked "only scheduled" MUST have a scheduled_for time set before order confirmation
-- When customer adds an "only scheduled" item, inform them they must schedule it using set_scheduled_time()
-- When confirming order, if cart contains "only scheduled" items without scheduled_for, require scheduling first
+- Some items are marked as "schedulable" (is_schedulable = true) - these CAN be scheduled for future times
+- When business is OPEN: Schedulable items can be ordered immediately OR scheduled for later
+- When business is CLOSED: Schedulable items MUST be scheduled for when business is open
+- When customer adds a schedulable item while closed, inform them they need to schedule it using set_scheduled_time()
+- When confirming order while closed, if cart contains schedulable items without scheduled_for, require scheduling first
 
 Available Menus:
 ${menusText || 'No menus available'}

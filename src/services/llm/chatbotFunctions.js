@@ -876,10 +876,16 @@ async function executeFunction(functionName, args, context) {
           };
         }
         
-        // Check if cart has items that are "only scheduled" (is_schedulable = true)
-        // These items MUST have a scheduled_for time before confirming
-        let hasOnlyScheduledItems = false;
-        let onlyScheduledItemNames = [];
+        // Check if business is currently open
+        const conversationManager = require('./conversationManager');
+        const openStatus = await conversationManager.isOpenNow(business.id, branchId);
+        
+        // Check if cart has items that are schedulable
+        // If business is open, schedulable items can be ordered immediately
+        // If business is closed, schedulable items must be scheduled
+        let hasSchedulableItems = false;
+        let schedulableItemNames = [];
+        let requiresScheduling = false;
         
         if (cart.items && cart.items.length > 0) {
           for (const cartItem of cart.items) {
@@ -891,26 +897,29 @@ async function executeFunction(functionName, args, context) {
             if (items && items.length > 0) {
               const item = items[0];
               // Explicitly check for is_schedulable = true (handles both boolean true and numeric 1 from MySQL)
-              // Only items with is_schedulable explicitly set to true/1 are "only scheduled"
-              // null, undefined, false, 0, '0', 'false' should all be treated as false
               const isSchedulable = item.is_schedulable === true 
                 || item.is_schedulable === 1 
                 || item.is_schedulable === '1' 
                 || item.is_schedulable === 'true';
               
               if (isSchedulable) {
-                hasOnlyScheduledItems = true;
-                onlyScheduledItemNames.push(item.name);
+                hasSchedulableItems = true;
+                schedulableItemNames.push(item.name);
+                
+                // Only require scheduling if business is closed
+                if (!openStatus.isOpen && !cart.scheduled_for) {
+                  requiresScheduling = true;
+                }
               }
             }
           }
         }
         
-        // If cart has "only scheduled" items, require scheduled_for time
-        if (hasOnlyScheduledItems && !cart.scheduled_for) {
+        // If business is closed and cart has schedulable items, require scheduled_for time
+        if (requiresScheduling) {
           return {
             success: false,
-            error: `Cannot confirm order: The following items can only be scheduled: ${onlyScheduledItemNames.join(', ')}. Please use the scheduling function to set a date and time first.`,
+            error: `We're currently closed. The following items need to be scheduled: ${schedulableItemNames.join(', ')}. Please use the scheduling function to set a date and time when we're open.`,
             requiresScheduling: true
           };
         }
