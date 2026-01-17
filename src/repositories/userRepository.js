@@ -139,6 +139,9 @@ async function update(userId, updateData) {
   const updates = [];
   const values = [];
   
+  const logger = require('../utils/logger');
+  logger.info('UserRepository.update called:', { userId, updateData });
+  
   for (const [key, value] of Object.entries(updateData)) {
     // Skip languages field - column doesn't exist, language preferences no longer stored
     if (key === 'languages') {
@@ -146,25 +149,45 @@ async function update(userId, updateData) {
     }
     
     const dbKey = fieldMap[key] || key.replace(/([A-Z])/g, '_$1').toLowerCase();
+    logger.info(`Processing field: ${key} -> ${dbKey}`, { 
+      key, 
+      dbKey, 
+      value, 
+      valueType: typeof value,
+      isAllowed: allowedFields.includes(dbKey),
+      isUndefined: value === undefined 
+    });
+    
     if (allowedFields.includes(dbKey) && value !== undefined) {
       updates.push(`${dbKey} = ?`);
       values.push(value);
+      logger.info(`Added to update: ${dbKey} = ${value}`);
+    } else {
+      logger.warn(`Field skipped: ${key} (dbKey: ${dbKey}, allowed: ${allowedFields.includes(dbKey)}, undefined: ${value === undefined})`);
     }
   }
   
   if (updates.length === 0) {
+    logger.warn('No updates to perform');
     return await findById(userId);
   }
   
   updates.push('updated_at = CURRENT_TIMESTAMP');
   values.push(userId);
   
-  await queryMySQL(
-    `UPDATE users SET ${updates.join(', ')} WHERE id = ?`,
-    values
-  );
+  const sql = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
+  logger.info('Executing SQL update:', { sql, values });
   
-  return await findById(userId);
+  await queryMySQL(sql, values);
+  
+  const updatedUser = await findById(userId);
+  logger.info('User after update:', { 
+    userId, 
+    business_name: updatedUser.business_name,
+    delivery_price: updatedUser.delivery_price 
+  });
+  
+  return updatedUser;
 }
 
 /**

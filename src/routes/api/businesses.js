@@ -168,8 +168,23 @@ router.put('/me', [
   ];
   // Note: 'languages' field removed - language preferences no longer stored
   
+  logger.info('Request body received:', { 
+    body: req.body,
+    businessName: req.body.businessName,
+    deliveryPrice: req.body.deliveryPrice,
+    businessNameType: typeof req.body.businessName,
+    deliveryPriceType: typeof req.body.deliveryPrice
+  });
+  
   for (const field of allowedFields) {
-    if (req.body[field] !== undefined) {
+    // Check if field exists in request body (including empty strings, but not undefined)
+    if (req.body.hasOwnProperty(field)) {
+      logger.info(`Processing field: ${field}`, { 
+        value: req.body[field], 
+        type: typeof req.body[field],
+        isUndefined: req.body[field] === undefined
+      });
+      
       // Normalize businessType: 'food and beverage' -> 'f & b' (case-insensitive)
       if (field === 'businessType') {
         const businessType = String(req.body[field]).toLowerCase().trim();
@@ -179,6 +194,11 @@ router.put('/me', [
           updateData[field] = req.body[field];
         }
       } 
+      // Handle businessName - allow empty strings but trim whitespace
+      else if (field === 'businessName') {
+        updateData[field] = req.body[field] ? String(req.body[field]).trim() : '';
+        logger.info(`Set businessName:`, { original: req.body[field], processed: updateData[field] });
+      }
       // Encrypt WhatsApp Access Token
       else if (field === 'whatsappAccessToken' && req.body[field]) {
         try {
@@ -207,6 +227,8 @@ router.put('/me', [
       else {
         updateData[field] = req.body[field];
       }
+    } else {
+      logger.debug(`Field ${field} not in request body`);
     }
   }
   
