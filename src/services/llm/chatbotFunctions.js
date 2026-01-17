@@ -1086,6 +1086,10 @@ async function executeFunction(functionName, args, context) {
         
         // If cart has "only scheduled" items without scheduled time AND business is closed, require scheduling
         if (requiresScheduling) {
+          logger.warn('confirm_order: Requires scheduling but business is closed', {
+            isOpen: openStatus.isOpen,
+            onlyScheduledItemNames
+          });
           return {
             success: false,
             error: `We're currently closed. The following items need to be scheduled: ${onlyScheduledItemNames.join(', ')}. Please use the scheduling function to set a date and time when we're open.`,
@@ -1151,12 +1155,24 @@ async function executeFunction(functionName, args, context) {
           }
         } else if (!openStatus.isOpen) {
           // Order is not scheduled and business is closed
+          logger.warn('confirm_order: Attempting to confirm unscheduled order while closed', {
+            isOpen: openStatus.isOpen,
+            reason: openStatus.reason,
+            hasScheduledTime: !!cart.scheduled_for
+          });
           return {
             success: false,
             error: `We're currently closed (${openStatus.reason}). Please schedule your order for when we're open.`,
             requiresScheduling: true
           };
         }
+        
+        // Business is open and order is not scheduled - allow immediate order
+        logger.info('confirm_order: Business is open, allowing immediate order confirmation', {
+          isOpen: openStatus.isOpen,
+          hasScheduledTime: !!cart.scheduled_for,
+          itemCount: cart.items?.length || 0
+        });
         
         // Show cart summary during checkout/confirmation
         const cartSummary = cartManager.getCartSummary(cart);
