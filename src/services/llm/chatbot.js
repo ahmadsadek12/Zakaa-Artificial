@@ -75,23 +75,46 @@ async function getConversationHistory(businessId, branchId, customerPhoneNumber,
     const messageLogs = await getMongoCollection('message_logs');
     if (!messageLogs) {
       // MongoDB not available - return empty array (conversation will work without history)
-      logger.debug('MongoDB not available, skipping conversation history');
+      logger.warn('MongoDB not available, skipping conversation history', {
+        businessId,
+        branchId,
+        customerPhoneNumber
+      });
       return [];
     }
     
-    // Get messages from the last 1 hour
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    // Get messages from the last 24 hours (increased from 1 hour to maintain context)
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    
+    const query = {
+      business_id: businessId,
+      branch_id: branchId || businessId,
+      customer_phone_number: customerPhoneNumber,
+      timestamp: { $gte: oneDayAgo }
+    };
+    
+    logger.info('Fetching conversation history', {
+      businessId,
+      branchId: branchId || businessId,
+      customerPhoneNumber,
+      query
+    });
     
     const allMessages = await messageLogs
-      .find({
-        business_id: businessId,
-        branch_id: branchId || businessId,
-        customer_phone_number: customerPhoneNumber,
-        timestamp: { $gte: oneHourAgo }
-      })
+      .find(query)
       .sort({ timestamp: 1 })
       .limit(limit)
       .toArray();
+    
+    logger.info('Conversation history retrieved', {
+      customerPhoneNumber,
+      messageCount: allMessages.length,
+      messages: allMessages.map(m => ({
+        direction: m.direction,
+        timestamp: m.timestamp,
+        textPreview: (m.text || '').substring(0, 50)
+      }))
+    });
     
     // Map to role and text
     const formattedMessages = allMessages.map(m => ({
@@ -101,8 +124,14 @@ async function getConversationHistory(businessId, branchId, customerPhoneNumber,
     
     return formattedMessages;
   } catch (error) {
-    // MongoDB unavailable or error - return empty array (chatbot will work without history)
-    logger.debug('Error getting conversation history (MongoDB may be unavailable):', error.message);
+    // MongoDB unavailable or error - log as warning so we can see it
+    logger.error('Error getting conversation history (MongoDB may be unavailable):', {
+      error: error.message,
+      stack: error.stack,
+      businessId,
+      branchId,
+      customerPhoneNumber
+    });
     return [];
   }
 }
