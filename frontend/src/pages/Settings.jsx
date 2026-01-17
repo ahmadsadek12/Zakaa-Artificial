@@ -53,7 +53,7 @@ export default function Settings() {
       console.log('User data received:', user)
       console.log('chatbot_enabled value:', user.chatbot_enabled, 'type:', typeof user.chatbot_enabled)
       setFormData({
-        businessName: user.business_name || '',
+        businessName: user.business_name || user.businessName || '',
         businessType: user.business_type || 'f & b',
         email: user.email || '',
         contactPhoneNumber: user.contact_phone_number || '',
@@ -61,7 +61,7 @@ export default function Settings() {
         locationLatitude: user.location_latitude || '',
         locationLongitude: user.location_longitude || '',
         deliveryRadiusKm: user.delivery_radius_km || '10',
-        deliveryPrice: user.delivery_price || '0',
+        deliveryPrice: user.delivery_price !== null && user.delivery_price !== undefined ? String(user.delivery_price) : '0',
         defaultLanguage: user.default_language || 'english',
         languages: user.languages ? (typeof user.languages === 'string' ? JSON.parse(user.languages) : user.languages) : ['english', 'arabic'],
         timezone: user.timezone || 'Asia/Beirut',

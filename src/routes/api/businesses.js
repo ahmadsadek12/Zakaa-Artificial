@@ -190,8 +190,19 @@ router.put('/me', [
       }
       // Convert numeric fields to proper types
       else if (field === 'deliveryPrice' || field === 'deliveryRadiusKm' || field === 'locationLatitude' || field === 'locationLongitude') {
-        const numValue = req.body[field] === '' || req.body[field] === null ? null : parseFloat(req.body[field]);
-        updateData[field] = isNaN(numValue) ? null : numValue;
+        // Allow 0 as a valid value, only treat empty string or null as null
+        if (req.body[field] === '' || req.body[field] === null || req.body[field] === undefined) {
+          updateData[field] = null;
+        } else {
+          const numValue = parseFloat(req.body[field]);
+          // Allow 0 as a valid value, only set to null if NaN
+          updateData[field] = isNaN(numValue) ? null : numValue;
+        }
+        logger.info(`Processing numeric field ${field}:`, { 
+          original: req.body[field], 
+          parsed: updateData[field],
+          type: typeof updateData[field]
+        });
       }
       else {
         updateData[field] = req.body[field];
@@ -199,10 +210,23 @@ router.put('/me', [
     }
   }
   
-  logger.info('Update data received:', { updateData, chatbotEnabled: updateData.chatbotEnabled, type: typeof updateData.chatbotEnabled });
+  logger.info('Update data received:', { 
+    updateData, 
+    chatbotEnabled: updateData.chatbotEnabled, 
+    type: typeof updateData.chatbotEnabled,
+    businessName: updateData.businessName,
+    deliveryPrice: updateData.deliveryPrice,
+    deliveryPriceType: typeof updateData.deliveryPrice
+  });
   
   try {
     const updatedUser = await userRepository.update(req.user.id, updateData);
+    logger.info('User updated in database:', {
+      userId: req.user.id,
+      business_name: updatedUser.business_name,
+      delivery_price: updatedUser.delivery_price,
+      delivery_price_type: typeof updatedUser.delivery_price
+    });
     delete updatedUser.password_hash;
     
     // If Telegram bot token was updated, automatically set up webhook
@@ -264,11 +288,23 @@ router.put('/me', [
       updatedUser.allow_on_site = Boolean(updatedUser.allow_on_site);
     }
   
-    logger.info(`Business profile updated: ${req.user.id}`, { chatbot_enabled: updatedUser.chatbot_enabled });
+    logger.info(`Business profile updated: ${req.user.id}`, { 
+      chatbot_enabled: updatedUser.chatbot_enabled,
+      business_name: updatedUser.business_name,
+      delivery_price: updatedUser.delivery_price
+    });
+    
+    // Ensure delivery_price is included in response (might be null, which is valid)
+    const responseData = {
+      ...updatedUser,
+      delivery_price: updatedUser.delivery_price !== null && updatedUser.delivery_price !== undefined 
+        ? updatedUser.delivery_price 
+        : 0
+    };
     
     res.json({
       success: true,
-      data: { business: updatedUser }
+      data: { business: responseData }
     });
   } catch (error) {
     logger.error('Error updating business profile:', {
