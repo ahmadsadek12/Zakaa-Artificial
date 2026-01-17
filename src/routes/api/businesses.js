@@ -188,6 +188,11 @@ router.put('/me', [
           logger.error('Failed to encrypt WhatsApp token:', error);
         }
       }
+      // Convert numeric fields to proper types
+      else if (field === 'deliveryPrice' || field === 'deliveryRadiusKm' || field === 'locationLatitude' || field === 'locationLongitude') {
+        const numValue = req.body[field] === '' || req.body[field] === null ? null : parseFloat(req.body[field]);
+        updateData[field] = isNaN(numValue) ? null : numValue;
+      }
       else {
         updateData[field] = req.body[field];
       }
