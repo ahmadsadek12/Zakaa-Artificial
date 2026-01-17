@@ -30,11 +30,11 @@ async function isOpenNow(businessId, branchId) {
     });
     
     const parts = formatter.formatToParts(now);
-    const hour = parts.find(p => p.type === 'hour').value;
-    const minute = parts.find(p => p.type === 'minute').value;
+    const currentHour = parts.find(p => p.type === 'hour').value;
+    const currentMinute = parts.find(p => p.type === 'minute').value;
     const weekday = parts.find(p => p.type === 'weekday').value.toLowerCase();
     
-    const currentTime = `${hour}:${minute}`;
+    const currentTime = `${currentHour}:${currentMinute}`;
     const dayOfWeek = weekday;
     
     logger.info('Checking opening hours', {
