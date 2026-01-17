@@ -100,6 +100,8 @@ CREATE TABLE IF NOT EXISTS items (
   duration_minutes INT NULL,  -- For other business types (entertainment, sports, etc.)
   quantity INT NULL,  -- Number of instances available (NULL = unlimited, 1 = single instance, >1 = multiple instances)
   is_reusable BOOLEAN DEFAULT true,  -- true = reusable/reservable (like football fields), false = consumable (like toys)
+  is_rental BOOLEAN DEFAULT false,  -- Items that require time slot booking
+  track_quantity BOOLEAN DEFAULT false,  -- Whether to enforce quantity limits (NULL quantity = unlimited)
   
   available_from TIME NULL,
   available_to TIME NULL,
@@ -135,6 +137,20 @@ CREATE TABLE IF NOT EXISTS item_ingredients (
   FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
   INDEX idx_item_id (item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Item Duration Tiers Table (For rental items with time-based pricing)
+CREATE TABLE IF NOT EXISTS item_duration_tiers (
+  id CHAR(36) PRIMARY KEY,
+  item_id CHAR(36) NOT NULL,
+  duration_minutes INT NOT NULL,
+  price DECIMAL(10,2) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  
+  FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
+  INDEX idx_item_id (item_id),
+  INDEX idx_duration (duration_minutes)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Orders Table (Transactional, Short-Lived)
 CREATE TABLE IF NOT EXISTS orders (
@@ -209,10 +225,19 @@ CREATE TABLE IF NOT EXISTS order_items (
   name_at_time VARCHAR(255) NOT NULL,
   notes TEXT NULL,
   
+  -- Rental booking fields
+  booking_date DATE NULL COMMENT 'Date of the rental booking',
+  booking_start_time TIME NULL COMMENT 'Start time of the rental',
+  booking_end_time TIME NULL COMMENT 'End time (calculated from start + duration)',
+  duration_tier_id CHAR(36) NULL COMMENT 'Reference to duration tier used',
+  
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
   FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE RESTRICT,
+  FOREIGN KEY (duration_tier_id) REFERENCES item_duration_tiers(id) ON DELETE SET NULL,
   INDEX idx_order_id (order_id),
-  INDEX idx_item_id (item_id)
+  INDEX idx_item_id (item_id),
+  INDEX idx_booking_date (booking_date),
+  INDEX idx_booking_times (booking_start_time, booking_end_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Order Status History Table (Track order status changes)
