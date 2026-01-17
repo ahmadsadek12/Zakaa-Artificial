@@ -147,7 +147,7 @@ export default function Settings() {
     
     try {
       const token = localStorage.getItem('token')
-      await axios.post(
+      const response = await axios.post(
         `${API_URL}/api/opening-hours`,
         {
           ownerType: 'business',
@@ -157,9 +157,14 @@ export default function Settings() {
         { headers: { Authorization: `Bearer ${token}` } }
       )
       
-      setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
-      alert('Opening hours saved successfully')
+      // Refetch opening hours to show saved data
+      if (response.data.success) {
+        await fetchOpeningHours()
+        setSaved(true)
+        setTimeout(() => setSaved(false), 3000)
+      } else {
+        alert('Failed to save opening hours')
+      }
     } catch (error) {
       console.error('Error saving opening hours:', error)
       alert(error.response?.data?.error?.message || 'Failed to save opening hours')
@@ -619,10 +624,17 @@ export default function Settings() {
         {activeTab === 'hours' && (
           <div className="card space-y-6">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Clock size={24} />
-                Opening Hours
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                  <Clock size={24} />
+                  Opening Hours
+                </h2>
+                {saved && (
+                  <div className="flex items-center gap-2 text-green-600 text-sm font-medium">
+                    <span>✓ Saved successfully!</span>
+                  </div>
+                )}
+              </div>
               <form onSubmit={handleOpeningHoursSubmit} className="space-y-4">
                 {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => {
                   // Ensure day exists in openingHours with default values
