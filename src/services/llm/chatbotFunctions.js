@@ -86,6 +86,18 @@ function getAvailableFunctions() {
     {
       type: 'function',
       function: {
+        name: 'clear_cart',
+        description: 'Clear/empty the entire cart. Remove all items and reset all prices to zero. Use this when customer wants to empty their cart, start over, or clear everything.',
+        parameters: {
+          type: 'object',
+          properties: {},
+          required: []
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
         name: 'update_delivery_type',
         description: 'Set the delivery type for the order. Use this when customer chooses takeaway, delivery, or on-site/dine-in.',
         parameters: {
