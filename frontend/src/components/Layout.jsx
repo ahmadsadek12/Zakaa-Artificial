@@ -117,12 +117,12 @@ export default function Layout({ children }) {
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
                 <span className="text-primary-700 font-semibold">
-                  {user?.business_name?.[0] || user?.email?.[0] || 'U'}
+                  {(user?.business_name || user?.businessName)?.[0] || user?.email?.[0] || 'U'}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">
-                  {user?.business_name || user?.email}
+                  {user?.business_name || user?.businessName || user?.email}
                 </p>
                 <p className="text-xs text-gray-500 truncate capitalize">
                   {user?.userType === 'admin' ? 'Admin' : user?.subscription_type === 'premium' ? 'Premium' : 'Standard'}
