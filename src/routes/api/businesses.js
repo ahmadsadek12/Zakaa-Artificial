@@ -58,10 +58,13 @@ router.put('/me', [
   body('businessName').optional({ checkFalsy: true }).notEmpty().withMessage('Business name cannot be empty'),
   body('businessType').optional().custom((value) => {
     if (!value) return true; // Optional field
-    // Accept both formats: 'f & b' or 'food and beverage'
-    const validTypes = ['f & b', 'food and beverage', 'services', 'products'];
+    // Match database enum: 'food and beverage', 'entertainment', 'sports', 'salons', 'clinics', 'rentals', 'other'
+    const validTypes = [
+      'food and beverage', 'food & beverage', 'f & b', // Accept old format for backward compatibility
+      'entertainment', 'sports', 'salons', 'clinics', 'rentals', 'other'
+    ];
     if (validTypes.includes(value.toLowerCase())) return true;
-    throw new Error('Invalid business type. Must be one of: f & b, services, products');
+    throw new Error('Invalid business type. Must be one of: food and beverage, entertainment, sports, salons, clinics, rentals, other');
   }),
   body('email').optional({ checkFalsy: true }).isEmail().withMessage('Valid email required'),
   body('contactPhoneNumber').optional({ checkFalsy: true }).isString().withMessage('Contact phone must be a string'),
