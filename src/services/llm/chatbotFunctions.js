@@ -1073,13 +1073,18 @@ async function executeFunction(functionName, args, context) {
           }
         }
         
-        // If cart has "only scheduled" items without scheduled time, require scheduling
+        // If cart has "only scheduled" items without scheduled time, check if business is open
+        // If business is open, allow immediate order. If closed, require scheduling.
         if (requiresScheduling) {
-          return {
-            success: false,
-            error: `The following items can only be scheduled: ${onlyScheduledItemNames.join(', ')}. Please use the scheduling function to set a date and time first.`,
-            requiresScheduling: true
-          };
+          if (!openStatus.isOpen) {
+            return {
+              success: false,
+              error: `We're currently closed. The following items need to be scheduled: ${onlyScheduledItemNames.join(', ')}. Please use the scheduling function to set a date and time when we're open.`,
+              requiresScheduling: true
+            };
+          }
+          // Business is open, so allow immediate order for "only scheduled" items
+          requiresScheduling = false;
         }
         
         // If order is scheduled, validate opening hours for that day
