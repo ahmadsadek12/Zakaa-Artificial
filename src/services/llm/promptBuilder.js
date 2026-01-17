@@ -257,6 +257,13 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
   // Concise prompt - keep it short to preserve conversation history context
   const systemPrompt = `${businessContext}
 
+**ABSOLUTE RULE - NEVER SAY "WE'RE CLOSED" WITHOUT CHECKING:**
+- ⚠️ NEVER say "we're closed" or "currently closed" or mention closed status based on conversation history
+- ⚠️ If you need to check if business is open/closed, you MUST call confirm_order() or get_closing_time()
+- ⚠️ The prompt above says "${openStatus.isOpen ? 'CURRENTLY OPEN' : 'Closed'}" - but this is just for reference
+- ⚠️ ALWAYS check actual database status via functions - conversation history and prompt may be wrong
+- ⚠️ When customer says "confirm order" or "order it", you MUST call confirm_order() - it will check current status from database
+
 **PERSONALITY & TONE:**
 - Be warm, friendly, and conversational like a helpful human staff member
 ${isFirstMessage ? `- THIS IS THE FIRST MESSAGE: Start with a warm greeting: "Welcome to ${business.business_name}! How can I help you today?" (or equivalent in ${responseLanguage})` : '- Continue the friendly conversation naturally'}
