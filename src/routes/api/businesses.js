@@ -185,11 +185,12 @@ router.put('/me', [
         isUndefined: req.body[field] === undefined
       });
       
-      // Normalize businessType: 'food and beverage' -> 'f & b' (case-insensitive)
+      // Normalize businessType: keep as-is (database uses 'food and beverage', not 'f & b')
       if (field === 'businessType') {
         const businessType = String(req.body[field]).toLowerCase().trim();
-        if (businessType === 'food and beverage' || businessType === 'food & beverage') {
-          updateData[field] = 'f & b';
+        // Map old 'f & b' to 'food and beverage' for backward compatibility
+        if (businessType === 'f & b' || businessType === 'food & beverage') {
+          updateData[field] = 'food and beverage';
         } else {
           updateData[field] = req.body[field];
         }
@@ -209,12 +210,12 @@ router.put('/me', [
         }
       }
       // Convert numeric fields to proper types
-      else if (field === 'deliveryPrice' || field === 'deliveryRadiusKm' || field === 'locationLatitude' || field === 'locationLongitude') {
+      else if (field === 'deliveryPrice' || field === 'deliveryRadiusKm' || field === 'locationLatitude' || field === 'locationLongitude' || field === 'lastOrderBeforeClosingMinutes') {
         // Allow 0 as a valid value, only treat empty string or null as null
         if (req.body[field] === '' || req.body[field] === null || req.body[field] === undefined) {
           updateData[field] = null;
         } else {
-          const numValue = parseFloat(req.body[field]);
+          const numValue = parseInt(req.body[field], 10); // Use parseInt for minutes (integer)
           // Allow 0 as a valid value, only set to null if NaN
           updateData[field] = isNaN(numValue) ? null : numValue;
         }

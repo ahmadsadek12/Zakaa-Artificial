@@ -9,7 +9,8 @@ export default function Settings() {
   const { user, fetchUser } = useAuth()
   const [formData, setFormData] = useState({
     businessName: '',
-    businessType: 'f & b',
+    businessType: 'food and beverage',
+    lastOrderBeforeClosingMinutes: '30',
     email: '',
     contactPhoneNumber: '',
     businessDescription: '',
@@ -29,6 +30,15 @@ export default function Settings() {
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
   const [activeTab, setActiveTab] = useState('business')
+  const [openingHours, setOpeningHours] = useState({
+    monday: { open: '', close: '', closed: false },
+    tuesday: { open: '', close: '', closed: false },
+    wednesday: { open: '', close: '', closed: false },
+    thursday: { open: '', close: '', closed: false },
+    friday: { open: '', close: '', closed: false },
+    saturday: { open: '', close: '', closed: false },
+    sunday: { open: '', close: '', closed: false }
+  })
   const [passwordData, setPasswordData] = useState({
     current_password: '',
     new_password: '',
@@ -54,7 +64,8 @@ export default function Settings() {
       console.log('chatbot_enabled value:', user.chatbot_enabled, 'type:', typeof user.chatbot_enabled)
       setFormData({
         businessName: user.business_name || user.businessName || '',
-        businessType: user.business_type || 'f & b',
+        businessType: user.business_type || (user.business_type === 'f & b' ? 'food and beverage' : 'food and beverage'),
+        lastOrderBeforeClosingMinutes: user.last_order_before_closing_minutes || '30',
         email: user.email || '',
         contactPhoneNumber: user.contact_phone_number || '',
         businessDescription: user.business_description || '',
@@ -71,8 +82,65 @@ export default function Settings() {
         telegramBotToken: user.telegram_bot_token || '',
         chatbotEnabled: user.chatbot_enabled !== undefined ? user.chatbot_enabled : true,
       })
+      
+      // Fetch opening hours
+      fetchOpeningHours()
     }
   }, [user])
+  
+  const fetchOpeningHours = async () => {
+    if (!user) return
+    
+    try {
+      const token = localStorage.getItem('token')
+      const response = await axios.get(
+        `${API_URL}/api/opening-hours?ownerType=business&ownerId=${user.id}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      
+      if (response.data.success && response.data.data.openingHours) {
+        const hours = {}
+        response.data.data.openingHours.forEach(h => {
+          hours[h.day_of_week] = {
+            open: h.open_time ? h.open_time.substring(0, 5) : '',
+            close: h.close_time ? h.close_time.substring(0, 5) : '',
+            closed: h.is_closed || false
+          }
+        })
+        setOpeningHours(hours)
+      }
+    } catch (error) {
+      console.error('Error fetching opening hours:', error)
+      // Don't show error if no opening hours exist yet
+    }
+  }
+  
+  const handleOpeningHoursSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    
+    try {
+      const token = localStorage.getItem('token')
+      await axios.post(
+        `${API_URL}/api/opening-hours`,
+        {
+          ownerType: 'business',
+          ownerId: user.id,
+          hours: openingHours
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+      alert('Opening hours saved successfully')
+    } catch (error) {
+      console.error('Error saving opening hours:', error)
+      alert(error.response?.data?.error?.message || 'Failed to save opening hours')
+    } finally {
+      setLoading(false)
+    }
+  }
   
   const handleLanguageToggle = (lang) => {
     setFormData(prev => ({
@@ -254,6 +322,17 @@ export default function Settings() {
             Location & Delivery
           </button>
           <button
+            onClick={() => setActiveTab('hours')}
+            className={`${
+              activeTab === 'hours'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2`}
+          >
+            <Clock size={18} />
+            Opening Hours
+          </button>
+          <button
             onClick={() => setActiveTab('bot')}
             className={`${
               activeTab === 'bot'
@@ -314,9 +393,13 @@ export default function Settings() {
                     onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
                     required
                   >
-                    <option value="f & b">F & B (Food & Beverage)</option>
-                    <option value="services">Services</option>
-                    <option value="products">Products</option>
+                    <option value="food and beverage">Food & Beverage</option>
+                    <option value="entertainment">Entertainment</option>
+                    <option value="sports">Sports</option>
+                    <option value="salons">Salons</option>
+                    <option value="clinics">Clinics</option>
+                    <option value="rentals">Rentals</option>
+                    <option value="other">Other</option>
                   </select>
                 </div>
                 <div>
@@ -476,6 +559,21 @@ export default function Settings() {
                     The price charged for delivery orders. This will be automatically added to the order total when customers choose delivery.
                   </p>
                 </div>
+                <div className="md:col-span-2">
+                  <label className="label">Last Order Before Closing (minutes)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="1440"
+                    className="input"
+                    value={formData.lastOrderBeforeClosingMinutes}
+                    onChange={(e) => setFormData({ ...formData, lastOrderBeforeClosingMinutes: e.target.value })}
+                    placeholder="30"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    How many minutes before closing time should you stop accepting new orders? (e.g., 30 = stop accepting orders 30 minutes before closing)
+                  </p>
+                </div>
               </div>
               
               <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -487,6 +585,83 @@ export default function Settings() {
                   <li>Paste here (format: latitude, longitude)</li>
                 </ol>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Opening Hours Tab */}
+        {activeTab === 'hours' && (
+          <div className="card space-y-6">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Clock size={24} />
+                Opening Hours
+              </h2>
+              <form onSubmit={handleOpeningHoursSubmit} className="space-y-4">
+                {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
+                  <div key={day} className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg">
+                    <div className="w-24">
+                      <label className="font-medium text-gray-900 capitalize">{day}</label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={openingHours[day].closed}
+                        onChange={(e) => {
+                          setOpeningHours(prev => ({
+                            ...prev,
+                            [day]: { ...prev[day], closed: e.target.checked }
+                          }))
+                        }}
+                        className="rounded"
+                      />
+                      <span className="text-sm text-gray-600">Closed</span>
+                    </div>
+                    {!openingHours[day].closed && (
+                      <>
+                        <div className="flex-1">
+                          <label className="text-sm text-gray-600 mb-1 block">Open Time</label>
+                          <input
+                            type="time"
+                            className="input"
+                            value={openingHours[day].open}
+                            onChange={(e) => {
+                              setOpeningHours(prev => ({
+                                ...prev,
+                                [day]: { ...prev[day], open: e.target.value }
+                              }))
+                            }}
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-sm text-gray-600 mb-1 block">Close Time</label>
+                          <input
+                            type="time"
+                            className="input"
+                            value={openingHours[day].close}
+                            onChange={(e) => {
+                              setOpeningHours(prev => ({
+                                ...prev,
+                                [day]: { ...prev[day], close: e.target.value }
+                              }))
+                            }}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+                <div className="flex justify-end pt-4 border-t border-gray-200">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="btn btn-primary flex items-center gap-2"
+                  >
+                    <Save size={18} />
+                    {loading ? 'Saving...' : 'Save Opening Hours'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

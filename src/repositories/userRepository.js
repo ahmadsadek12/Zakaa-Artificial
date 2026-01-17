@@ -111,6 +111,8 @@ async function update(userId, updateData) {
     locationLatitude: 'location_latitude',
     locationLongitude: 'location_longitude',
     deliveryRadiusKm: 'delivery_radius_km',
+    deliveryPrice: 'delivery_price',
+    lastOrderBeforeClosingMinutes: 'last_order_before_closing_minutes',
     subscriptionType: 'subscription_type',
     subscriptionPrice: 'subscription_price',
     subscriptionStatus: 'subscription_status',
