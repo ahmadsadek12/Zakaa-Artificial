@@ -202,6 +202,24 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
     // Businesses can create orders directly without requiring branches
     // insertBranchId logic kept for backward compatibility but not used in INSERT
     
+    // Get business type to set default delivery type
+    // F&B businesses default to 'delivery', others default to 'on_site'
+    let defaultDeliveryType = 'on_site'; // Default for non-F&B
+    try {
+      const [businesses] = await connection.query(
+        'SELECT business_type FROM users WHERE id = ?',
+        [businessId]
+      );
+      if (businesses.length > 0) {
+        const businessType = businesses[0].business_type;
+        if (businessType === 'f & b' || businessType === 'f&b') {
+          defaultDeliveryType = 'delivery'; // F&B defaults to delivery
+        }
+      }
+    } catch (err) {
+      logger.warn('Could not fetch business type for default delivery type', { error: err.message });
+    }
+    
     // Insert with user_id (branch_id column removed - no longer needed)
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:202',message:'Before INSERT into orders',data:{orderId,businessId,insertUserId,customerPhoneNumber},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'B'})}).catch(()=>{});
@@ -211,8 +229,8 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
         INSERT INTO orders (
           id, business_id, user_id, customer_phone_number,
           status, subtotal, delivery_price, total, delivery_type, notes
-        ) VALUES (?, ?, ?, ?, 'cart', 0, 0, 0, 'takeaway', '__cart__')
-      `, [orderId, businessId, insertUserId, customerPhoneNumber]);
+        ) VALUES (?, ?, ?, ?, 'cart', 0, 0, 0, ?, '__cart__')
+      `, [orderId, businessId, insertUserId, customerPhoneNumber, defaultDeliveryType]);
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:173',message:'INSERT successful',data:{orderId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
       // #endregion
@@ -240,7 +258,7 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
       subtotal: 0,
       delivery_price: 0,
       total: 0,
-      delivery_type: 'takeaway',
+      delivery_type: defaultDeliveryType,
       scheduled_for: null,
       delivery_address_location_id: null,
       customer_name: null,

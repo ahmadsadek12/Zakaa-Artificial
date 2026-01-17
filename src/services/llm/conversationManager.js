@@ -377,7 +377,7 @@ async function processChatbotResponse({
             cart.customer_name,
             cart.notes && cart.notes !== '__cart__' ? cart.notes : null,
             cart.scheduled_for ? new Date(cart.scheduled_for) : null,
-            cart.delivery_type || 'takeaway',
+            cart.delivery_type || null, // Use cart delivery_type (which defaults based on business type)
             cart.delivery_price || 0,
             cart.id
           ]);

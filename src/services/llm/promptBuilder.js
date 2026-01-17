@@ -220,12 +220,13 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
   businessContext += `\n\n**CURRENT DATE AND TIME (${businessTimezone}):** ${currentDateTime}`;
   businessContext += `\nUse this as the reference for "today", "tomorrow", "now", and scheduling.`;
   
-  // Add business-type-specific context
+  // Add business-type-specific context - BE VERY EXPLICIT ABOUT OPEN STATUS
   if (isFoodAndBeverage) {
     if (openStatus.isOpen) {
-      businessContext += ` We're currently open and ready to serve you!`;
+      businessContext += `\n\n**IMPORTANT: We are CURRENTLY OPEN and accepting orders RIGHT NOW.**`;
+      businessContext += `\nCustomers can place orders for immediate fulfillment.`;
     } else {
-      businessContext += ` We're currently closed (${openStatus.reason}), but you can still place orders for scheduled delivery/pickup.`;
+      businessContext += `\n\n**NOTE: We are currently closed (${openStatus.reason}), but customers can still place orders for scheduled delivery/pickup.**`;
     }
     
     if (business.allow_scheduled_orders) {
@@ -233,9 +234,17 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
     }
   } else if (isServices) {
     businessContext += ` We offer services that can be scheduled at your convenience.`;
-    businessContext += ` Status: ${openStatus.isOpen ? 'Open and ready to help' : `Closed (${openStatus.reason})`}`;
+    if (openStatus.isOpen) {
+      businessContext += `\n\n**IMPORTANT: We are CURRENTLY OPEN and accepting bookings RIGHT NOW.**`;
+    } else {
+      businessContext += `\n**NOTE: Status: Closed (${openStatus.reason})**`;
+    }
   } else {
-    businessContext += ` Status: ${openStatus.isOpen ? 'Open and ready to help' : `Closed (${openStatus.reason})`}`;
+    if (openStatus.isOpen) {
+      businessContext += `\n\n**IMPORTANT: We are CURRENTLY OPEN and ready to help.**`;
+    } else {
+      businessContext += `\n**NOTE: Status: Closed (${openStatus.reason})**`;
+    }
   }
   
   // Language instruction map
