@@ -19,7 +19,6 @@ export default function Items() {
     ingredients: '',
     price: '',
     cost: '',
-    preparationTimeMinutes: '',
     durationMinutes: '',
     quantity: '',
     isReusable: true,
