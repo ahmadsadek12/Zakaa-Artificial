@@ -198,8 +198,27 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
     french: 'Bonjour'
   };
   
+  // Get current date and time in business timezone
+  const businessTimezone = business.timezone || 'Asia/Beirut';
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: businessTimezone,
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+  const currentDateTime = formatter.format(now);
+  
   // Build business-specific context with welcoming tone
   let businessContext = `You are a friendly and helpful AI assistant for ${business.business_name}, a ${businessTypeContext}.`;
+  
+  // Add current date/time context
+  businessContext += `\n\n**CURRENT DATE AND TIME (${businessTimezone}):** ${currentDateTime}`;
+  businessContext += `\nUse this as the reference for "today", "tomorrow", "now", and scheduling.`;
   
   // Add business-type-specific context
   if (isFoodAndBeverage) {
