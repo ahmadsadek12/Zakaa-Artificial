@@ -482,31 +482,42 @@ async function executeFunction(functionName, args, context) {
         logger.info('Cart BEFORE address update', { 
           cartId: cartBefore?.id, 
           itemCount: cartBefore?.items?.length || 0,
-          hasItems: cartBefore?.items && cartBefore.items.length > 0
+          hasItems: cartBefore?.items && cartBefore.items.length > 0,
+          currentDeliveryType: cartBefore?.delivery_type
         });
+        
+        // Automatically set delivery_type to 'delivery' when address is provided
+        const updateData = { 
+          location_address: address,
+          delivery_type: 'delivery' // Automatically set to delivery when address is provided
+        };
+        
+        // Set delivery price if business has one configured
+        if (business.delivery_price) {
+          updateData.delivery_price = parseFloat(business.delivery_price);
+        }
         
         const cart = await cartManager.updateCart(
           business.id,
           branchId,
           customerPhoneNumber,
-          { 
-            location_address: address
-            // Don't update notes - it must stay as '__cart__' to identify the cart
-          }
+          updateData
         );
         
         logger.info('Cart AFTER address update', { 
           cartId: cart?.id,
           itemCount: cart?.items?.length || 0,
           hasItems: cart?.items && cart.items.length > 0,
-          address: cart?.location_address
+          address: cart?.location_address,
+          deliveryType: cart?.delivery_type,
+          deliveryPrice: cart?.delivery_price
         });
         
-        logger.info('Delivery address set via function call', { address });
+        logger.info('Delivery address set via function call', { address, deliveryType: 'delivery' });
         
         return {
           success: true,
-          message: `Delivery address saved: ${address}`,
+          message: `Delivery address saved: ${address}. Delivery type set to delivery.`,
           cart: cart
         };
       }

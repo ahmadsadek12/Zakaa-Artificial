@@ -16,49 +16,69 @@ async function isOpenNow(businessId, branchId) {
     const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][now.getDay()];
     const currentTime = now.toTimeString().substring(0, 5); // HH:MM format
     
-    // Check opening hours
-    const hours = await queryMySQL(`
-      SELECT * FROM opening_hours 
-      WHERE owner_type = ? AND owner_id = ? AND day_of_week = ?
-    `, ['branch', branchId, dayOfWeek]);
+    logger.info('Checking opening hours', {
+      businessId,
+      branchId,
+      dayOfWeek,
+      currentTime
+    });
     
+    // Check branch hours first if branchId is different from businessId
+    let hours = [];
+    if (branchId && branchId !== businessId) {
+      hours = await queryMySQL(`
+        SELECT * FROM opening_hours 
+        WHERE owner_type = ? AND owner_id = ? AND day_of_week = ?
+      `, ['branch', branchId, dayOfWeek]);
+    }
+    
+    // If no branch hours, check business-level hours
     if (hours.length === 0) {
-      // Check business-level hours
-      const businessHours = await queryMySQL(`
+      hours = await queryMySQL(`
         SELECT * FROM opening_hours 
         WHERE owner_type = ? AND owner_id = ? AND day_of_week = ?
       `, ['business', businessId, dayOfWeek]);
-      
-      if (businessHours.length === 0) {
-        return { isOpen: false, reason: 'No opening hours configured' };
-      }
-      
-      const hour = businessHours[0];
-      if (hour.is_closed) {
-        return { isOpen: false, reason: 'Closed today' };
-      }
-      
-      if (!hour.open_time || !hour.close_time) {
-        return { isOpen: true }; // Assume open if no specific hours
-      }
-      
-      const isOpen = currentTime >= hour.open_time.substring(0, 5) && currentTime <= hour.close_time.substring(0, 5);
-      return {
-        isOpen,
-        reason: isOpen ? 'Open' : `Closed. Hours: ${hour.open_time.substring(0, 5)} - ${hour.close_time.substring(0, 5)}`
-      };
+    }
+    
+    if (hours.length === 0) {
+      logger.warn('No opening hours found', { businessId, branchId, dayOfWeek });
+      return { isOpen: false, reason: 'No opening hours configured' };
     }
     
     const hour = hours[0];
     if (hour.is_closed) {
+      logger.info('Business is closed today', { dayOfWeek, is_closed: hour.is_closed });
       return { isOpen: false, reason: 'Closed today' };
     }
     
     if (!hour.open_time || !hour.close_time) {
-      return { isOpen: true };
+      logger.info('No specific hours set, assuming open', { dayOfWeek });
+      return { isOpen: true }; // Assume open if no specific hours
     }
     
-    const isOpen = currentTime >= hour.open_time.substring(0, 5) && currentTime <= hour.close_time.substring(0, 5);
+    // Convert times to minutes for accurate comparison
+    const timeToMinutes = (timeStr) => {
+      const [hours, minutes] = timeStr.substring(0, 5).split(':').map(Number);
+      return hours * 60 + minutes;
+    };
+    
+    const currentMinutes = timeToMinutes(currentTime);
+    const openMinutes = timeToMinutes(hour.open_time);
+    const closeMinutes = timeToMinutes(hour.close_time);
+    
+    const isOpen = currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
+    
+    logger.info('Opening hours check result', {
+      dayOfWeek,
+      currentTime,
+      openTime: hour.open_time.substring(0, 5),
+      closeTime: hour.close_time.substring(0, 5),
+      isOpen,
+      currentMinutes,
+      openMinutes,
+      closeMinutes
+    });
+    
     return {
       isOpen,
       reason: isOpen ? 'Open' : `Closed. Hours: ${hour.open_time.substring(0, 5)} - ${hour.close_time.substring(0, 5)}`

@@ -283,7 +283,7 @@ Rules:
 - Use send_menu_image() when customer asks to see menu images, wants to see pictures of the menu, or requests menu photos
 - Use send_item_image() when customer asks to see a picture of an item
 - Use add_item_to_cart() when customer wants items/services
-- Use set_delivery_address() for delivery addresses
+- Use set_delivery_address() for delivery addresses - this will automatically set delivery type to 'delivery'
 ${(isFoodAndBeverage && business.allow_scheduled_orders) || isServices ? '- Use set_scheduled_time() when customer wants to schedule (parse natural language)\n' : ''}- Use confirm_order() only when: cart has items + delivery type set + address (if delivery)${(isFoodAndBeverage && business.allow_scheduled_orders) || isServices ? ' + scheduled time (if scheduling or if cart has "only scheduled" items)' : ' + scheduled time (if cart has "only scheduled" items)'}
 - Keep responses friendly and conversational`;
 
