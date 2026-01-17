@@ -93,7 +93,15 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
     `, [order.id]);
     
     // If notes contains '__cart__', treat it as a cart (status='cart' for API)
-    const isCart = order.notes === '__cart__';
+    // Notes can be '__cart__' or '__cart__\nNOTES: {customer notes}'
+    const isCart = order.notes && (order.notes === '__cart__' || order.notes.startsWith('__cart__'));
+    
+    // Extract customer notes if present (format: '__cart__\nNOTES: {notes}')
+    let customerNotes = null;
+    if (order.notes && order.notes.startsWith('__cart__\nNOTES: ')) {
+      customerNotes = order.notes.replace('__cart__\nNOTES: ', '').trim();
+    }
+    
     return {
       id: order.id,
       business_id: order.business_id,
@@ -119,7 +127,7 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
       location_longitude: order.location_longitude,
       location_name: order.location_name,
       customer_name: order.customer_name,
-      notes: order.notes,
+      notes: customerNotes || (order.notes === '__cart__' ? null : order.notes), // Return customer notes or original notes if not cart
       created_at: order.created_at,
       updated_at: order.updated_at
     };

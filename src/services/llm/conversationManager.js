@@ -362,14 +362,15 @@ async function processChatbotResponse({
               order_source = ?,
               customer_name = COALESCE(?, customer_name),
               notes = CASE 
-                WHEN notes = '__cart__' THEN NULL 
+                WHEN notes = '__cart__' THEN NULL
+                WHEN notes LIKE '__cart__\nNOTES: %' THEN SUBSTRING(notes, LENGTH('__cart__\nNOTES: ') + 1)
                 ELSE COALESCE(?, notes) 
               END,
               scheduled_for = COALESCE(?, scheduled_for),
               delivery_type = COALESCE(?, delivery_type),
               delivery_price = COALESCE(?, delivery_price),
               updated_at = CURRENT_TIMESTAMP
-            WHERE id = ? AND status = 'cart' AND notes = '__cart__'
+            WHERE id = ? AND status = 'cart' AND (notes = '__cart__' OR notes LIKE '__cart__%')
           `, [
             customerPhoneNumber,
             language || 'english',

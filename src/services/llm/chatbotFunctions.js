@@ -302,6 +302,23 @@ function getAvailableFunctions() {
           required: []
         }
       }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'set_order_notes',
+        description: 'Add or update special instructions/notes for the order (e.g., "no tomato", "no garlic", "extra spicy", "please make it mild"). Use this when customer wants to add special instructions or notes to their order.',
+        parameters: {
+          type: 'object',
+          properties: {
+            notes: {
+              type: 'string',
+              description: 'Order notes or special instructions from the customer (e.g., "no tomato, no garlic", "extra spicy", "please make it mild", "no onions")'
+            }
+          },
+          required: ['notes']
+        }
+      }
     }
   ];
 }
