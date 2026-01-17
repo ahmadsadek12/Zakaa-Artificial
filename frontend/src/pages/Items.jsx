@@ -82,12 +82,10 @@ export default function Items() {
         }
       }
       
-      // Quantity field (for reservation-based items) - always send it to allow clearing (empty = unlimited)
-      if (businessType !== 'f & b') {
-        formDataToSend.append('quantity', formData.quantity || '')
-        // FormData converts boolean to string, so we explicitly convert to string
-        formDataToSend.append('isReusable', formData.isReusable ? 'true' : 'false')
-      }
+      // Quantity field (for all business types) - always send it to allow clearing (empty = unlimited)
+      formDataToSend.append('quantity', formData.quantity || '')
+      // FormData converts boolean to string, so we explicitly convert to string
+      formDataToSend.append('isReusable', formData.isReusable ? 'true' : 'false')
       
       // Scheduling fields (for all businesses)
       formDataToSend.append('itemType', formData.itemType)
@@ -458,41 +456,39 @@ export default function Items() {
                 )}
               </div>
 
-              {/* Quantity (for reservation-based items) */}
-              {businessType !== 'f & b' && (
-                <div className="border-b border-gray-200 pb-4">
-                  <div className="space-y-4">
-                    <div>
-                      <label className="label">Quantity (Optional)</label>
+              {/* Quantity (for all business types) */}
+              <div className="border-b border-gray-200 pb-4">
+                <div className="space-y-4">
+                  <div>
+                    <label className="label">Quantity (Optional)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="input"
+                      placeholder="Leave empty for unlimited"
+                      value={formData.quantity}
+                      onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                    />
+                    <p className="text-sm text-gray-500 mt-1">
+                      1 = single instance, &gt;1 = multiple instances, empty = unlimited
+                    </p>
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-2 cursor-pointer">
                       <input
-                        type="number"
-                        min="1"
-                        className="input"
-                        placeholder="Leave empty for unlimited"
-                        value={formData.quantity}
-                        onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                        type="checkbox"
+                        checked={formData.isReusable}
+                        onChange={(e) => setFormData({ ...formData, isReusable: e.target.checked })}
+                        className="rounded"
                       />
-                      <p className="text-sm text-gray-500 mt-1">
-                        1 = single instance, &gt;1 = multiple instances, empty = unlimited
-                      </p>
-                    </div>
-                    <div>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={formData.isReusable}
-                          onChange={(e) => setFormData({ ...formData, isReusable: e.target.checked })}
-                          className="rounded"
-                        />
-                        <span className="text-sm">Is Reusable</span>
-                      </label>
-                      <p className="text-sm text-gray-500 mt-1">
+                      <span className="text-sm">Is Reusable</span>
+                    </label>
+                    <p className="text-sm text-gray-500 mt-1">
                         Reusable items (like football fields) become available again after reservation ends. Consumable items (like toys) are permanently used.
                       </p>
                     </div>
                   </div>
                 </div>
-              )}
 
               {/* Item Type & Scheduling */}
               <div className="border-b border-gray-200 pb-4">
