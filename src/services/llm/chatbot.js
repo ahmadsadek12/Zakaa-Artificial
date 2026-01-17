@@ -212,8 +212,9 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
       { role: 'system', content: prompt.system }
     ];
     
-    // Add conversation history
-    for (const msg of messageHistory.slice(-10)) {
+    // Add conversation history (REDUCED - only for conversational flow, NOT for business data)
+    // Limit to 5 messages to prevent outdated business info from influencing responses
+    for (const msg of messageHistory.slice(-5)) {
       messages.push({
         role: msg.role === 'customer' ? 'user' : 'assistant',
         content: msg.text
