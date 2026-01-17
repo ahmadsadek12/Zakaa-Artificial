@@ -304,17 +304,36 @@ router.put('/me/password', [
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    const errorMessages = errors.array().map(e => e.msg || e.message).join(', ');
+    logger.warn('Password change validation failed', { 
+      userId: req.user.id, 
+      errors: errors.array() 
+    });
     return res.status(400).json({
       success: false,
-      error: { message: 'Validation failed', errors: errors.array() }
+      error: { 
+        message: errorMessages || 'Validation failed',
+        errors: errors.array().map(e => ({
+          field: e.path || e.param,
+          message: e.msg || e.message
+        }))
+      }
     });
   }
 
   const { current_password, new_password } = req.body;
   
+  if (!current_password || !new_password) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Current password and new password are required' }
+    });
+  }
+  
   // Get current password hash
-  const users = await userRepository.findById(req.user.id);
-  if (!users || !users.password_hash) {
+  const user = await userRepository.findById(req.user.id);
+  if (!user || !user.password_hash) {
+    logger.warn('Password change failed: user not found or no password set', { userId: req.user.id });
     return res.status(404).json({
       success: false,
       error: { message: 'User not found or has no password set' }
@@ -322,9 +341,10 @@ router.put('/me/password', [
   }
   
   // Verify current password
-  const isValid = await bcrypt.compare(current_password, users.password_hash);
+  const isValid = await bcrypt.compare(current_password, user.password_hash);
   
   if (!isValid) {
+    logger.warn('Password change failed: incorrect current password', { userId: req.user.id });
     return res.status(401).json({
       success: false,
       error: { message: 'Current password is incorrect' }
@@ -332,14 +352,21 @@ router.put('/me/password', [
   }
   
   // Update password
-  await userRepository.updatePassword(req.user.id, new_password);
-  
-  logger.info(`Business password changed: ${req.user.id}`);
-  
-  res.json({
-    success: true,
-    data: { message: 'Password updated successfully' }
-  });
+  try {
+    await userRepository.updatePassword(req.user.id, new_password);
+    logger.info(`Business password changed successfully: ${req.user.id}`);
+    
+    res.json({
+      success: true,
+      data: { message: 'Password updated successfully' }
+    });
+  } catch (error) {
+    logger.error('Error updating password:', { userId: req.user.id, error: error.message });
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to update password. Please try again.' }
+    });
+  }
 }));
 
 /**
