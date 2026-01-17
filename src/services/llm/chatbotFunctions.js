@@ -307,7 +307,7 @@ function getAvailableFunctions() {
       type: 'function',
       function: {
         name: 'set_order_notes',
-        description: 'Add or update special instructions/notes for the order (e.g., "no tomato", "no garlic", "extra spicy", "please make it mild"). Use this when customer wants to add special instructions or notes to their order.',
+        description: 'CRITICAL: Add or update special instructions/notes for the order. Call this IMMEDIATELY when customer mentions ANY special requests, modifications, or notes (e.g., "no tomato", "no garlic", "extra spicy", "please make it mild", "without onions", "remove pickles", "make it less spicy", "add cheese"). This is how you save customer\'s special instructions - ALWAYS call this function when they mention changes to their order.',
         parameters: {
           type: 'object',
           properties: {
