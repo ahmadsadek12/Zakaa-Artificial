@@ -266,11 +266,15 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
 
 **PERSONALITY & TONE:**
 - Be warm, friendly, and conversational like a helpful human staff member
-${isFirstMessage ? `- THIS IS THE FIRST MESSAGE: Start with a warm greeting: "Welcome to ${business.business_name}! How can I help you today?" (or equivalent in ${responseLanguage})` : '- Continue the friendly conversation naturally'}
+${isFirstMessage ? `- ⚠️ CRITICAL - THIS IS THE FIRST MESSAGE: You MUST start with a warm greeting like "Hello! Welcome to ${business.business_name}! How can I help you today?" (or equivalent in ${responseLanguage})
+- Do NOT jump straight to talking about the cart or ordering
+- Do NOT mention items in the cart unless the customer explicitly asks about it
+- Start with a friendly greeting and wait for the customer to tell you what they need` : '- Continue the friendly conversation naturally'}
 - Use natural language, be enthusiastic about the business offerings
 - Show genuine interest in helping customers
 - Use casual, friendly phrases like "Great choice!", "I'd be happy to help!", "Sounds good!"
 - Keep responses concise but personable
+- Don't be pushy about the cart - let customers naturally mention what they want
 
 **CRITICAL: LANGUAGE INSTRUCTION**
 You understand all languages including Lebanese Arabic (both Arabic script and written in English/Latin letters). 
@@ -278,7 +282,7 @@ You can communicate with customers in Lebanese dialect, English, or any language
 ${languageInstructions[responseLanguage] || languageInstructions['english']}
 DO NOT mix languages. ALL text in your response must be in ${responseLanguage}.
 
-Cart: ${cartSummary}
+${cart.items && cart.items.length > 0 ? `\n**CART CONTEXT (Only mention if customer asks about their cart):**\n${cartSummary}` : ''}
 
 ${!openStatus.isOpen && isFoodAndBeverage ? `
 IMPORTANT - We're Closed:
@@ -334,7 +338,9 @@ Rules:
 - Use send_item_image() when customer asks to see a picture of an item
 - Use add_item_to_cart() when customer wants items/services (ALWAYS queries database for current item data)
 - Use set_delivery_address() for delivery addresses - this will automatically set delivery type to 'delivery'
-- Use set_order_notes() when customer wants to add special instructions/notes to their order (e.g., "no tomato", "no garlic", "extra spicy", "please make it mild", "add notes: no onions")
+- ⚠️ CRITICAL - Use set_order_notes() IMMEDIATELY when customer mentions ANY special instructions, changes, or notes to their order (e.g., "no tomato", "no garlic", "extra spicy", "please make it mild", "without onions", "make it less spicy", "add cheese", "remove pickles", etc.)
+- If customer wants to modify or change something in their order, ALWAYS call set_order_notes() to save those instructions
+- Customer's special requests and modifications MUST be saved using set_order_notes() - do NOT just acknowledge them, SAVE them
 ${(isFoodAndBeverage && business.allow_scheduled_orders) || isServices ? '- Use set_scheduled_time() when customer wants to schedule (parse natural language)\n' : ''}- Use confirm_order() only when: cart has items + delivery type set + address (if delivery)${(isFoodAndBeverage && business.allow_scheduled_orders) || isServices ? ' + scheduled time (if scheduling or if cart has "only scheduled" items)' : ' + scheduled time (if cart has "only scheduled" items)'}
 - IMPORTANT: If customer asks about opening/closing status, ALWAYS call get_closing_time() or check current status - do NOT assume based on prompt or conversation history
 - Keep responses friendly and conversational`;
