@@ -658,7 +658,7 @@ export default function Settings() {
                   </div>
                 )}
               </div>
-              <form onSubmit={handleOpeningHoursSubmit} className="space-y-4">
+              <form onSubmit={handleOpeningHoursSubmit} className="space-y-4" noValidate>
                 {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => {
                   // Ensure day exists in openingHours with default values
                   const dayHours = openingHours[day] || { open: '', close: '', closed: false }
@@ -718,15 +718,19 @@ export default function Settings() {
                 })}
                 <div className="flex justify-end pt-4 border-t border-gray-200">
                   <button
-                    type="submit"
+                    type="button"
                     disabled={loading || !user}
                     className="btn btn-primary flex items-center gap-2"
                     onClick={(e) => {
                       console.log('🔵 Save button clicked')
+                      e.preventDefault()
+                      e.stopPropagation()
                       if (!user) {
-                        e.preventDefault()
                         alert('User not loaded. Please refresh the page.')
+                        return
                       }
+                      // Manually trigger form submission
+                      handleOpeningHoursSubmit(e)
                     }}
                   >
                     <Save size={18} />
