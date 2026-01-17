@@ -41,6 +41,13 @@ export default function Settings() {
   })
   const [passwordMessage, setPasswordMessage] = useState({ type: '', text: '' })
 
+  // Debug: Log password message changes
+  useEffect(() => {
+    if (passwordMessage.text) {
+      console.log('📢 Password message updated:', passwordMessage)
+    }
+  }, [passwordMessage])
+
   useEffect(() => {
     if (user) {
       console.log('User data received:', user)
@@ -117,12 +124,14 @@ export default function Settings() {
 
   const handlePasswordChange = async (e) => {
     e.preventDefault()
+    console.log('🔐 Password change form submitted')
     setLoading(true)
     setSaved(false)
     setPasswordMessage({ type: '', text: '' })
 
     // Validate passwords match
     if (passwordData.new_password !== passwordData.confirm_password) {
+      console.log('❌ Validation failed: passwords do not match')
       setPasswordMessage({ type: 'error', text: 'New passwords do not match' })
       setLoading(false)
       return
@@ -130,6 +139,7 @@ export default function Settings() {
 
     // Validate password strength
     if (passwordData.new_password.length < 8) {
+      console.log('❌ Validation failed: password too short')
       setPasswordMessage({ type: 'error', text: 'Password must be at least 8 characters long' })
       setLoading(false)
       return
@@ -137,6 +147,7 @@ export default function Settings() {
 
     // Validate current password is provided
     if (!passwordData.current_password) {
+      console.log('❌ Validation failed: current password missing')
       setPasswordMessage({ type: 'error', text: 'Current password is required' })
       setLoading(false)
       return
@@ -145,22 +156,30 @@ export default function Settings() {
     try {
       const token = localStorage.getItem('token')
       if (!token) {
+        console.log('❌ No authentication token found')
         setPasswordMessage({ type: 'error', text: 'You must be logged in to change your password' })
         setLoading(false)
         return
       }
       
+      console.log('📤 Sending password change request to:', `${API_URL}/api/businesses/me/password`)
+      const requestData = {
+        current_password: passwordData.current_password,
+        new_password: passwordData.new_password,
+        confirm_password: passwordData.confirm_password
+      }
+      console.log('📤 Request data:', { ...requestData, current_password: '***', new_password: '***', confirm_password: '***' })
+      
       const response = await axios.put(
         `${API_URL}/api/businesses/me/password`,
-        {
-          current_password: passwordData.current_password,
-          new_password: passwordData.new_password,
-          confirm_password: passwordData.confirm_password
-        },
+        requestData,
         { headers: { Authorization: `Bearer ${token}` } }
       )
       
-      if (response.data.success) {
+      console.log('✅ Password change response:', response.data)
+      
+      if (response.data && response.data.success) {
+        console.log('✅ Password changed successfully')
         setPasswordMessage({ type: 'success', text: 'Password changed successfully' })
         setPasswordData({
           current_password: '',
@@ -171,17 +190,24 @@ export default function Settings() {
           setPasswordMessage({ type: '', text: '' })
         }, 5000)
       } else {
-        setPasswordMessage({ type: 'error', text: response.data.error?.message || 'Failed to change password' })
+        console.log('❌ Password change failed:', response.data)
+        setPasswordMessage({ type: 'error', text: response.data?.error?.message || 'Failed to change password' })
       }
     } catch (error) {
-      console.error('Error changing password:', error)
+      console.error('❌ Error changing password:', error)
+      console.error('❌ Error response:', error.response?.data)
+      console.error('❌ Error status:', error.response?.status)
+      console.error('❌ Error message:', error.message)
+      
       const errorMessage = error.response?.data?.error?.message || 
                           error.response?.data?.error?.errors?.map(e => e.message || e.msg).join(', ') ||
                           error.message || 
                           'Failed to change password'
+      console.log('📝 Setting error message:', errorMessage)
       setPasswordMessage({ type: 'error', text: errorMessage })
     } finally {
       setLoading(false)
+      console.log('🏁 Password change handler finished, loading set to false')
     }
   }
 
