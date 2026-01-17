@@ -478,6 +478,15 @@ export default function Settings() {
                 </div>
               </div>
               
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h4 className="text-sm font-medium text-blue-900 mb-2">How to find your coordinates:</h4>
+                <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
+                  <li>Open Google Maps</li>
+                  <li>Right-click on your business location</li>
+                  <li>Click the coordinates to copy them</li>
+                  <li>Paste here (format: latitude, longitude)</li>
+                </ol>
+              </div>
             </div>
           </div>
         )}
