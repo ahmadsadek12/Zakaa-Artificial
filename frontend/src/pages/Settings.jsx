@@ -135,7 +135,13 @@ export default function Settings() {
 
     try {
       const token = localStorage.getItem('token')
-      await axios.put(
+      if (!token) {
+        alert('You must be logged in to change your password')
+        setLoading(false)
+        return
+      }
+      
+      const response = await axios.put(
         `${API_URL}/api/businesses/me/password`,
         {
           current_password: passwordData.current_password,
@@ -145,17 +151,25 @@ export default function Settings() {
         { headers: { Authorization: `Bearer ${token}` } }
       )
       
-      setSaved(true)
-      setPasswordData({
-        current_password: '',
-        new_password: '',
-        confirm_password: ''
-      })
-      setTimeout(() => setSaved(false), 3000)
-      alert('Password changed successfully')
+      if (response.data.success) {
+        setSaved(true)
+        setPasswordData({
+          current_password: '',
+          new_password: '',
+          confirm_password: ''
+        })
+        setTimeout(() => setSaved(false), 3000)
+        alert('Password changed successfully')
+      } else {
+        alert(response.data.error?.message || 'Failed to change password')
+      }
     } catch (error) {
       console.error('Error changing password:', error)
-      alert(error.response?.data?.error?.message || 'Failed to change password')
+      const errorMessage = error.response?.data?.error?.message || 
+                          error.response?.data?.error?.errors?.map(e => e.message).join(', ') ||
+                          error.message || 
+                          'Failed to change password'
+      alert(errorMessage)
     } finally {
       setLoading(false)
     }
