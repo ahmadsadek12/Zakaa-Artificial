@@ -110,18 +110,49 @@ function parseDateTime(text, timezone = 'Asia/Beirut', openingHours = []) {
     }
   }
   
-  // Set time if parsed (use local time, not UTC)
+  // Set time if parsed - MUST use business timezone, not server timezone
+  // The issue: setHours() uses server timezone (UTC), not business timezone
+  // Solution: Get date components in business timezone, construct time, then convert properly
   if (hour !== null) {
-    // Set hours/minutes in local timezone (not UTC)
-    resultDate.setHours(hour, minute, 0, 0);
+    // Get the date (year, month, day) as it appears in the business timezone
+    const formatter = new Intl.DateTimeFormat('en-CA', { 
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const parts = formatter.formatToParts(resultDate);
+    const tzYear = parts.find(p => p.type === 'year').value;
+    const tzMonth = parts.find(p => p.type === 'month').value;
+    const tzDay = parts.find(p => p.type === 'day').value;
+    
+    // Create a date string representing this time in business timezone: "YYYY-MM-DDTHH:MM:00"
+    // We'll construct it and then adjust for timezone offset
+    const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+    const dateTimeStr = `${tzYear}-${tzMonth}-${tzDay}T${timeStr}`;
+    
+    // Now we need to convert this "local time in business timezone" to a proper Date
+    // Calculate the offset: what time is "now" in business timezone vs UTC
+    const nowInBusinessTz = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+    const nowUtc = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+    const offsetMs = nowUtc.getTime() - nowInBusinessTz.getTime();
+    
+    // Create date assuming dateTimeStr is in server local time, then adjust by offset
+    // Actually better: create date assuming it's UTC, then subtract the offset to get business timezone time
+    const tempDate = new Date(dateTimeStr + 'Z'); // Parse as UTC
+    resultDate = new Date(tempDate.getTime() - offsetMs);
     
     // Log for debugging
-    logger.debug('Time parsed', {
+    logger.debug('Time parsed with timezone', {
       input: text,
       parsedHour: hour,
       parsedMinute: minute,
+      timezone,
+      dateTimeStr,
+      offsetMs: offsetMs / (1000 * 60 * 60), // in hours
       resultDate: resultDate.toISOString(),
-      localTime: resultDate.toLocaleString('en-US', { timeZone: timezone })
+      businessTime: resultDate.toLocaleString('en-US', { timeZone: timezone, hour: '2-digit', minute: '2-digit' }),
+      businessDate: resultDate.toLocaleString('en-US', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' })
     });
   } else {
     // Default to next available opening time
@@ -130,10 +161,41 @@ function parseDateTime(text, timezone = 'Asia/Beirut', openingHours = []) {
     
     if (todayHours && todayHours.open_time && !todayHours.is_closed) {
       const [openHour, openMinute] = todayHours.open_time.split(':').map(n => parseInt(n));
-      resultDate.setHours(openHour, openMinute, 0, 0);
+      const formatter = new Intl.DateTimeFormat('en-CA', { 
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      const parts = formatter.formatToParts(resultDate);
+      const tzYear = parts.find(p => p.type === 'year').value;
+      const tzMonth = parts.find(p => p.type === 'month').value;
+      const tzDay = parts.find(p => p.type === 'day').value;
+      const timeStr = `${String(openHour).padStart(2, '0')}:${String(openMinute).padStart(2, '0')}:00`;
+      const dateTimeStr = `${tzYear}-${tzMonth}-${tzDay}T${timeStr}`;
+      const nowInBusinessTz = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+      const nowUtc = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+      const offsetMs = nowUtc.getTime() - nowInBusinessTz.getTime();
+      const tempDate = new Date(dateTimeStr + 'Z');
+      resultDate = new Date(tempDate.getTime() - offsetMs);
     } else {
-      // Default to noon
-      resultDate.setHours(12, 0, 0, 0);
+      // Default to noon in business timezone
+      const formatter = new Intl.DateTimeFormat('en-CA', { 
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      const parts = formatter.formatToParts(resultDate);
+      const tzYear = parts.find(p => p.type === 'year').value;
+      const tzMonth = parts.find(p => p.type === 'month').value;
+      const tzDay = parts.find(p => p.type === 'day').value;
+      const dateTimeStr = `${tzYear}-${tzMonth}-${tzDay}T12:00:00`;
+      const nowInBusinessTz = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+      const nowUtc = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+      const offsetMs = nowUtc.getTime() - nowInBusinessTz.getTime();
+      const tempDate = new Date(dateTimeStr + 'Z');
+      resultDate = new Date(tempDate.getTime() - offsetMs);
     }
   }
   
