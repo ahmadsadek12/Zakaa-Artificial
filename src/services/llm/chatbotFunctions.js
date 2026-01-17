@@ -176,11 +176,11 @@ function getAvailableFunctions() {
         }
       }
     },
-    {
-      type: 'function',
-      function: {
-        name: 'confirm_order',
-        description: 'Confirm and place the order. Only use this when cart has items, delivery type is set, and if delivery then address is provided. Customer must explicitly confirm.',
+      {
+        type: 'function',
+        function: {
+          name: 'confirm_order',
+          description: 'Confirm and place the order. This function checks CURRENT business status from database. Use this when customer wants to confirm/place their order. It will check if business is currently open (from database, not conversation history). Only use this when cart has items, delivery type is set, and if delivery then address is provided.',
         parameters: {
           type: 'object',
           properties: {},

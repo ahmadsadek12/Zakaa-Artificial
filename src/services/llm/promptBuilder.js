@@ -179,9 +179,10 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
     ? cartManager.getCartSummary(cart)
     : 'Cart is empty';
   
-  // Build conversation history context
+  // Build conversation history context (limited - DO NOT rely on this for business data)
+  // Conversation history is ONLY for conversational context, NOT for business status, menu, prices, etc.
   const conversationContext = messageHistory.length > 0
-    ? `\n\nRecent conversation:\n${messageHistory.slice(-5).map(m => 
+    ? `\n\nRecent conversation (FOR CONTEXT ONLY - DO NOT use for business status/menu/prices):\n${messageHistory.slice(-3).map(m => 
         `${m.role === 'customer' ? 'Customer' : 'You'}: ${m.text}`
       ).join('\n')}`
     : '';
@@ -306,12 +307,15 @@ Save FULL address exactly as provided with set_delivery_address().
 Available Menus:
 ${menusText || 'No menus available'}
 
-**CRITICAL - ALWAYS USE DATABASE FUNCTIONS:**
-- NEVER rely on conversation history for menu items, prices, availability, or business status
-- ALWAYS call get_menu_items() when showing menu (even if items were mentioned before)
-- ALWAYS call add_item_to_cart() when adding items (checks database for current availability)
-- When customer asks "are you open?", "are you closed?", etc., ALWAYS check the current status - do NOT rely on prompt or conversation history
-- Database queries are the source of truth - conversation history and prompt may be outdated
+**CRITICAL - IGNORE CONVERSATION HISTORY FOR BUSINESS DATA:**
+- ⚠️ CONVERSATION HISTORY IS OUTDATED AND UNRELIABLE FOR BUSINESS DATA ⚠️
+- NEVER mention business status (open/closed) from conversation history - it may be outdated
+- NEVER mention menu items, prices, or availability from conversation history
+- ALWAYS call get_menu_items() when showing menu - IGNORE what was said before
+- ALWAYS call add_item_to_cart() when adding items - queries database for current data
+- ALWAYS call get_closing_time() when asked about closing time
+- ALWAYS call confirm_order() to check current business status - NEVER assume based on history
+- THE DATABASE IS THE ONLY SOURCE OF TRUTH - conversation history is only for conversational flow
 
 Rules:
 - Use get_menu_items() to show menu/catalog (ALWAYS call this function, never use conversation history)
