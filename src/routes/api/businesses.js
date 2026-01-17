@@ -165,6 +165,7 @@ router.put('/me', [
     'businessName', 'businessType', 'email', 'contactPhoneNumber',
     'defaultLanguage', 'timezone', 'businessDescription',
     'locationLatitude', 'locationLongitude', 'deliveryRadiusKm', 'deliveryPrice',
+    'lastOrderBeforeClosingMinutes',
     'whatsappPhoneNumberId', 'whatsappBusinessAccountId', 'whatsappAccessToken', 'telegramBotToken',
     'allowScheduledOrders', 'allowDelivery', 'allowTakeaway', 'allowOnSite',
     'chatbotEnabled'
