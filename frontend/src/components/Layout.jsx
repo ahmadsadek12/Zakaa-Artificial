@@ -79,8 +79,9 @@ export default function Layout({ children }) {
           {/* Logo */}
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center justify-between">
-              <Link to="/">
-                <img src="/zakaa-logo.jpeg" alt="Zakaa" className="h-10 w-auto object-contain" />
+              <Link to="/" className="flex items-center gap-3">
+                <img src="/zakaa-logo.jpeg" alt="Zakaa" className="h-12 w-auto object-contain" />
+                <span className="text-xl font-bold text-gray-900">Zakaa</span>
               </Link>
               <button
                 onClick={() => setSidebarOpen(false)}

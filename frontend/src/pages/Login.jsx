@@ -32,8 +32,9 @@ export default function Login() {
       <div className="max-w-md w-full">
         <div className="card">
           <div className="text-center mb-8">
-            <div className="flex justify-center mb-4">
-              <img src="/zakaa-logo.jpeg" alt="Zakaa" className="h-16 w-auto" />
+            <div className="flex flex-col items-center justify-center mb-4 gap-3">
+              <img src="/zakaa-logo.jpeg" alt="Zakaa" className="h-20 w-auto" />
+              <h1 className="text-3xl font-bold text-gray-900">Zakaa</h1>
             </div>
             <p className="text-gray-600">Business Dashboard</p>
           </div>
