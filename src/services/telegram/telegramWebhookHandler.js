@@ -238,6 +238,18 @@ async function processMessage(message, businessId = null) {
     if (response && response.text) {
       let responseMessage = response.text;
       
+      // Remove S3 URLs from message text (they should only be sent as media files, never as links)
+      // Remove markdown image links: ![text](url) format
+      responseMessage = responseMessage.replace(/!\[([^\]]*)\]\(https?:\/\/[^\)]*\.s3[^\)]*\.amazonaws\.com[^\)]*\)/gi, '');
+      responseMessage = responseMessage.replace(/!\[([^\]]*)\]\(https?:\/\/[^\)]*amazonaws\.com[^\)]*s3[^\)]*\)/gi, '');
+      // Remove plain S3 URLs: https://bucket.s3.amazonaws.com/... or https://bucket.s3.region.amazonaws.com/...
+      responseMessage = responseMessage.replace(/https?:\/\/[^\s]*\.s3[^\s]*\.amazonaws\.com[^\s]*/gi, '');
+      responseMessage = responseMessage.replace(/https?:\/\/[^\s]*amazonaws\.com[^\s]*s3[^\s]*/gi, '');
+      // Remove numbered markdown links like: "1. ![Menu Image](url)" or "2. ![Menu Image](url)"
+      responseMessage = responseMessage.replace(/\d+\.\s*!\[([^\]]*)\]\([^\)]*\)/gi, '');
+      // Clean up multiple spaces and empty lines
+      responseMessage = responseMessage.replace(/\n{3,}/g, '\n\n').trim();
+      
       // Cart summary is only shown when explicitly requested via get_cart function or during checkout
       // (get_cart includes cart summary in the message, so no need to add it here)
       
@@ -286,32 +298,36 @@ async function processMessage(message, businessId = null) {
         }
       }
       
-      // Send via Telegram
-      // Note: We'll send as plain text for now to avoid Markdown escaping issues
-      // You can enable Markdown later if needed
-      const sendResult = await telegramMessageSender.sendMessageWithRetry({
-        chatId,
-        message: responseMessage,
-        botToken: business.telegram_bot_token,
-        options: {
-          parse_mode: undefined, // Use plain text for now
-          disable_web_page_preview: true
-        }
-      });
+      // Only send text message if no images/PDFs were sent, or if there's meaningful content (like order confirmation)
+      const hasMediaToSend = (response.imagesToSend && response.imagesToSend.length > 0) || 
+                             (response.pdfsToSend && response.pdfsToSend.length > 0);
       
-      // Log outbound message to MongoDB (non-blocking)
-      logMessage({
-        business_id: business.id,
-        branch_id: branch?.id || business.id,
-        customer_phone_number: customerPhoneNumber,
-        whatsapp_user_id: customerPhoneNumber,
-        direction: 'outbound',
-        channel: 'telegram',
-        message_type: 'text',
-        text: responseMessage,
-        meta_message_id: sendResult?.message_id?.toString() || messageId.toString(),
-        timestamp: new Date()
-      }).catch(err => logger.debug('Failed to log message (non-critical):', err));
+      // Skip text message if media was sent, unless there's important content (order confirmation, etc.)
+      if (!hasMediaToSend || (responseMessage && responseMessage.trim().length > 0 && response.orderCreated)) {
+        const sendResult = await telegramMessageSender.sendMessageWithRetry({
+          chatId,
+          message: responseMessage,
+          botToken: business.telegram_bot_token,
+          options: {
+            parse_mode: undefined, // Use plain text for now
+            disable_web_page_preview: true
+          }
+        });
+        
+        // Log outbound message to MongoDB (non-blocking)
+        logMessage({
+          business_id: business.id,
+          branch_id: branch?.id || business.id,
+          customer_phone_number: customerPhoneNumber,
+          whatsapp_user_id: customerPhoneNumber,
+          direction: 'outbound',
+          channel: 'telegram',
+          message_type: 'text',
+          text: responseMessage,
+          meta_message_id: sendResult?.message_id?.toString() || messageId.toString(),
+          timestamp: new Date()
+        }).catch(err => logger.debug('Failed to log message (non-critical):', err));
+      }
     }
   } catch (error) {
     logger.error('Error processing Telegram message:', error);

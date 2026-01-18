@@ -208,7 +208,7 @@ function getAvailableFunctions() {
       type: 'function',
       function: {
         name: 'get_menu_items',
-        description: 'Get all available menu items. Use this when customer asks to see the menu, available items, or what\'s available.',
+        description: 'Get all available menu items, menu images, or menu PDFs. Use this as the PRIMARY function when customer asks to see the menu, wants to browse items, asks "what do you have?", "show me the menu", or requests the menu in any format. This function automatically handles PDFs, images, and text-based menus based on what\'s available.',
         parameters: {
           type: 'object',
           properties: {},
@@ -237,7 +237,7 @@ function getAvailableFunctions() {
       type: 'function',
       function: {
         name: 'send_menu_pdf',
-        description: 'Send a menu PDF to the customer. Use this when customer asks for the menu in PDF format, wants to download the menu PDF, requests the menu as a PDF file, or asks to see the menu PDF.',
+        description: 'Send a menu PDF to the customer. ONLY use this when customer specifically says "PDF" or "download as PDF" or "menu PDF file". NEVER use this for general requests like "send menu", "show menu", "menu please" - for those, ALWAYS use get_menu_items instead. If no PDF is available, this function will fall back to sending menu images.',
         parameters: {
           type: 'object',
           properties: {
@@ -1391,106 +1391,116 @@ async function executeFunction(functionName, args, context) {
           return cached;
         }
         
-        // FIRST: Check if any active menus have PDF/image/link - prioritize these over text
-        const menusWithAttachments = await queryMySQL(
+        // Get all active menus
+        const allMenus = await queryMySQL(
           `SELECT * FROM menus 
            WHERE business_id = ? AND is_active = true AND deleted_at IS NULL
-           AND (menu_pdf_url IS NOT NULL OR menu_image_urls IS NOT NULL OR menu_link IS NOT NULL)
            ORDER BY name`,
           [business.id]
         );
         
-        // If menus with PDF/image/link exist, prioritize sending those instead of text menu
-        if (menusWithAttachments.length > 0) {
-          const pdfUrls = [];
-          const imageUrls = [];
-          const menuLinks = [];
-          
-          for (const menu of menusWithAttachments) {
-            // Add PDF if available
-            if (menu.menu_pdf_url) {
-              pdfUrls.push({
-                url: menu.menu_pdf_url,
-                menuName: menu.name
-              });
-            }
-            
-            // Add images if available
-            if (menu.menu_image_urls) {
-              try {
-                const menuImageUrls = typeof menu.menu_image_urls === 'string' 
-                  ? JSON.parse(menu.menu_image_urls) 
-                  : menu.menu_image_urls;
-                if (Array.isArray(menuImageUrls) && menuImageUrls.length > 0) {
-                  for (const imageUrl of menuImageUrls) {
-                    imageUrls.push({
-                      url: imageUrl,
-                      menuName: menu.name
-                    });
-                  }
+        // STEP 1: Check for images first (highest priority)
+        const menusWithImages = [];
+        const allImageUrls = [];
+        
+        for (const menu of allMenus) {
+          if (menu.menu_image_urls) {
+            try {
+              const menuImageUrls = typeof menu.menu_image_urls === 'string' 
+                ? JSON.parse(menu.menu_image_urls) 
+                : menu.menu_image_urls;
+              if (Array.isArray(menuImageUrls) && menuImageUrls.length > 0) {
+                menusWithImages.push({
+                  menu: menu,
+                  imageUrls: menuImageUrls
+                });
+                // Store images with menu name for grouping
+                for (const imageUrl of menuImageUrls) {
+                  allImageUrls.push({
+                    url: imageUrl,
+                    menuName: menu.name
+                  });
                 }
-              } catch (e) {
-                logger.warn('Failed to parse menu_image_urls', { menuId: menu.id, error: e.message });
               }
-            }
-            
-            // Add link if available (links will be included in message text)
-            if (menu.menu_link) {
-              menuLinks.push({
-                url: menu.menu_link,
-                menuName: menu.name
-              });
+            } catch (e) {
+              logger.warn('Failed to parse menu_image_urls', { menuId: menu.id, error: e.message });
             }
           }
+        }
+        
+        if (allImageUrls.length > 0) {
+          // Limit to first 2 images only
+          const limitedImageUrls = allImageUrls.slice(0, 2);
           
-          // Build minimal message - images/PDFs will be sent separately, not as text
-          let message = '';
-          if (pdfUrls.length > 0 || imageUrls.length > 0) {
-            // If we have images/PDFs, just send a simple message - images will be sent separately
-            message = '📋 Here are our menus:';
-            // Only include links in message text (not image/PDF URLs)
-            for (const menu of menusWithAttachments) {
-              if (menu.menu_link) {
-                if (!message.includes('Menu link:')) {
-                  message += '\n\n';
-                }
-                message += `\n🔗 ${menu.name}: ${menu.menu_link}`;
-              }
-            }
-          } else {
-            // Only links available - include them in message
-            message = '📋 Here are our menus:\n\n';
-            for (const menu of menusWithAttachments) {
-              message += `**${menu.name}**`;
-              if (menu.menu_link) {
-                message += `\n🔗 Menu link: ${menu.menu_link}`;
-              }
-              message += '\n\n';
+          // Build message - if multiple menus, include menu names
+          let message = '📋 Here are our menus:';
+          if (menusWithImages.length > 1) {
+            // Multiple menus - list menu names
+            message += '\n\n';
+            for (const { menu, imageUrls } of menusWithImages) {
+              message += `**${menu.name}** (${imageUrls.length} image${imageUrls.length > 1 ? 's' : ''})\n`;
             }
           }
           
           const result = {
             success: true,
             message: message,
-            // Indicate we should send PDFs/images (not text menu)
-            pdfUrls: pdfUrls.map(p => p.url),
-            imageUrls: imageUrls.map(img => img.url),
-            menuLinks: menuLinks,
-            shouldSendPdf: pdfUrls.length > 0,
-            shouldSendImages: imageUrls.length > 0,
-            // Don't include text items - we're prioritizing PDF/image/link
+            // Return only first 2 images with menu names for better captions
+            imageUrls: limitedImageUrls.map(img => img.url),
+            imageUrlsWithMenu: limitedImageUrls, // Include full objects with menu names
+            shouldSendImages: true,
             items: []
           };
           
-          // Don't cache when we have images/PDFs - always fetch fresh to ensure images are sent
-          if (pdfUrls.length === 0 && imageUrls.length === 0) {
-            cache.set(cacheKey, result, 5 * 60 * 1000);
-          }
-          
+          // Don't cache images - always fetch fresh
           return result;
         }
         
-        // FALLBACK: No PDF/image/link available - return text menu as before
+        // STEP 2: No images - check for PDF
+        const menusWithPdf = allMenus.filter(menu => menu.menu_pdf_url);
+        if (menusWithPdf.length > 0) {
+          const pdfUrls = menusWithPdf.map(menu => menu.menu_pdf_url);
+          
+          let message = '📋 Here are our menus:';
+          if (menusWithPdf.length > 1) {
+            message += '\n\n';
+            for (const menu of menusWithPdf) {
+              message += `**${menu.name}**\n`;
+            }
+          }
+          
+          const result = {
+            success: true,
+            message: message,
+            pdfUrls: pdfUrls,
+            shouldSendPdf: true,
+            items: []
+          };
+          
+          // Don't cache PDFs - always fetch fresh
+          return result;
+        }
+        
+        // STEP 3: No PDF - check for links
+        const menusWithLink = allMenus.filter(menu => menu.menu_link);
+        if (menusWithLink.length > 0) {
+          let message = '📋 Here are our menus:\n\n';
+          for (const menu of menusWithLink) {
+            message += `**${menu.name}**\n🔗 Menu link: ${menu.menu_link}\n\n`;
+          }
+          
+          const result = {
+            success: true,
+            message: message,
+            items: []
+          };
+          
+          // Cache links for 5 minutes
+          cache.set(cacheKey, result, 5 * 60 * 1000);
+          return result;
+        }
+        
+        // STEP 4: Final fallback - text-based menu from items
         const items = await queryMySQL(
           `SELECT i.*, m.name as menu_name FROM items i
            LEFT JOIN menus m ON i.menu_id = m.id
@@ -1599,7 +1609,7 @@ async function executeFunction(functionName, args, context) {
       case 'send_menu_pdf': {
         const { menuName } = args;
         
-        // Find menus with PDFs
+        // Find menus with PDFs first
         let menus;
         if (menuName) {
           menus = await queryMySQL(
@@ -1628,7 +1638,64 @@ async function executeFunction(functionName, args, context) {
           );
         }
         
+        // If no PDF found, fall back to images if available (check ALL menus, not just one)
         if (menus.length === 0) {
+          // Get ALL active menus with images (like get_menu_items does)
+          const allMenusWithImages = await queryMySQL(
+            `SELECT * FROM menus 
+             WHERE business_id = ? AND is_active = true AND deleted_at IS NULL
+             AND menu_image_urls IS NOT NULL
+             ORDER BY name`,
+            [business.id]
+          );
+          
+          // Collect all images from all menus
+          const allImageUrls = [];
+          const menusWithImages = [];
+          
+          for (const menu of allMenusWithImages) {
+            try {
+              const menuImageUrls = typeof menu.menu_image_urls === 'string' 
+                ? JSON.parse(menu.menu_image_urls) 
+                : menu.menu_image_urls;
+              if (Array.isArray(menuImageUrls) && menuImageUrls.length > 0) {
+                menusWithImages.push({ menu, imageUrls: menuImageUrls });
+                for (const imageUrl of menuImageUrls) {
+                  allImageUrls.push({
+                    url: imageUrl,
+                    menuName: menu.name
+                  });
+                }
+              }
+            } catch (e) {
+              logger.warn('Failed to parse menu_image_urls', { menuId: menu.id, error: e.message });
+            }
+          }
+          
+          // If we found images, return them (similar to get_menu_items)
+          // Limit to first 2 images only
+          if (allImageUrls.length > 0) {
+            const limitedImageUrls = allImageUrls.slice(0, 2);
+            
+            let message = '📋 Here are our menus:';
+            if (menusWithImages.length > 1) {
+              message += '\n\n';
+              for (const { menu, imageUrls } of menusWithImages) {
+                message += `**${menu.name}** (${imageUrls.length} image${imageUrls.length > 1 ? 's' : ''})\n`;
+              }
+            }
+            
+            return {
+              success: true,
+              message: message,
+              imageUrls: limitedImageUrls.map(img => img.url),
+              imageUrlsWithMenu: limitedImageUrls, // Include full objects with menu names
+              shouldSendImages: true,
+              items: []
+            };
+          }
+          
+          // No PDF or images available
           return {
             success: false,
             error: menuName 

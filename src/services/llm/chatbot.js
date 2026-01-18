@@ -39,6 +39,16 @@ function sanitizeResponse(text) {
     return '';
   }
   
+  // Remove S3 URLs from LLM response text (they should only be sent as media files, never as links)
+  // Remove markdown image links: ![text](url) format
+  text = text.replace(/!\[([^\]]*)\]\(https?:\/\/[^\)]*\.s3[^\)]*\.amazonaws\.com[^\)]*\)/gi, '');
+  text = text.replace(/!\[([^\]]*)\]\(https?:\/\/[^\)]*amazonaws\.com[^\)]*s3[^\)]*\)/gi, '');
+  // Remove plain S3 URLs: https://bucket.s3.amazonaws.com/... or https://bucket.s3.region.amazonaws.com/...
+  text = text.replace(/https?:\/\/[^\s]*\.s3[^\s]*\.amazonaws\.com[^\s]*/gi, '');
+  text = text.replace(/https?:\/\/[^\s]*amazonaws\.com[^\s]*s3[^\s]*/gi, '');
+  // Remove numbered markdown links like: "1. ![Menu Image](url)" or "2. ![Menu Image](url)"
+  text = text.replace(/\d+\.\s*!\[([^\]]*)\]\([^\)]*\)/gi, '');
+  
   // WhatsApp message limit: 4096 characters per message
   const MAX_LENGTH = 4096;
   
@@ -60,6 +70,9 @@ function sanitizeResponse(text) {
   // Remove excessive whitespace
   text = text.replace(/\n{4,}/g, '\n\n\n'); // Max 3 consecutive newlines
   text = text.replace(/[ \t]{3,}/g, '  '); // Max 2 consecutive spaces
+  
+  // Clean up multiple empty lines after S3 URL removal
+  text = text.replace(/\n{3,}/g, '\n\n').trim();
   
   // Trim
   text = text.trim();
@@ -386,12 +399,23 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
             if (!context.imagesToSend) {
               context.imagesToSend = [];
             }
-            // Add all menu images
-            for (const imageUrl of result.imageUrls) {
-              context.imagesToSend.push({
-                url: imageUrl,
-                caption: result.message || `Menu image for ${result.menuName || 'menu'}`
-              });
+            // Check if we have images with menu names (from get_menu_items)
+            if (result.imageUrlsWithMenu && Array.isArray(result.imageUrlsWithMenu)) {
+              // Use menu names from imageUrlsWithMenu for better captions
+              for (const imageObj of result.imageUrlsWithMenu) {
+                context.imagesToSend.push({
+                  url: imageObj.url,
+                  caption: result.message || `Menu: ${imageObj.menuName || 'menu'}`
+                });
+              }
+            } else {
+              // Fallback: use simple imageUrls array
+              for (const imageUrl of result.imageUrls) {
+                context.imagesToSend.push({
+                  url: imageUrl,
+                  caption: result.message || `Menu image for ${result.menuName || 'menu'}`
+                });
+              }
             }
           }
           

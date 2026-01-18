@@ -9,6 +9,10 @@ const { tenantIsolation, requireOwnership } = require('../../middleware/tenant')
 const { asyncHandler } = require('../../middleware/errorHandler');
 const orderService = require('../../services/order/orderService');
 const orderRepository = require('../../repositories/orderRepository');
+const userRepository = require('../../repositories/userRepository');
+const telegramMessageSender = require('../../services/telegram/telegramMessageSender');
+const whatsappMessageSender = require('../../services/whatsapp/messageSender');
+const twilioMessageSender = require('../../services/whatsapp/twilioMessageSender');
 const logger = require('../../utils/logger');
 const CONSTANTS = require('../../config/constants');
 
@@ -379,6 +383,129 @@ router.post('/:id/cancel', requireOwnership('orders'), asyncHandler(async (req, 
     success: true,
     data: { order },
     message: 'Order cancelled successfully'
+  });
+}));
+
+/**
+ * Update delivery price for accepted order
+ * PUT /api/orders/:id/delivery-price
+ * Only works for accepted delivery orders
+ */
+router.put('/:id/delivery-price', requireOwnership('orders'), [
+  body('deliveryPrice').isFloat({ min: 0 }).withMessage('Delivery price must be a positive number')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+
+  const { deliveryPrice } = req.body;
+  
+  // Update delivery price
+  const order = await orderRepository.updateDeliveryPrice(req.params.id, req.businessId, deliveryPrice);
+  
+  // Get business info for sending message
+  const business = await userRepository.findById(req.businessId);
+  
+  // Send message to customer
+  try {
+    // Build message
+    const subtotal = parseFloat(order.subtotal).toFixed(2);
+    const delivery = parseFloat(deliveryPrice).toFixed(2);
+    const total = parseFloat(order.total).toFixed(2);
+    
+    const message = `📦 Delivery charge has been set for your order:\n\n` +
+      `Subtotal: $${subtotal}\n` +
+      `Delivery: $${delivery}\n` +
+      `Total: $${total}\n\n` +
+      `Your order will be delivered soon!`;
+    
+    // Determine channel from order source
+    const channel = order.order_source === 'telegram' ? 'telegram' : 'whatsapp';
+    const customerPhoneNumber = order.customer_phone_number;
+    
+    if (channel === 'telegram') {
+      // Extract Telegram chat ID
+      const chatId = customerPhoneNumber.startsWith('telegram:')
+        ? customerPhoneNumber.replace('telegram:', '')
+        : customerPhoneNumber;
+      
+      await telegramMessageSender.sendMessage({
+        chatId: parseInt(chatId),
+        message,
+        botToken: business.telegram_bot_token
+      });
+      
+      logger.info('Delivery price message sent via Telegram', {
+        orderId: req.params.id,
+        chatId
+      });
+    } else if (channel === 'whatsapp') {
+      // Determine which WhatsApp provider to use
+      const whatsappProvider = process.env.WHATSAPP_PROVIDER || 'meta';
+      
+      if (whatsappProvider === 'twilio') {
+        const twilioNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+        if (!twilioNumber) {
+          throw new Error('Twilio WhatsApp number not configured');
+        }
+        
+        await twilioMessageSender.sendMessage({
+          to: customerPhoneNumber,
+          from: twilioNumber,
+          message
+        });
+        
+        logger.info('Delivery price message sent via Twilio WhatsApp', {
+          orderId: req.params.id,
+          to: customerPhoneNumber
+        });
+      } else {
+        // Meta WhatsApp Business API
+        const phoneNumberId = business.whatsapp_phone_number_id;
+        const accessToken = business.whatsapp_access_token_encrypted;
+        
+        if (!phoneNumberId || !accessToken) {
+          throw new Error('WhatsApp not configured for this business');
+        }
+        
+        await whatsappMessageSender.sendMessage({
+          phoneNumberId,
+          accessToken,
+          to: customerPhoneNumber,
+          message
+        });
+        
+        logger.info('Delivery price message sent via Meta WhatsApp', {
+          orderId: req.params.id,
+          to: customerPhoneNumber
+        });
+      }
+    }
+    
+    logger.info(`Delivery price updated and message sent for order ${req.params.id}`, {
+      orderId: req.params.id,
+      deliveryPrice,
+      total: order.total,
+      customerPhoneNumber,
+      channel
+    });
+  } catch (messageError) {
+    // Log error but don't fail the request
+    logger.error('Failed to send delivery price message to customer:', {
+      orderId: req.params.id,
+      error: messageError.message,
+      stack: messageError.stack
+    });
+  }
+  
+  res.json({
+    success: true,
+    data: { order },
+    message: 'Delivery price updated and customer notified'
   });
 }));
 

@@ -15,6 +15,8 @@ export default function Orders() {
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [orderDetails, setOrderDetails] = useState(null)
   const [loadingOrderDetails, setLoadingOrderDetails] = useState(false)
+  const [deliveryPriceInput, setDeliveryPriceInput] = useState('')
+  const [settingDeliveryPrice, setSettingDeliveryPrice] = useState(false)
   
   // Create order modal
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -143,6 +145,7 @@ export default function Orders() {
       setSelectedOrder(order)
       setShowOrderModal(true)
       setLoadingOrderDetails(true)
+      setDeliveryPriceInput('') // Reset delivery price input
       
       const token = localStorage.getItem('token')
       const headers = { Authorization: `Bearer ${token}` }
@@ -162,6 +165,42 @@ export default function Orders() {
     setShowOrderModal(false)
     setSelectedOrder(null)
     setOrderDetails(null)
+    setDeliveryPriceInput('')
+  }
+  
+  const handleSetDeliveryPrice = async () => {
+    if (!deliveryPriceInput || parseFloat(deliveryPriceInput) < 0) {
+      alert('Please enter a valid delivery price')
+      return
+    }
+    
+    if (!confirm(`Set delivery price to $${parseFloat(deliveryPriceInput).toFixed(2)}? The customer will be notified.`)) {
+      return
+    }
+    
+    setSettingDeliveryPrice(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await axios.put(
+        `${API_URL}/api/orders/${orderDetails.id}/delivery-price`,
+        { deliveryPrice: parseFloat(deliveryPriceInput) },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      
+      alert('Delivery price set successfully! Customer has been notified.')
+      
+      // Refresh order details
+      const orderResponse = await axios.get(`${API_URL}/api/orders/${orderDetails.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setOrderDetails(orderResponse.data.data.order)
+      setDeliveryPriceInput('')
+    } catch (error) {
+      console.error('Error setting delivery price:', error)
+      alert(error.response?.data?.error?.message || 'Failed to set delivery price')
+    } finally {
+      setSettingDeliveryPrice(false)
+    }
   }
   
   const handleCreateOrder = async (e) => {
@@ -800,12 +839,38 @@ export default function Orders() {
                         <span className="text-gray-600">Subtotal</span>
                         <span className="font-medium text-gray-900">${parseFloat(orderDetails.subtotal || 0).toFixed(2)}</span>
                       </div>
-                      {orderDetails.delivery_price > 0 && (
+                      {orderDetails.delivery_price > 0 ? (
                         <div className="flex justify-between">
                           <span className="text-gray-600">Delivery Price</span>
                           <span className="font-medium text-gray-900">${parseFloat(orderDetails.delivery_price || 0).toFixed(2)}</span>
                         </div>
-                      )}
+                      ) : orderDetails.status === 'accepted' && orderDetails.delivery_type === 'delivery' ? (
+                        <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-200">
+                          <div className="flex-1">
+                            <label className="text-sm text-gray-600 mb-1 block">Set Delivery Price</label>
+                            <div className="flex gap-2">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                className="input flex-1"
+                                value={deliveryPriceInput}
+                                onChange={(e) => setDeliveryPriceInput(e.target.value)}
+                                placeholder="0.00"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleSetDeliveryPrice}
+                                disabled={settingDeliveryPrice || !deliveryPriceInput}
+                                className="btn btn-primary whitespace-nowrap"
+                              >
+                                {settingDeliveryPrice ? 'Setting...' : 'Set Price'}
+                              </button>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">Customer will be notified automatically</p>
+                          </div>
+                        </div>
+                      ) : null}
                       <div className="flex justify-between pt-2 border-t border-gray-200">
                         <span className="text-lg font-semibold text-gray-900">Total</span>
                         <span className="text-lg font-bold text-gray-900">${parseFloat(orderDetails.total || 0).toFixed(2)}</span>

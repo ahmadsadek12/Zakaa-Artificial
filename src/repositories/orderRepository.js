@@ -294,6 +294,52 @@ async function updateStatus(orderId, businessId, status, changedBy = 'system') {
 }
 
 /**
+ * Update delivery price and recalculate total
+ */
+async function updateDeliveryPrice(orderId, businessId, deliveryPrice) {
+  const connection = await getMySQLConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    // Get current order
+    const order = await findById(orderId, businessId);
+    if (!order) {
+      throw new Error('Order not found');
+    }
+    
+    // Validate order is accepted and delivery type
+    if (order.status !== 'accepted') {
+      throw new Error('Can only update delivery price for accepted orders');
+    }
+    
+    if (order.delivery_type !== 'delivery') {
+      throw new Error('Can only set delivery price for delivery orders');
+    }
+    
+    // Calculate new total
+    const newDeliveryPrice = parseFloat(deliveryPrice) || 0;
+    const newTotal = parseFloat(order.subtotal) + newDeliveryPrice;
+    
+    // Update order
+    await connection.query(`
+      UPDATE orders 
+      SET delivery_price = ?, total = ?, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = ? AND business_id = ?
+    `, [newDeliveryPrice, newTotal, orderId, businessId]);
+    
+    await connection.commit();
+    
+    return await findById(orderId, businessId);
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
  * Get orders to archive (completed > 24h ago)
  */
 async function findOrdersToArchive() {
@@ -319,5 +365,6 @@ module.exports = {
   getStatusHistory,
   create,
   updateStatus,
+  updateDeliveryPrice,
   findOrdersToArchive
 };
