@@ -1443,14 +1443,30 @@ async function executeFunction(functionName, args, context) {
             }
           }
           
-          // Build message with links
-          let message = '📋 Here are our menus:\n\n';
-          for (const menu of menusWithAttachments) {
-            message += `**${menu.name}**`;
-            if (menu.menu_link) {
-              message += `\n🔗 Menu link: ${menu.menu_link}`;
+          // Build minimal message - images/PDFs will be sent separately, not as text
+          let message = '';
+          if (pdfUrls.length > 0 || imageUrls.length > 0) {
+            // If we have images/PDFs, just send a simple message - images will be sent separately
+            message = '📋 Here are our menus:';
+            // Only include links in message text (not image/PDF URLs)
+            for (const menu of menusWithAttachments) {
+              if (menu.menu_link) {
+                if (!message.includes('Menu link:')) {
+                  message += '\n\n';
+                }
+                message += `\n🔗 ${menu.name}: ${menu.menu_link}`;
+              }
             }
-            message += '\n\n';
+          } else {
+            // Only links available - include them in message
+            message = '📋 Here are our menus:\n\n';
+            for (const menu of menusWithAttachments) {
+              message += `**${menu.name}**`;
+              if (menu.menu_link) {
+                message += `\n🔗 Menu link: ${menu.menu_link}`;
+              }
+              message += '\n\n';
+            }
           }
           
           const result = {
@@ -1466,8 +1482,10 @@ async function executeFunction(functionName, args, context) {
             items: []
           };
           
-          // Cache for 5 minutes
-          cache.set(cacheKey, result, 5 * 60 * 1000);
+          // Don't cache when we have images/PDFs - always fetch fresh to ensure images are sent
+          if (pdfUrls.length === 0 && imageUrls.length === 0) {
+            cache.set(cacheKey, result, 5 * 60 * 1000);
+          }
           
           return result;
         }
