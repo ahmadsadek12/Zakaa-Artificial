@@ -15,7 +15,7 @@ function getAvailableFunctions() {
       type: 'function',
       function: {
         name: 'add_item_to_cart',
-        description: 'Add an item to the customer\'s cart. Use this when customer wants to order something (e.g., "I want pizza", "baddi pizza", "give me burger"). Match the item name from available menu items.',
+        description: 'Add an item to the customer\'s ongoing order. Use this when customer wants to order something (e.g., "I want pizza", "baddi pizza", "give me burger"). Match the item name from available menu items.',
         parameters: {
           type: 'object',
           properties: {
@@ -37,13 +37,13 @@ function getAvailableFunctions() {
       type: 'function',
       function: {
         name: 'remove_item_from_cart',
-        description: 'Remove an item from the customer\'s cart. Use this when customer wants to remove something from their order.',
+        description: 'Remove an item from the customer\'s ongoing order. Use this when customer wants to remove something from their order.',
         parameters: {
           type: 'object',
           properties: {
             itemName: {
               type: 'string',
-              description: 'The name of the item to remove from cart'
+              description: 'The name of the item to remove from ongoing order'
             }
           },
           required: ['itemName']
@@ -54,7 +54,7 @@ function getAvailableFunctions() {
       type: 'function',
       function: {
         name: 'update_item_quantity',
-        description: 'Update the quantity of an item in the cart.',
+        description: 'Update the quantity of an item in the ongoing order.',
         parameters: {
           type: 'object',
           properties: {
@@ -75,7 +75,7 @@ function getAvailableFunctions() {
       type: 'function',
       function: {
         name: 'get_cart',
-        description: 'Get the current cart contents. Use this when customer asks to see their cart, order summary, or what they ordered.',
+        description: 'Get the current ongoing order contents. Use this when customer asks to see their order, order summary, or what they ordered.',
         parameters: {
           type: 'object',
           properties: {},
@@ -87,7 +87,7 @@ function getAvailableFunctions() {
       type: 'function',
       function: {
         name: 'clear_cart',
-        description: 'Clear/empty the entire cart. Remove all items and reset all prices to zero. Use this when customer wants to empty their cart, start over, or clear everything.',
+        description: 'Clear/empty the entire ongoing order. Remove all items and reset all prices to zero. Use this when customer wants to empty their order, start over, or clear everything.',
         parameters: {
           type: 'object',
           properties: {},
@@ -180,7 +180,7 @@ function getAvailableFunctions() {
         type: 'function',
         function: {
           name: 'confirm_order',
-          description: 'Confirm and place the order. This function checks CURRENT business status from database. Use this when customer wants to confirm/place their order. It will check if business is currently open (from database, not conversation history). Only use this when cart has items, delivery type is set, and if delivery then address is provided.',
+          description: 'Confirm and place the order. This function checks CURRENT business status from database. Use this when customer wants to confirm/place their order. It will check if business is currently open (from database, not conversation history). Only use this when ongoing order has items, delivery type is set, and if delivery then address is provided.',
         parameters: {
           type: 'object',
           properties: {},
@@ -407,7 +407,7 @@ async function executeFunction(functionName, args, context) {
           // Item can only be scheduled, inform customer
           return {
             success: true,
-            message: `Added ${quantity}x ${item.name} to your cart. Note: This item can only be scheduled for a future time. Please use the scheduling function to set a date and time before confirming your order.`,
+            message: `Added ${quantity}x ${item.name} to your ongoing order. Note: This item can only be scheduled for a future time. Please use the scheduling function to set a date and time before confirming your order.`,
             cart: cart,
             requiresScheduling: true
           };
@@ -415,7 +415,7 @@ async function executeFunction(functionName, args, context) {
         
         return {
           success: true,
-          message: `Added ${quantity}x ${item.name} to your cart`,
+          message: `Added ${quantity}x ${item.name} to your ongoing order`,
           cart: cart
         };
       }
@@ -432,7 +432,7 @@ async function executeFunction(functionName, args, context) {
         if (!cartItem) {
           return {
             success: false,
-            error: `Item "${itemName}" not found in cart.`
+            error: `Item "${itemName}" not found in your ongoing order.`
           };
         }
         
@@ -447,7 +447,7 @@ async function executeFunction(functionName, args, context) {
         
         return {
           success: true,
-          message: `Removed ${cartItem.name} from your cart`,
+          message: `Removed ${cartItem.name} from your ongoing order`,
           cart: updatedCart
         };
       }
@@ -464,7 +464,7 @@ async function executeFunction(functionName, args, context) {
         if (!cartItem) {
           return {
             success: false,
-            error: `Item "${itemName}" not found in cart.`
+            error: `Item "${itemName}" not found in your ongoing order.`
           };
         }
         
@@ -478,7 +478,7 @@ async function executeFunction(functionName, args, context) {
           );
           return {
             success: true,
-            message: `Removed ${cartItem.name} from your cart`,
+            message: `Removed ${cartItem.name} from your ongoing order`,
             cart: updatedCart
           };
         }
@@ -517,7 +517,7 @@ async function executeFunction(functionName, args, context) {
           if (!cart || !cart.id) {
             return {
               success: true,
-              message: 'Your cart is already empty.',
+              message: 'Your ongoing order is already empty.',
               cart: { items: [], subtotal: 0, total: 0 }
             };
           }
@@ -550,14 +550,14 @@ async function executeFunction(functionName, args, context) {
           
           return {
             success: true,
-            message: 'Your cart has been cleared. It\'s now empty and ready for new items.',
+            message: 'Your ongoing order has been cleared. It\'s now empty and ready for new items.',
             cart: clearedCart
           };
         } catch (error) {
           logger.error('Error clearing cart:', error);
           return {
             success: false,
-            error: `Failed to clear cart: ${error.message}`
+            error: `Failed to clear ongoing order: ${error.message}`
           };
         }
       }
@@ -740,7 +740,7 @@ async function executeFunction(functionName, args, context) {
             await connection.rollback();
             return {
               success: false,
-              error: 'Cannot add notes: Your cart is empty. Please add items first.'
+              error: 'Cannot add notes: Your ongoing order is empty. Please add items first.'
             };
           }
           
@@ -1095,7 +1095,7 @@ async function executeFunction(functionName, args, context) {
         if (!cart.items || cart.items.length === 0) {
           return {
             success: false,
-            error: 'Cannot confirm order: Cart is empty. Please add items first.'
+            error: 'Cannot confirm order: Your ongoing order is empty. Please add items first.'
           };
         }
         

@@ -704,10 +704,10 @@ async function completeCart(businessId, branchId, customerPhoneNumber) {
  */
 function getCartSummary(cart) {
   if (!cart || !cart.items || cart.items.length === 0) {
-    return 'Your cart is empty.';
+    return 'Your ongoing order is empty.';
   }
   
-  let summary = '📋 **Your Cart:**\n\n';
+  let summary = '📋 **Your Ongoing Order:**\n\n';
   
   for (const item of cart.items) {
     summary += `• ${item.name} x${item.quantity} - $${(item.price * item.quantity).toFixed(2)}`;

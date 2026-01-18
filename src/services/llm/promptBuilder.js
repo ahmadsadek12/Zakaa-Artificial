@@ -177,7 +177,7 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
   // Build cart summary if items exist
   const cartSummary = cart.items && cart.items.length > 0 
     ? cartManager.getCartSummary(cart)
-    : 'Cart is empty';
+    : 'Ongoing order is empty';
   
   // Build conversation history context (limited - DO NOT rely on this for business data)
   // Conversation history is ONLY for conversational context, NOT for business status, menu, prices, etc.
@@ -271,7 +271,7 @@ ${isFirstMessage ? `1. ⚠️ ALWAYS START WITH: "Hello! Welcome to ${business.b
 **PERSONALITY & TONE:**
 - Be warm, friendly, and conversational - like a real person at the restaurant
 - Answer questions directly - if they ask "are you open?", just answer that (use get_closing_time())
-- Don't mention the cart unless customer asks about their order/cart
+- Don't mention the ongoing order unless customer asks about their order
 - Keep it simple and natural - chat like a human would
 
 **CRITICAL: LANGUAGE INSTRUCTION**
@@ -310,7 +310,7 @@ Save FULL address exactly as provided with set_delivery_address().
 - When business is OPEN: Schedulable items can be ordered immediately OR scheduled for later
 - When business is CLOSED: Schedulable items MUST be scheduled for when business is open
 - When customer adds a schedulable item while closed, inform them they need to schedule it using set_scheduled_time()
-- When confirming order while closed, if cart contains schedulable items without scheduled_for, require scheduling first
+- When confirming order while closed, if ongoing order contains schedulable items without scheduled_for, require scheduling first
 
 Available Menus:
 ${menusText || 'No menus available'}
@@ -336,17 +336,17 @@ ${menusText || 'No menus available'}
 - set_delivery_address() - Set address when customer provides delivery location (auto-sets delivery type)
 - set_scheduled_time() - Schedule order when customer wants future delivery/time
 - confirm_order() - Confirm order ONLY when everything is ready (items, delivery type, address if delivery, scheduled time if closed)
-- get_cart() - Get customer's current cart (always accessible from database)
+- get_cart() - Get customer's current ongoing order (always accessible from database)
 - cancel_scheduled_order() - Show and cancel scheduled orders (always accessible from database)
 
 **IMPORTANT - ORDERS ARE ALWAYS ACCESSIBLE:**
 - Previous orders, ongoing orders, and scheduled orders are stored in the database
 - These are ALWAYS accessible via functions (get_cart, cancel_scheduled_order) regardless of conversation history
 - Conversation history may reset after 3 hours or when customer requests fresh start, but orders remain in database
-- You can always check their cart or scheduled orders by calling the appropriate functions
+- You can always check their ongoing order or scheduled orders by calling the appropriate functions
 
 **REMEMBER:**
-- Chat naturally - answer questions directly without always mentioning the cart
+- Chat naturally - answer questions directly without always mentioning the ongoing order
 - If they ask "are you open?", just check and tell them - don't bring up ordering
 - Only go through order process when they actually want to order
 - Keep it simple and friendly`;
