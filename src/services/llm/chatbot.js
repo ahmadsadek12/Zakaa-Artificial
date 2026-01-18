@@ -68,9 +68,10 @@ function sanitizeResponse(text) {
 }
 
 /**
- * Get conversation history from the last hour
+ * Get conversation history - reset after 3 hours of inactivity or when customer requests fresh start
+ * Note: Orders (previous/ongoing/scheduled) are always accessible from database regardless of conversation history
  */
-async function getConversationHistory(businessId, branchId, customerPhoneNumber, limit = 50) {
+async function getConversationHistory(businessId, branchId, customerPhoneNumber, currentMessage = '', limit = 50) {
   try {
     const messageLogs = await getMongoCollection('message_logs');
     if (!messageLogs) {
@@ -83,14 +84,56 @@ async function getConversationHistory(businessId, branchId, customerPhoneNumber,
       return [];
     }
     
-    // Get messages from the last 24 hours (increased from 1 hour to maintain context)
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    // Check if customer explicitly requested a fresh start
+    const freshStartPhrases = [
+      'start fresh', 'fresh start', 'new conversation', 'start new',
+      'forget everything', 'forget all', 'reset conversation', 'reset chat',
+      'clear history', 'start over', 'begin again', 'new chat'
+    ];
+    const messageLower = (currentMessage || '').toLowerCase();
+    const requestedFreshStart = freshStartPhrases.some(phrase => messageLower.includes(phrase));
+    
+    if (requestedFreshStart) {
+      logger.info('Customer requested fresh start - resetting conversation history', {
+        customerPhoneNumber,
+        message: currentMessage.substring(0, 50)
+      });
+      return [];
+    }
+    
+    // Get the last message timestamp to check if more than 3 hours have passed
+    const lastMessageQuery = {
+      business_id: businessId,
+      branch_id: branchId || businessId,
+      customer_phone_number: customerPhoneNumber
+    };
+    
+    const lastMessage = await messageLogs
+      .findOne(lastMessageQuery, { sort: { timestamp: -1 } });
+    
+    if (lastMessage) {
+      const lastMessageTime = new Date(lastMessage.timestamp);
+      const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      
+      // If last message was more than 3 hours ago, reset conversation (fresh start)
+      if (lastMessageTime < threeHoursAgo) {
+        logger.info('Last message was more than 3 hours ago - resetting conversation history', {
+          customerPhoneNumber,
+          lastMessageTime: lastMessageTime.toISOString(),
+          hoursSinceLastMessage: (Date.now() - lastMessageTime.getTime()) / (1000 * 60 * 60)
+        });
+        return [];
+      }
+    }
+    
+    // Get messages from the last 3 hours (for active conversations)
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
     
     const query = {
       business_id: businessId,
       branch_id: branchId || businessId,
       customer_phone_number: customerPhoneNumber,
-      timestamp: { $gte: oneDayAgo }
+      timestamp: { $gte: threeHoursAgo }
     };
     
     logger.info('Fetching conversation history', {
@@ -162,10 +205,12 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
     }
     
     // Get conversation history first to check if this is first message
+    // Pass current message to detect if customer requested fresh start
     const messageHistory = await getConversationHistory(
       business.id, 
       branch?.id || business.id, 
-      customerPhoneNumber
+      customerPhoneNumber,
+      message // Pass current message to check for fresh start requests
     );
     
     logger.info('Conversation history loaded', { 

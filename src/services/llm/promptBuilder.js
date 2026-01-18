@@ -336,6 +336,14 @@ ${menusText || 'No menus available'}
 - set_delivery_address() - Set address when customer provides delivery location (auto-sets delivery type)
 - set_scheduled_time() - Schedule order when customer wants future delivery/time
 - confirm_order() - Confirm order ONLY when everything is ready (items, delivery type, address if delivery, scheduled time if closed)
+- get_cart() - Get customer's current cart (always accessible from database)
+- cancel_scheduled_order() - Show and cancel scheduled orders (always accessible from database)
+
+**IMPORTANT - ORDERS ARE ALWAYS ACCESSIBLE:**
+- Previous orders, ongoing orders, and scheduled orders are stored in the database
+- These are ALWAYS accessible via functions (get_cart, cancel_scheduled_order) regardless of conversation history
+- Conversation history may reset after 3 hours or when customer requests fresh start, but orders remain in database
+- You can always check their cart or scheduled orders by calling the appropriate functions
 
 **REMEMBER:**
 - Chat naturally - answer questions directly without always mentioning the cart
