@@ -1391,7 +1391,88 @@ async function executeFunction(functionName, args, context) {
           return cached;
         }
         
-        // Get all available items from database
+        // FIRST: Check if any active menus have PDF/image/link - prioritize these over text
+        const menusWithAttachments = await queryMySQL(
+          `SELECT * FROM menus 
+           WHERE business_id = ? AND is_active = true AND deleted_at IS NULL
+           AND (menu_pdf_url IS NOT NULL OR menu_image_urls IS NOT NULL OR menu_link IS NOT NULL)
+           ORDER BY name`,
+          [business.id]
+        );
+        
+        // If menus with PDF/image/link exist, prioritize sending those instead of text menu
+        if (menusWithAttachments.length > 0) {
+          const pdfUrls = [];
+          const imageUrls = [];
+          const menuLinks = [];
+          
+          for (const menu of menusWithAttachments) {
+            // Add PDF if available
+            if (menu.menu_pdf_url) {
+              pdfUrls.push({
+                url: menu.menu_pdf_url,
+                menuName: menu.name
+              });
+            }
+            
+            // Add images if available
+            if (menu.menu_image_urls) {
+              try {
+                const menuImageUrls = typeof menu.menu_image_urls === 'string' 
+                  ? JSON.parse(menu.menu_image_urls) 
+                  : menu.menu_image_urls;
+                if (Array.isArray(menuImageUrls) && menuImageUrls.length > 0) {
+                  for (const imageUrl of menuImageUrls) {
+                    imageUrls.push({
+                      url: imageUrl,
+                      menuName: menu.name
+                    });
+                  }
+                }
+              } catch (e) {
+                logger.warn('Failed to parse menu_image_urls', { menuId: menu.id, error: e.message });
+              }
+            }
+            
+            // Add link if available (links will be included in message text)
+            if (menu.menu_link) {
+              menuLinks.push({
+                url: menu.menu_link,
+                menuName: menu.name
+              });
+            }
+          }
+          
+          // Build message with links
+          let message = '📋 Here are our menus:\n\n';
+          for (const menu of menusWithAttachments) {
+            message += `**${menu.name}**`;
+            if (menu.menu_link) {
+              message += `\n🔗 Menu link: ${menu.menu_link}`;
+            }
+            message += '\n\n';
+          }
+          
+          const result = {
+            success: true,
+            message: message,
+            // Indicate we should send PDFs/images (not text menu)
+            pdfUrls: pdfUrls.map(p => p.url),
+            imageUrls: imageUrls.map(img => img.url),
+            menuLinks: menuLinks,
+            shouldSendPdf: pdfUrls.length > 0,
+            shouldSendImages: imageUrls.length > 0,
+            // Don't include text items - we're prioritizing PDF/image/link
+            items: []
+          };
+          
+          // Cache for 5 minutes
+          cache.set(cacheKey, result, 5 * 60 * 1000);
+          
+          return result;
+        }
+        
+        // FALLBACK: No PDF/image/link available - return text menu as before
         const items = await queryMySQL(
           `SELECT i.*, m.name as menu_name FROM items i
            LEFT JOIN menus m ON i.menu_id = m.id

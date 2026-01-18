@@ -315,14 +315,25 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
           }
           
           // Track PDF URLs from function results
-          if (result.shouldSendPdf && result.pdfUrl) {
+          if (result.shouldSendPdf) {
             if (!context.pdfsToSend) {
               context.pdfsToSend = [];
             }
-            context.pdfsToSend.push({
-              url: result.pdfUrl,
-              caption: result.message || `Menu PDF for ${result.menuName || 'menu'}`
-            });
+            // Handle single PDF or array of PDFs
+            if (result.pdfUrl) {
+              context.pdfsToSend.push({
+                url: result.pdfUrl,
+                caption: result.message || `Menu PDF for ${result.menuName || 'menu'}`
+              });
+            } else if (result.pdfUrls && Array.isArray(result.pdfUrls) && result.pdfUrls.length > 0) {
+              // Multiple PDFs (from get_menu_items)
+              for (const pdfUrl of result.pdfUrls) {
+                context.pdfsToSend.push({
+                  url: pdfUrl,
+                  caption: result.message || 'Menu PDF'
+                });
+              }
+            }
           }
           
           // Track menu image URLs from function results
