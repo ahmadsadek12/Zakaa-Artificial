@@ -180,7 +180,7 @@ function getAvailableFunctions() {
         type: 'function',
         function: {
           name: 'confirm_order',
-          description: 'Confirm and place the order. This function checks CURRENT business status from database. Use this when customer wants to confirm/place their order. It will check if business is currently open (from database, not conversation history). Only use this when ongoing order has items, delivery type is set, and if delivery then address is provided.',
+          description: '⚠️ CRITICAL: Confirm and place the order. This function MUST ONLY be called when the customer EXPLICITLY says "CONFIRM" or "confirm" in their message. NEVER call this function automatically - you must ALWAYS wait for the customer to explicitly confirm. After showing order summary, ask the customer to type "CONFIRM" to place the order, and ONLY THEN call this function when they say "CONFIRM". This function checks CURRENT business status from database. It will check if business is currently open (from database, not conversation history). Only use this when ongoing order has items, delivery type is set, and if delivery then address is provided.',
         parameters: {
           type: 'object',
           properties: {},
@@ -199,6 +199,22 @@ function getAvailableFunctions() {
             orderId: {
               type: 'string',
               description: 'Order ID to cancel (optional - if not provided, will list customer\'s scheduled orders)'
+            }
+          }
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'cancel_order',
+        description: 'Cancel an accepted order. Use when customer wants to cancel their order with status "accepted". If customer has only one accepted order, cancel it directly. If customer has multiple accepted orders, list them and ask which one to cancel. The orderId parameter is optional - if not provided and there\'s only one order, it will be cancelled automatically.',
+        parameters: {
+          type: 'object',
+          properties: {
+            orderId: {
+              type: 'string',
+              description: 'Order ID to cancel (optional - if customer has only one accepted order, it will be cancelled automatically without needing this parameter)'
             }
           }
         }
@@ -1372,6 +1388,155 @@ async function executeFunction(functionName, args, context) {
         } catch (error) {
           await connection.rollback();
           logger.error('Error cancelling scheduled order', { error: error.message, orderId: order.id });
+          return {
+            success: false,
+            error: 'Sorry, there was an error cancelling your order. Please try again or contact us.'
+          };
+        } finally {
+          connection.release();
+        }
+      }
+      
+      case 'cancel_order': {
+        const { orderId } = args;
+        const { generateUUID } = require('../../utils/uuid');
+        const { getMySQLConnection } = require('../../config/database');
+        
+        // Get customer's accepted orders (excluding scheduled orders with future dates)
+        const [acceptedOrders] = await queryMySQL(
+          `SELECT id, created_at, subtotal, total, delivery_type, status, scheduled_for
+           FROM orders
+           WHERE customer_phone_number = ?
+             AND business_id = ?
+             AND status = 'accepted'
+           ORDER BY created_at DESC`,
+          [customerPhoneNumber, business.id]
+        );
+        
+        if (acceptedOrders.length === 0) {
+          return {
+            success: false,
+            error: 'You have no accepted orders to cancel.'
+          };
+        }
+        
+        // If only one order and no orderId specified, cancel it directly
+        if (acceptedOrders.length === 1 && !orderId) {
+          const order = acceptedOrders[0];
+          
+          // Cancel the order
+          const connection = await getMySQLConnection();
+          
+          try {
+            await connection.beginTransaction();
+            
+            // Update order status to rejected
+            await connection.query(
+              `UPDATE orders SET status = 'rejected', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+              [order.id]
+            );
+            
+            // Add status history
+            await connection.query(
+              `INSERT INTO order_status_history (id, order_id, status, changed_by, changed_at)
+               VALUES (?, ?, 'rejected', 'customer', CURRENT_TIMESTAMP)`,
+              [generateUUID(), order.id]
+            );
+            
+            await connection.commit();
+            
+            logger.info('Order cancelled by customer', {
+              orderId: order.id,
+              customerPhoneNumber,
+              businessId: business.id
+            });
+            
+            return {
+              success: true,
+              message: `✅ Your order has been cancelled successfully. You will not be charged.`
+            };
+            
+          } catch (error) {
+            await connection.rollback();
+            logger.error('Error cancelling order', { error: error.message, orderId: order.id });
+            return {
+              success: false,
+              error: 'Sorry, there was an error cancelling your order. Please try again or contact us.'
+            };
+          } finally {
+            connection.release();
+          }
+        }
+        
+        // If multiple orders and no orderId specified, list them
+        if (!orderId) {
+          let ordersList = '📋 Your accepted orders:\n\n';
+          for (let i = 0; i < acceptedOrders.length; i++) {
+            const order = acceptedOrders[i];
+            const orderDate = new Date(order.created_at);
+            ordersList += `${i + 1}. Order #${order.id.substring(0, 8).toUpperCase()}\n`;
+            ordersList += `   Date: ${orderDate.toLocaleString()}\n`;
+            ordersList += `   Total: $${parseFloat(order.total).toFixed(2)}\n`;
+            ordersList += `   Type: ${order.delivery_type || 'N/A'}\n`;
+            if (order.scheduled_for) {
+              ordersList += `   Scheduled: ${new Date(order.scheduled_for).toLocaleString()}\n`;
+            }
+            ordersList += '\n';
+          }
+          ordersList += 'Please specify which order you would like to cancel by providing the order number (e.g., the first 8 characters of the order ID).';
+          
+          return {
+            success: true,
+            message: ordersList,
+            orders: acceptedOrders
+          };
+        }
+        
+        // Find the order by orderId (match by prefix)
+        const order = acceptedOrders.find(o => o.id === orderId || o.id.startsWith(orderId));
+        
+        if (!order) {
+          return {
+            success: false,
+            error: `Order not found. Please check the order ID.`
+          };
+        }
+        
+        // Cancel the order
+        const connection = await getMySQLConnection();
+        
+        try {
+          await connection.beginTransaction();
+          
+          // Update order status to rejected
+          await connection.query(
+            `UPDATE orders SET status = 'rejected', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [order.id]
+          );
+          
+          // Add status history
+          await connection.query(
+            `INSERT INTO order_status_history (id, order_id, status, changed_by, changed_at)
+             VALUES (?, ?, 'rejected', 'customer', CURRENT_TIMESTAMP)`,
+            [generateUUID(), order.id]
+          );
+          
+          await connection.commit();
+          
+          logger.info('Order cancelled by customer', {
+            orderId: order.id,
+            customerPhoneNumber,
+            businessId: business.id
+          });
+          
+          return {
+            success: true,
+            message: `✅ Your order #${order.id.substring(0, 8).toUpperCase()} has been cancelled successfully. You will not be charged.`
+          };
+          
+        } catch (error) {
+          await connection.rollback();
+          logger.error('Error cancelling order', { error: error.message, orderId: order.id });
           return {
             success: false,
             error: 'Sorry, there was an error cancelling your order. Please try again or contact us.'
