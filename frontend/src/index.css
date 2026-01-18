@@ -47,14 +47,14 @@
   transform: translateX(-50%);
   width: 6px;
   height: 6px;
-  background-color: #3b82f6;
+  background-color: #111827;
   border-radius: 50%;
 }
 
 .rbc-month-view .rbc-date-cell.has-events {
-  background-color: rgba(59, 130, 246, 0.05);
+  background-color: rgba(17, 24, 39, 0.05);
 }
 
 .rbc-month-view .rbc-date-cell.has-events:hover {
-  background-color: rgba(59, 130, 246, 0.1);
+  background-color: rgba(17, 24, 39, 0.1);
 }

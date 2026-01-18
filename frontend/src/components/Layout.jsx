@@ -79,7 +79,9 @@ export default function Layout({ children }) {
           {/* Logo */}
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold text-primary-600">Zakaa</h1>
+              <Link to="/">
+                <img src="/zakaa-logo.jpeg" alt="Zakaa" className="h-10 w-auto object-contain" />
+              </Link>
               <button
                 onClick={() => setSidebarOpen(false)}
                 className="lg:hidden text-gray-500 hover:text-gray-700"

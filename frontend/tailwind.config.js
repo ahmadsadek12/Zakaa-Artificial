@@ -8,16 +8,16 @@ export default {
     extend: {
       colors: {
         primary: {
-          50: '#f0f9ff',
-          100: '#e0f2fe',
-          200: '#bae6fd',
-          300: '#7dd3fc',
-          400: '#38bdf8',
-          500: '#0ea5e9',
-          600: '#0284c7',
-          700: '#0369a1',
-          800: '#075985',
-          900: '#0c4a6e',
+          50: '#f9fafb', // Very light gray
+          100: '#f3f4f6',
+          200: '#e5e7eb',
+          300: '#d1d5db',
+          400: '#9ca3af',
+          500: '#6b7280',
+          600: '#111827', // Almost black (Gray 900) - Main brand color
+          700: '#000000', // Black
+          800: '#000000',
+          900: '#000000',
         },
       },
     },
