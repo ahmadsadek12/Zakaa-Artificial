@@ -357,11 +357,49 @@ router.put('/businesses/:id', asyncHandler(async (req, res) => {
     });
   }
   
+  // Validate required fields if they're being updated
+  if (email !== undefined && !email) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Email is required' }
+    });
+  }
+  
+  if (business_name !== undefined && !business_name) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Business name is required' }
+    });
+  }
+  
+  if (business_type !== undefined && !business_type) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Business type is required' }
+    });
+  }
+  
+  if (contact_phone_number !== undefined && !contact_phone_number) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Contact phone number is required' }
+    });
+  }
+  
   // Build update query dynamically
   const updates = [];
   const params = [];
   
   if (email !== undefined) {
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid email format' }
+      });
+    }
+    
     // Check if email is already in use by another user
     const existingUsers = await queryMySQL(
       'SELECT id FROM users WHERE email = ? AND id != ?',
@@ -381,12 +419,20 @@ router.put('/businesses/:id', asyncHandler(async (req, res) => {
   
   if (business_name !== undefined) {
     updates.push('business_name = ?');
-    params.push(business_name);
+    params.push(business_name.trim());
   }
   
   if (business_type !== undefined) {
+    // Validate business type
+    const validTypes = ['food and beverage', 'entertainment', 'sports', 'salons', 'clinics', 'rentals', 'other'];
+    if (!validTypes.includes(business_type.toLowerCase())) {
+      return res.status(400).json({
+        success: false,
+        error: { message: `Invalid business type. Must be one of: ${validTypes.join(', ')}` }
+      });
+    }
     updates.push('business_type = ?');
-    params.push(business_type);
+    params.push(business_type.toLowerCase());
   }
   
   if (business_description !== undefined) {

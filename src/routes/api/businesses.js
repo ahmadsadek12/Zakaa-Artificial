@@ -55,27 +55,8 @@ router.get('/me', asyncHandler(async (req, res) => {
  * PUT /api/businesses/me
  */
 router.put('/me', [
-  body('businessName').optional({ checkFalsy: true }).notEmpty().withMessage('Business name cannot be empty'),
-  body('businessType').optional().custom((value) => {
-    if (!value) return true; // Optional field
-    // Match database enum: 'food and beverage', 'entertainment', 'sports', 'salons', 'clinics', 'rentals', 'other'
-    const validTypes = [
-      'food and beverage', 'food & beverage', 'f & b', // Accept old format for backward compatibility
-      'entertainment', 'sports', 'salons', 'clinics', 'rentals', 'other'
-    ];
-    if (validTypes.includes(value.toLowerCase())) return true;
-    throw new Error('Invalid business type. Must be one of: food and beverage, entertainment, sports, salons, clinics, rentals, other');
-  }),
-  body('email').optional({ checkFalsy: true }).isEmail().withMessage('Valid email required'),
-  body('contactPhoneNumber').optional({ checkFalsy: true }).isString().withMessage('Contact phone must be a string'),
-  body('defaultLanguage').optional({ checkFalsy: true }).isIn(['arabic', 'arabizi', 'english', 'french']).withMessage('Invalid language'),
-  body('languages').optional({ checkFalsy: true }).custom((value) => {
-    // Accept null, undefined, or array
-    if (value === null || value === undefined) return true;
-    if (Array.isArray(value)) return true;
-    throw new Error('Languages must be an array or null');
-  }),
-  body('timezone').optional({ checkFalsy: true }).notEmpty().withMessage('Timezone cannot be empty'),
+  // Note: businessName, email, businessType, contactPhoneNumber are admin-only fields
+  // Note: defaultLanguage and timezone removed - not needed
   body('businessDescription').optional({ checkFalsy: true }).isString(),
   body('locationLatitude').optional({ checkFalsy: true }).custom((value) => {
     if (!value || value === '') return true; // Allow empty
@@ -97,17 +78,8 @@ router.put('/me', [
     if (isNaN(value) || parseFloat(value) < 0) throw new Error('Delivery price must be a positive number');
     return true;
   }),
-  body('whatsappPhoneNumberId').optional({ checkFalsy: true }).isString(),
-  body('whatsappBusinessAccountId').optional({ checkFalsy: true }).isString(),
-  body('whatsappAccessToken').optional({ checkFalsy: true }).isString(),
-  body('telegramBotToken').optional({ checkFalsy: true }).isString(),
-  body('chatbotEnabled').optional().custom((value) => {
-    // Accept boolean or string "true"/"false"
-    if (value === undefined || value === null) return true;
-    if (typeof value === 'boolean') return true;
-    if (typeof value === 'string' && (value === 'true' || value === 'false')) return true;
-    throw new Error('Chatbot enabled must be true or false');
-  }).toBoolean(),
+  // Note: Bot configuration fields (whatsappPhoneNumberId, whatsappBusinessAccountId, 
+  // whatsappAccessToken, telegramBotToken, chatbotEnabled) are admin-only fields
   body('allowScheduledOrders').optional().custom((value) => {
     if (value === undefined || value === null) return true;
     if (typeof value === 'boolean') return true;
@@ -161,16 +133,16 @@ router.put('/me', [
   }
   
   const updateData = {};
+  // Only allow businesses to edit these fields - admin-only fields removed:
+  // businessName, email, businessType, contactPhoneNumber (admin-only)
+  // defaultLanguage, timezone (removed - not needed)
+  // whatsappPhoneNumberId, whatsappBusinessAccountId, whatsappAccessToken, telegramBotToken, chatbotEnabled (admin-only)
   const allowedFields = [
-    'businessName', 'businessType', 'email', 'contactPhoneNumber',
-    'defaultLanguage', 'timezone', 'businessDescription',
+    'businessDescription',
     'locationLatitude', 'locationLongitude', 'deliveryRadiusKm', 'deliveryPrice',
     'lastOrderBeforeClosingMinutes',
-    'whatsappPhoneNumberId', 'whatsappBusinessAccountId', 'whatsappAccessToken', 'telegramBotToken',
-    'allowScheduledOrders', 'allowDelivery', 'allowTakeaway', 'allowOnSite',
-    'chatbotEnabled'
+    'allowScheduledOrders', 'allowDelivery', 'allowTakeaway', 'allowOnSite'
   ];
-  // Note: 'languages' field removed - language preferences no longer stored
   
   logger.info('Request body received:', { 
     body: req.body,

@@ -7,6 +7,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 export default function Settings() {
   const { user, fetchUser } = useAuth()
+  const isAdmin = user?.userType === 'admin'
   const [formData, setFormData] = useState({
     businessName: '',
     businessType: 'food and beverage',
@@ -18,9 +19,6 @@ export default function Settings() {
     locationLongitude: '',
     deliveryRadiusKm: '10',
     deliveryPrice: '0',
-    defaultLanguage: 'english',
-    languages: ['english', 'arabic'],
-    timezone: 'Asia/Beirut',
     whatsappPhoneNumberId: '',
     whatsappBusinessAccountId: '',
     whatsappAccessToken: '',
@@ -73,9 +71,6 @@ export default function Settings() {
         locationLongitude: user.location_longitude || '',
         deliveryRadiusKm: user.delivery_radius_km || '10',
         deliveryPrice: user.delivery_price !== null && user.delivery_price !== undefined ? String(user.delivery_price) : '0',
-        defaultLanguage: user.default_language || 'english',
-        languages: user.languages ? (typeof user.languages === 'string' ? JSON.parse(user.languages) : user.languages) : ['english', 'arabic'],
-        timezone: user.timezone || 'Asia/Beirut',
         whatsappPhoneNumberId: user.whatsapp_phone_number_id || '',
         whatsappBusinessAccountId: user.whatsapp_business_account_id || '',
         whatsappAccessToken: user.whatsapp_access_token || '',
@@ -296,9 +291,9 @@ export default function Settings() {
       
       console.log('📤 Sending password change request to:', `${API_URL}/api/businesses/me/password`)
       const requestData = {
-        current_password: passwordData.current_password,
-        new_password: passwordData.new_password,
-        confirm_password: passwordData.confirm_password
+          current_password: passwordData.current_password,
+          new_password: passwordData.new_password,
+          confirm_password: passwordData.confirm_password
       }
       console.log('📤 Request data:', { ...requestData, current_password: '***', new_password: '***', confirm_password: '***' })
       
@@ -313,11 +308,11 @@ export default function Settings() {
       if (response.data && response.data.success) {
         console.log('✅ Password changed successfully')
         setPasswordMessage({ type: 'success', text: 'Password changed successfully' })
-        setPasswordData({
-          current_password: '',
-          new_password: '',
-          confirm_password: ''
-        })
+      setPasswordData({
+        current_password: '',
+        new_password: '',
+        confirm_password: ''
+      })
         setTimeout(() => {
           setPasswordMessage({ type: '', text: '' })
         }, 5000)
@@ -433,19 +428,26 @@ export default function Settings() {
                   <label className="label">Business Name *</label>
                   <input
                     type="text"
-                    className="input"
+                    className={`input ${!isAdmin ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                     value={formData.businessName}
                     onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
+                    disabled={!isAdmin}
                     required
+                    title={!isAdmin ? 'Only admin can edit this field' : ''}
                   />
+                  {!isAdmin && (
+                    <p className="text-xs text-gray-500 mt-1">This field can only be edited by admin</p>
+                  )}
                 </div>
                 <div>
                   <label className="label">Business Type *</label>
                   <select
-                    className="input"
+                    className={`input ${!isAdmin ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                     value={formData.businessType}
                     onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
+                    disabled={!isAdmin}
                     required
+                    title={!isAdmin ? 'Only admin can edit this field' : ''}
                   >
                     <option value="food and beverage">Food & Beverage</option>
                     <option value="entertainment">Entertainment</option>
@@ -455,26 +457,40 @@ export default function Settings() {
                     <option value="rentals">Rentals</option>
                     <option value="other">Other</option>
                   </select>
+                  {!isAdmin && (
+                    <p className="text-xs text-gray-500 mt-1">This field can only be edited by admin</p>
+                  )}
                 </div>
                 <div>
                   <label className="label">Email *</label>
                   <input
                     type="email"
-                    className="input"
+                    className={`input ${!isAdmin ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    disabled={!isAdmin}
                     required
+                    title={!isAdmin ? 'Only admin can edit this field' : ''}
                   />
+                  {!isAdmin && (
+                    <p className="text-xs text-gray-500 mt-1">This field can only be edited by admin</p>
+                  )}
                 </div>
                 <div>
-                  <label className="label">Phone Number</label>
+                  <label className="label">Phone Number *</label>
                   <input
                     type="tel"
-                    className="input"
+                    className={`input ${!isAdmin ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                     value={formData.contactPhoneNumber}
                     onChange={(e) => setFormData({ ...formData, contactPhoneNumber: e.target.value })}
+                    disabled={!isAdmin}
                     placeholder="+961..."
+                    required
+                    title={!isAdmin ? 'Only admin can edit this field' : ''}
                   />
+                  {!isAdmin && (
+                    <p className="text-xs text-gray-500 mt-1">This field can only be edited by admin</p>
+                  )}
                 </div>
                 <div className="md:col-span-2">
                   <label className="label">Business Description</label>
@@ -489,67 +505,6 @@ export default function Settings() {
               </div>
             </div>
 
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Globe size={20} />
-                Language & Localization
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="label">Default Language</label>
-                  <select
-                    className="input"
-                    value={formData.defaultLanguage}
-                    onChange={(e) => setFormData({ ...formData, defaultLanguage: e.target.value })}
-                  >
-                    <option value="english">English (Default)</option>
-                    <option value="arabic">Arabic (عربي)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Timezone</label>
-                  <select
-                    className="input"
-                    value={formData.timezone}
-                    onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
-                  >
-                    <option value="Asia/Beirut">Beirut (GMT+2/+3)</option>
-                    <option value="Europe/London">London (GMT+0/+1)</option>
-                    <option value="Europe/Paris">Paris (GMT+1/+2)</option>
-                    <option value="America/New_York">New York (GMT-5/-4)</option>
-                    <option value="Asia/Dubai">Dubai (GMT+4)</option>
-                  </select>
-                </div>
-              </div>
-              
-              <div className="mt-4">
-                <label className="label">Bot Default Language</label>
-                <p className="text-sm text-gray-500 mb-2">The bot always starts in English. Customers can request Arabic by saying "Arabic" or "عربي"</p>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <p className="text-sm text-gray-700">
-                    🌐 <strong>Default:</strong> English<br/>
-                    🔄 <strong>Available:</strong> English, Arabic (عربي)
-                  </p>
-                </div>
-                {/* Hidden language checkboxes - kept for backward compatibility but hidden */}
-                <div className="hidden">
-                  {[
-                    { value: 'english', label: 'English' },
-                    { value: 'arabic', label: 'عربي (Arabic)' }
-                  ].map(lang => (
-                    <label key={lang.value} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.languages.includes(lang.value)}
-                        onChange={() => handleLanguageToggle(lang.value)}
-                        className="rounded"
-                      />
-                      <span className="text-sm">{lang.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
           </div>
         )}
 
@@ -762,13 +717,16 @@ export default function Settings() {
                 <button
                   type="button"
                   onClick={() => {
+                    if (!isAdmin) return
                     const newValue = !formData.chatbotEnabled
                     console.log('Toggle clicked! Changing chatbotEnabled from', formData.chatbotEnabled, 'to', newValue)
                     setFormData({ ...formData, chatbotEnabled: newValue })
                   }}
+                  disabled={!isAdmin}
                   className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
                     formData.chatbotEnabled ? 'bg-green-600' : 'bg-gray-300'
-                  }`}
+                  } ${!isAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title={!isAdmin ? 'Only admin can edit this field' : ''}
                 >
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -788,6 +746,13 @@ export default function Settings() {
               </div>
             </div>
 
+            {!isAdmin && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ <strong>Bot Configuration is Admin-Only:</strong> These settings can only be edited by administrators. Contact support if you need changes.
+                </p>
+              </div>
+            )}
             <div>
               <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <MessageSquare size={24} />
@@ -801,12 +766,17 @@ export default function Settings() {
                   </label>
                   <input
                     type="text"
-                    className="input font-mono"
+                    className={`input font-mono ${!isAdmin ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                     value={formData.whatsappPhoneNumberId}
                     onChange={(e) => setFormData({ ...formData, whatsappPhoneNumberId: e.target.value })}
+                    disabled={!isAdmin}
                     placeholder="1234567890123456"
+                    title={!isAdmin ? 'Only admin can edit this field' : ''}
                   />
                   <p className="text-sm text-gray-500 mt-1">Found in Meta Business Suite → WhatsApp → API Setup</p>
+                  {!isAdmin && (
+                    <p className="text-xs text-gray-500 mt-1">This field can only be edited by admin</p>
+                  )}
                 </div>
                 <div>
                   <label className="label flex items-center gap-2">
@@ -815,12 +785,17 @@ export default function Settings() {
                   </label>
                   <input
                     type="text"
-                    className="input font-mono"
+                    className={`input font-mono ${!isAdmin ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                     value={formData.whatsappBusinessAccountId}
                     onChange={(e) => setFormData({ ...formData, whatsappBusinessAccountId: e.target.value })}
+                    disabled={!isAdmin}
                     placeholder="1234567890123456"
+                    title={!isAdmin ? 'Only admin can edit this field' : ''}
                   />
                   <p className="text-sm text-gray-500 mt-1">Your WABA ID from Meta Business Manager</p>
+                  {!isAdmin && (
+                    <p className="text-xs text-gray-500 mt-1">This field can only be edited by admin</p>
+                  )}
                 </div>
                 <div>
                   <label className="label flex items-center gap-2">
@@ -829,12 +804,17 @@ export default function Settings() {
                   </label>
                   <input
                     type="password"
-                    className="input font-mono"
+                    className={`input font-mono ${!isAdmin ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                     value={formData.whatsappAccessToken}
                     onChange={(e) => setFormData({ ...formData, whatsappAccessToken: e.target.value })}
+                    disabled={!isAdmin}
                     placeholder="EAAxxxxxxxxxxxxx..."
+                    title={!isAdmin ? 'Only admin can edit this field' : ''}
                   />
                   <p className="text-sm text-gray-500 mt-1">Your permanent access token from Meta Business Suite</p>
+                  {!isAdmin && (
+                    <p className="text-xs text-gray-500 mt-1">This field can only be edited by admin</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -851,12 +831,17 @@ export default function Settings() {
                 </label>
                 <input
                   type="text"
-                  className="input font-mono"
+                  className={`input font-mono ${!isAdmin ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                   value={formData.telegramBotToken}
                   onChange={(e) => setFormData({ ...formData, telegramBotToken: e.target.value })}
+                  disabled={!isAdmin}
                   placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
+                  title={!isAdmin ? 'Only admin can edit this field' : ''}
                 />
                 <p className="text-sm text-gray-500 mt-1">Get from @BotFather on Telegram</p>
+                {!isAdmin && (
+                  <p className="text-xs text-gray-500 mt-1">This field can only be edited by admin</p>
+                )}
               </div>
               
               <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
