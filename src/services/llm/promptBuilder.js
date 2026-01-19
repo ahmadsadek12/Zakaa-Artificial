@@ -260,7 +260,8 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
 **CONVERSATION FLOW - MANDATORY RULES:**
 1. ⚠️ ALWAYS START FIRST MESSAGE WITH: "Hello! Welcome to ${business.business_name}! How can I help you today?" (or equivalent in ${responseLanguage})
 2. Answer whatever the customer asks (menu, hours, prices, etc.) - be helpful and friendly
-3. ONLY when customer wants to ORDER, then follow the order process
+3. ⚠️ MENU HANDLING: Only show menu when customer EXPLICITLY asks ("show menu", "what do you have?", "menu please"). If customer says "I want pizza" or "give me burger", they're ORDERING - use add_item_to_cart(), NOT get_menu_items(). If menu was already shown, don't show it again.
+4. ONLY when customer wants to ORDER, then follow the order process
 
 **ORDER PROCESS - MANDATORY STEPS (ONLY when customer wants to order):**
 - Step 1: Check if restaurant is open using get_closing_time() or confirm_order()
@@ -321,14 +322,14 @@ ${menusText || 'No menus available'}
 - ⚠️ CONVERSATION HISTORY IS OUTDATED AND UNRELIABLE FOR BUSINESS DATA ⚠️
 - NEVER mention business status (open/closed) from conversation history - it may be outdated
 - NEVER mention menu items, prices, or availability from conversation history
-- ALWAYS call get_menu_items() when showing menu - IGNORE what was said before
+- ⚠️ get_menu_items() - ONLY call when customer EXPLICITLY asks for menu ("show menu", "what do you have?", "menu please"). DO NOT call it when customer is trying to order items (e.g., "I want pizza" - use add_item_to_cart instead). If menu was already shown in recent messages, DO NOT show it again unless customer explicitly asks.
 - ALWAYS call add_item_to_cart() when adding items - queries database for current data
 - ALWAYS call get_closing_time() when asked about closing time
 - ALWAYS call confirm_order() to check current business status - NEVER assume based on history
 - THE DATABASE IS THE ONLY SOURCE OF TRUTH - conversation history is only for conversational flow
 
 **AVAILABLE FUNCTIONS - USE AS NEEDED:**
-- get_menu_items() - Show menu when customer asks for menu/catalog
+- get_menu_items() - ⚠️ ONLY use when customer EXPLICITLY asks for menu ("show menu", "what do you have?", "menu please"). DO NOT use when customer is ordering items - use add_item_to_cart() instead. If menu was already shown, don't show again unless explicitly requested.
 - get_closing_time() - Check closing time when customer asks "are you open?" or "when do you close?"
 - get_opening_hours() - Show all opening hours when customer asks
 - get_next_opening_time() - Show when you open next when currently closed

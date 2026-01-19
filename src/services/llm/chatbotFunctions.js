@@ -208,7 +208,7 @@ function getAvailableFunctions() {
       type: 'function',
       function: {
         name: 'get_menu_items',
-        description: 'Get all available menu items, menu images, or menu PDFs. Use this as the PRIMARY function when customer asks to see the menu, wants to browse items, asks "what do you have?", "show me the menu", or requests the menu in any format. This function automatically handles PDFs, images, and text-based menus based on what\'s available.',
+        description: 'Get all available menu items, menu images, or menu PDFs. ⚠️ ONLY use this when customer EXPLICITLY asks to see the menu, wants to browse items, asks "what do you have?", "show me the menu", or requests the menu in any format. DO NOT use this when customer is trying to order specific items (e.g., "I want pizza" - use add_item_to_cart instead). If menu was already shown in recent messages, do NOT call this again unless customer explicitly asks for menu again. This function automatically handles PDFs, images, and text-based menus based on what\'s available.',
         parameters: {
           type: 'object',
           properties: {},
