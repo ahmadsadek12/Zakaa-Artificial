@@ -1410,87 +1410,108 @@ async function executeFunction(functionName, args, context) {
       }
       
       case 'get_my_orders': {
-        // Get customer's accepted orders
-        const [acceptedOrders] = await queryMySQL(
-          `SELECT 
-            o.id,
-            o.subtotal,
-            o.delivery_price,
-            o.total,
-            o.delivery_type,
-            o.scheduled_for,
-            o.created_at,
-            o.updated_at,
-            o.notes,
-            o.status
-          FROM orders o
-          WHERE o.customer_phone_number = ?
-            AND o.business_id = ?
-            AND o.status = 'accepted'
-          ORDER BY o.created_at DESC
-          LIMIT 20`,
-          [customerPhoneNumber, business.id]
-        );
-        
-        if (acceptedOrders.length === 0) {
-          return {
-            success: true,
-            message: 'You have no accepted orders at the moment.',
-            orders: []
-          };
-        }
-        
-        // Get order items for each order
-        let ordersList = '📦 **Your Accepted Orders:**\n\n';
-        for (const order of acceptedOrders) {
-          const [orderItems] = await queryMySQL(
-            `SELECT oi.*, i.name as item_name
-             FROM order_items oi
-             LEFT JOIN items i ON oi.item_id = i.id
-             WHERE oi.order_id = ?
-             ORDER BY oi.created_at ASC`,
-            [order.id]
+        try {
+          // Get customer's accepted orders
+          const acceptedOrders = await queryMySQL(
+            `SELECT 
+              o.id,
+              o.subtotal,
+              o.delivery_price,
+              o.total,
+              o.delivery_type,
+              o.scheduled_for,
+              o.created_at,
+              o.updated_at,
+              o.notes,
+              o.status
+            FROM orders o
+            WHERE o.customer_phone_number = ?
+              AND o.business_id = ?
+              AND o.status = 'accepted'
+            ORDER BY o.created_at DESC
+            LIMIT 20`,
+            [customerPhoneNumber, business.id]
           );
           
-          const orderDate = new Date(order.created_at);
-          const orderNumber = order.id.substring(0, 8).toUpperCase();
-          
-          ordersList += `**Order #${orderNumber}**\n`;
-          ordersList += `  Status: ${order.status}\n`;
-          ordersList += `  Date: ${orderDate.toLocaleString()}\n`;
-          
-          if (order.scheduled_for) {
-            const scheduledDate = new Date(order.scheduled_for);
-            ordersList += `  Scheduled for: ${scheduledDate.toLocaleString()}\n`;
+          if (!acceptedOrders || acceptedOrders.length === 0) {
+            return {
+              success: true,
+              message: 'You have no accepted orders at the moment.',
+              orders: []
+            };
           }
           
-          ordersList += `  Type: ${order.delivery_type}\n`;
-          
-          if (orderItems && orderItems.length > 0) {
-            ordersList += `  Items:\n`;
-            for (const item of orderItems) {
-              ordersList += `    • ${item.quantity}x ${item.name_at_time || item.item_name || 'Item'}\n`;
+          // Get order items for each order
+          let ordersList = '📦 **Your Accepted Orders:**\n\n';
+          for (const order of acceptedOrders) {
+            try {
+              const orderItems = await queryMySQL(
+                `SELECT oi.*, i.name as item_name
+                 FROM order_items oi
+                 LEFT JOIN items i ON oi.item_id = i.id
+                 WHERE oi.order_id = ?
+                 ORDER BY oi.created_at ASC`,
+                [order.id]
+              );
+              
+              const orderDate = new Date(order.created_at);
+              const orderNumber = order.id.substring(0, 8).toUpperCase();
+              
+              ordersList += `**Order #${orderNumber}**\n`;
+              ordersList += `  Status: ${order.status}\n`;
+              ordersList += `  Date: ${orderDate.toLocaleString()}\n`;
+              
+              if (order.scheduled_for) {
+                const scheduledDate = new Date(order.scheduled_for);
+                ordersList += `  Scheduled for: ${scheduledDate.toLocaleString()}\n`;
+              }
+              
+              ordersList += `  Type: ${order.delivery_type}\n`;
+              
+              if (orderItems && orderItems.length > 0) {
+                ordersList += `  Items:\n`;
+                for (const item of orderItems) {
+                  ordersList += `    • ${item.quantity}x ${item.name_at_time || item.item_name || 'Item'}\n`;
+                }
+              }
+              
+              ordersList += `  Total: $${parseFloat(order.total).toFixed(2)}\n`;
+              
+              if (order.notes && !order.notes.startsWith('__cart__')) {
+                // Extract customer notes (remove cart marker if present)
+                const customerNotes = order.notes.replace(/^__cart__\s*\n?\s*NOTES:\s*/i, '').trim();
+                if (customerNotes) {
+                  ordersList += `  Notes: ${customerNotes}\n`;
+                }
+              }
+              
+              ordersList += '\n';
+            } catch (itemError) {
+              logger.error('Error fetching order items', { 
+                orderId: order.id, 
+                error: itemError.message 
+              });
+              // Continue with other orders even if one fails
             }
           }
           
-          ordersList += `  Total: $${parseFloat(order.total).toFixed(2)}\n`;
-          
-          if (order.notes && !order.notes.startsWith('__cart__')) {
-            // Extract customer notes (remove cart marker if present)
-            const customerNotes = order.notes.replace(/^__cart__\s*\n?\s*NOTES:\s*/i, '').trim();
-            if (customerNotes) {
-              ordersList += `  Notes: ${customerNotes}\n`;
-            }
-          }
-          
-          ordersList += '\n';
+          return {
+            success: true,
+            message: ordersList,
+            orders: acceptedOrders
+          };
+        } catch (error) {
+          logger.error('Error in get_my_orders', { 
+            error: error.message, 
+            stack: error.stack,
+            customerPhoneNumber,
+            businessId: business.id
+          });
+          return {
+            success: false,
+            error: 'Sorry, there was an issue retrieving your orders. Please try again later.'
+          };
         }
-        
-        return {
-          success: true,
-          message: ordersList,
-          orders: acceptedOrders
-        };
       }
       
       case 'cancel_accepted_order': {
@@ -1499,7 +1520,7 @@ async function executeFunction(functionName, args, context) {
         const { getMySQLConnection } = require('../../config/database');
         
         // Get customer's accepted scheduled orders (only scheduled orders can be cancelled)
-        const [acceptedScheduledOrders] = await queryMySQL(
+        const acceptedScheduledOrders = await queryMySQL(
           `SELECT id, scheduled_for, subtotal, total, delivery_type, status
            FROM orders
            WHERE customer_phone_number = ?
