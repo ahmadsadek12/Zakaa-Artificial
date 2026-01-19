@@ -340,7 +340,9 @@ ${menusText || 'No menus available'}
 - set_scheduled_time() - Schedule order when customer wants future delivery/time
 - confirm_order() - ⚠️ CRITICAL: Confirm order ONLY when customer explicitly says "CONFIRM". NEVER call this automatically. After showing order summary, ask customer to type "CONFIRM", and ONLY call this when they say "CONFIRM". Everything must be ready (items, delivery type, address if delivery, scheduled time if closed)
 - get_cart() - Get customer's current ongoing order (always accessible from database)
+- get_my_orders() - Show customer's accepted orders when they ask "my orders", "show my orders", or want to check order status
 - cancel_scheduled_order() - Show and cancel scheduled orders (always accessible from database)
+- cancel_accepted_order() - Cancel an accepted scheduled order (only works for scheduled orders more than 2 hours away)
 
 **IMPORTANT - ORDERS ARE ALWAYS ACCESSIBLE:**
 - Previous orders, ongoing orders, and scheduled orders are stored in the database

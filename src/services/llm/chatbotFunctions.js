@@ -207,6 +207,34 @@ function getAvailableFunctions() {
     {
       type: 'function',
       function: {
+        name: 'get_my_orders',
+        description: 'Get customer\'s accepted orders. Use this when customer asks to see their orders, "my orders", "show my orders", "what orders do I have", or wants to check their order status.',
+        parameters: {
+          type: 'object',
+          properties: {},
+          required: []
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'cancel_accepted_order',
+        description: 'Cancel an accepted order. Only works for scheduled orders (orders with scheduled_for time) that are scheduled more than 2 hours in the future. Use when customer wants to cancel an accepted order. If no orderId provided, will list their accepted scheduled orders.',
+        parameters: {
+          type: 'object',
+          properties: {
+            orderId: {
+              type: 'string',
+              description: 'Order ID to cancel (optional - if not provided, will list customer\'s accepted scheduled orders)'
+            }
+          }
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
         name: 'get_menu_items',
         description: 'Get all available menu items, menu images, or menu PDFs. ⚠️ ONLY use this when customer\'s CURRENT message EXPLICITLY asks to see the menu, wants to browse items, asks "what do you have?", "show me the menu", or requests the menu in any format. DO NOT use this for greetings ("Hello", "Hi", "Hey") - just greet back. DO NOT use this when customer is trying to order specific items (e.g., "I want pizza" - use add_item_to_cart instead). If menu was already shown in recent messages, do NOT call this again unless CURRENT message explicitly asks for menu again. This function automatically handles PDFs, images, and text-based menus based on what\'s available.',
         parameters: {
@@ -1372,6 +1400,213 @@ async function executeFunction(functionName, args, context) {
         } catch (error) {
           await connection.rollback();
           logger.error('Error cancelling scheduled order', { error: error.message, orderId: order.id });
+          return {
+            success: false,
+            error: 'Sorry, there was an error cancelling your order. Please try again or contact us.'
+          };
+        } finally {
+          connection.release();
+        }
+      }
+      
+      case 'get_my_orders': {
+        // Get customer's accepted orders
+        const [acceptedOrders] = await queryMySQL(
+          `SELECT 
+            o.id,
+            o.subtotal,
+            o.delivery_price,
+            o.total,
+            o.delivery_type,
+            o.scheduled_for,
+            o.created_at,
+            o.updated_at,
+            o.notes,
+            o.status
+          FROM orders o
+          WHERE o.customer_phone_number = ?
+            AND o.business_id = ?
+            AND o.status = 'accepted'
+          ORDER BY o.created_at DESC
+          LIMIT 20`,
+          [customerPhoneNumber, business.id]
+        );
+        
+        if (acceptedOrders.length === 0) {
+          return {
+            success: true,
+            message: 'You have no accepted orders at the moment.',
+            orders: []
+          };
+        }
+        
+        // Get order items for each order
+        let ordersList = '📦 **Your Accepted Orders:**\n\n';
+        for (const order of acceptedOrders) {
+          const [orderItems] = await queryMySQL(
+            `SELECT oi.*, i.name as item_name
+             FROM order_items oi
+             LEFT JOIN items i ON oi.item_id = i.id
+             WHERE oi.order_id = ?
+             ORDER BY oi.created_at ASC`,
+            [order.id]
+          );
+          
+          const orderDate = new Date(order.created_at);
+          const orderNumber = order.id.substring(0, 8).toUpperCase();
+          
+          ordersList += `**Order #${orderNumber}**\n`;
+          ordersList += `  Status: ${order.status}\n`;
+          ordersList += `  Date: ${orderDate.toLocaleString()}\n`;
+          
+          if (order.scheduled_for) {
+            const scheduledDate = new Date(order.scheduled_for);
+            ordersList += `  Scheduled for: ${scheduledDate.toLocaleString()}\n`;
+          }
+          
+          ordersList += `  Type: ${order.delivery_type}\n`;
+          
+          if (orderItems && orderItems.length > 0) {
+            ordersList += `  Items:\n`;
+            for (const item of orderItems) {
+              ordersList += `    • ${item.quantity}x ${item.name_at_time || item.item_name || 'Item'}\n`;
+            }
+          }
+          
+          ordersList += `  Total: $${parseFloat(order.total).toFixed(2)}\n`;
+          
+          if (order.notes && !order.notes.startsWith('__cart__')) {
+            // Extract customer notes (remove cart marker if present)
+            const customerNotes = order.notes.replace(/^__cart__\s*\n?\s*NOTES:\s*/i, '').trim();
+            if (customerNotes) {
+              ordersList += `  Notes: ${customerNotes}\n`;
+            }
+          }
+          
+          ordersList += '\n';
+        }
+        
+        return {
+          success: true,
+          message: ordersList,
+          orders: acceptedOrders
+        };
+      }
+      
+      case 'cancel_accepted_order': {
+        const { orderId } = args;
+        const { generateUUID } = require('../../utils/uuid');
+        const { getMySQLConnection } = require('../../config/database');
+        
+        // Get customer's accepted scheduled orders (only scheduled orders can be cancelled)
+        const [acceptedScheduledOrders] = await queryMySQL(
+          `SELECT id, scheduled_for, subtotal, total, delivery_type, status
+           FROM orders
+           WHERE customer_phone_number = ?
+             AND business_id = ?
+             AND status = 'accepted'
+             AND scheduled_for IS NOT NULL
+             AND scheduled_for > NOW()
+           ORDER BY scheduled_for ASC`,
+          [customerPhoneNumber, business.id]
+        );
+        
+        if (acceptedScheduledOrders.length === 0) {
+          return {
+            success: false,
+            error: 'You have no accepted scheduled orders that can be cancelled.'
+          };
+        }
+        
+        // If no orderId provided, list their orders
+        if (!orderId) {
+          let ordersList = '📅 **Your Accepted Scheduled Orders:**\n\n';
+          for (const order of acceptedScheduledOrders) {
+            const orderDate = new Date(order.scheduled_for);
+            const hoursUntil = (orderDate - new Date()) / (1000 * 60 * 60);
+            const orderNumber = order.id.substring(0, 8).toUpperCase();
+            
+            ordersList += `**Order #${orderNumber}**\n`;
+            ordersList += `  Scheduled for: ${orderDate.toLocaleString()}\n`;
+            ordersList += `  Total: $${parseFloat(order.total).toFixed(2)}\n`;
+            ordersList += `  Type: ${order.delivery_type}\n`;
+            if (hoursUntil < 2) {
+              ordersList += `  ⚠️ Cannot cancel (less than 2 hours remaining)\n`;
+            } else {
+              ordersList += `  ✅ Can be cancelled\n`;
+            }
+            ordersList += '\n';
+          }
+          ordersList += 'To cancel, provide the order ID or order number.';
+          
+          return {
+            success: true,
+            message: ordersList,
+            orders: acceptedScheduledOrders
+          };
+        }
+        
+        // Find the order (match by full ID or first 8 characters)
+        const order = acceptedScheduledOrders.find(o => 
+          o.id === orderId || 
+          o.id.startsWith(orderId) ||
+          o.id.substring(0, 8).toUpperCase() === orderId.toUpperCase()
+        );
+        
+        if (!order) {
+          return {
+            success: false,
+            error: `Order not found. Please check the order ID. Use get_my_orders() to see your orders.`
+          };
+        }
+        
+        // Check if more than 2 hours remaining
+        const hoursUntil = (new Date(order.scheduled_for) - new Date()) / (1000 * 60 * 60);
+        
+        if (hoursUntil < 2) {
+          return {
+            success: false,
+            error: `Cannot cancel this order. It's scheduled in less than 2 hours. Please contact us directly if you need to cancel.`
+          };
+        }
+        
+        // Cancel the order
+        const connection = await getMySQLConnection();
+        
+        try {
+          await connection.beginTransaction();
+          
+          // Update order status to rejected
+          await connection.query(
+            `UPDATE orders SET status = 'rejected', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [order.id]
+          );
+          
+          // Add status history
+          await connection.query(
+            `INSERT INTO order_status_history (id, order_id, status, changed_by, changed_at)
+             VALUES (?, ?, 'rejected', 'customer', CURRENT_TIMESTAMP)`,
+            [generateUUID(), order.id]
+          );
+          
+          await connection.commit();
+          
+          logger.info('Accepted scheduled order cancelled by customer', {
+            orderId: order.id,
+            customerPhoneNumber,
+            businessId: business.id,
+            scheduledFor: order.scheduled_for
+          });
+          
+          const orderNumber = order.id.substring(0, 8).toUpperCase();
+          return {
+            success: true,
+            message: `✅ Your order #${orderNumber} has been cancelled successfully. You will not be charged.`
+          };
+          
+        } catch (error) {
+          await connection.rollback();
+          logger.error('Error cancelling accepted order', { error: error.message, orderId: order.id });
           return {
             success: false,
             error: 'Sorry, there was an error cancelling your order. Please try again or contact us.'
