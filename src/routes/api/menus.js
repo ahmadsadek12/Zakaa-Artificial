@@ -148,7 +148,7 @@ router.post('/', upload.fields([
     } else if (pdfFile.buffer && s3) {
       try {
         const fileName = `${generateUUID()}-${pdfFile.originalname}`;
-        menuPdfUrl = await uploadToS3(pdfFile.buffer, fileName, pdfFile.mimetype, 'menus');
+        menuPdfUrl = await uploadToS3(pdfFile.buffer, fileName, pdfFile.mimetype, 'menus', req.businessId);
         logger.info('Menu PDF uploaded successfully', { 
           menuPdfUrl, 
           fileName,
@@ -182,7 +182,7 @@ router.post('/', upload.fields([
             // Generate filename with .jpg extension (compressed images are JPEG)
             const originalName = imageFile.originalname.replace(/\.[^/.]+$/, '');
             const fileName = `${generateUUID()}-${originalName}.jpg`;
-            const imageUrl = await uploadToS3(compressedBuffer, fileName, 'image/jpeg', 'menus');
+            const imageUrl = await uploadToS3(compressedBuffer, fileName, 'image/jpeg', 'menus', req.businessId);
             menuImageUrls.push(imageUrl);
             logger.info('Menu image uploaded successfully', { 
               imageUrl, 
@@ -268,7 +268,7 @@ router.put('/:id', requireOwnership('menus'), upload.fields([
     } else if (pdfFile.buffer && s3) {
       try {
         const fileName = `${generateUUID()}-${pdfFile.originalname}`;
-        updateData.menuPdfUrl = await uploadToS3(pdfFile.buffer, fileName, pdfFile.mimetype, 'menus');
+        updateData.menuPdfUrl = await uploadToS3(pdfFile.buffer, fileName, pdfFile.mimetype, 'menus', req.businessId);
       } catch (error) {
         logger.warn('S3 PDF upload failed, skipping PDF update:', error.message);
       }
@@ -319,7 +319,7 @@ router.put('/:id', requireOwnership('menus'), upload.fields([
             // Generate filename with .jpg extension (compressed images are JPEG)
             const originalName = imageFile.originalname.replace(/\.[^/.]+$/, '');
             const fileName = `${generateUUID()}-${originalName}.jpg`;
-            const imageUrl = await uploadToS3(compressedBuffer, fileName, 'image/jpeg', 'menus');
+            const imageUrl = await uploadToS3(compressedBuffer, fileName, 'image/jpeg', 'menus', req.businessId);
             finalImageUrls.push(imageUrl);
           } catch (error) {
             logger.warn('S3 image upload failed, skipping image:', error.message);

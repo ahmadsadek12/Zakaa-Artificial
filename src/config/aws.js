@@ -32,15 +32,24 @@ const S3_CONFIG = {
  * @param {Buffer} fileBuffer - File buffer
  * @param {string} fileName - File name
  * @param {string} mimetype - File mimetype
- * @param {string} folder - Optional folder prefix
+ * @param {string} folder - Optional folder prefix (e.g., 'menus', 'items')
+ * @param {string} businessId - Business ID to organize files by business
  * @returns {Promise<string>} - S3 URL
  */
-async function uploadToS3(fileBuffer, fileName, mimetype, folder = '') {
+async function uploadToS3(fileBuffer, fileName, mimetype, folder = '', businessId = null) {
   if (!s3) {
     throw new Error('S3 is not configured. Please set AWS credentials in .env file');
   }
   
-  const key = folder ? `${folder}/${fileName}` : fileName;
+  // Build S3 key: {businessId}/{folder}/{fileName}
+  let key = fileName;
+  if (businessId && folder) {
+    key = `${businessId}/${folder}/${fileName}`;
+  } else if (businessId) {
+    key = `${businessId}/${fileName}`;
+  } else if (folder) {
+    key = `${folder}/${fileName}`;
+  }
   
   const params = {
     Bucket: S3_CONFIG.bucket,

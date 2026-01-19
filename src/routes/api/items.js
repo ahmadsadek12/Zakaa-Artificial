@@ -202,7 +202,7 @@ router.post('/', upload.single('itemImage'), handleMulterError, [
         // Generate filename with .jpg extension (compressed images are JPEG)
         const originalName = req.file.originalname.replace(/\.[^/.]+$/, '');
         const fileName = `${generateUUID()}-${originalName}.jpg`;
-        itemImageUrl = await uploadToS3(compressedBuffer, fileName, 'image/jpeg', 'items');
+        itemImageUrl = await uploadToS3(compressedBuffer, fileName, 'image/jpeg', 'items', req.businessId);
         logger.info('Item image uploaded successfully', { 
           itemImageUrl, 
           fileName,
@@ -359,8 +359,8 @@ router.put('/:id', requireOwnership('items'), upload.single('itemImage'), handle
         
         // Generate filename with .jpg extension (compressed images are JPEG)
         const originalName = req.file.originalname.replace(/\.[^/.]+$/, '');
-        const fileName = `${generateUUID()}-${originalName}.jpg`;
-        updateData.itemImageUrl = await uploadToS3(compressedBuffer, fileName, 'image/jpeg', 'items');
+            const fileName = `${generateUUID()}-${originalName}.jpg`;
+            updateData.itemImageUrl = await uploadToS3(compressedBuffer, fileName, 'image/jpeg', 'items', req.businessId);
       } catch (error) {
         logger.warn('S3 upload failed, skipping image update:', error.message);
         // Continue without image if S3 upload fails
