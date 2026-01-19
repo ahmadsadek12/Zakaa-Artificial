@@ -11,6 +11,7 @@
     "migrate": "node database/migrate.js",
     "migrate-s3": "node database/migrate_s3_to_business_folders.js",
     "migrate-s3:dry-run": "node database/migrate_s3_to_business_folders.js --dry-run",
+    "check-s3-urls": "node database/check_s3_urls.js",
     "test": "jest --coverage",
     "test:watch": "jest --watch"
   },
