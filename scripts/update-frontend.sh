@@ -28,12 +28,19 @@ npm install
 # Check if .env file exists, if not create it
 if [ ! -f ".env" ]; then
     echo -e "${YELLOW}⚙️ Creating frontend .env file...${NC}"
-    # Try to get EC2 IP from nginx config or use default
-    EC2_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "localhost:3000")
+    # Use HTTPS with same domain (assuming API is on same domain)
+    # Change this to your actual domain or API subdomain
     cat > .env << EOF
-VITE_API_URL=http://${EC2_IP}
+VITE_API_URL=https://zakaa-artificial.com
 EOF
-    echo "Created .env with VITE_API_URL=http://${EC2_IP}"
+    echo "Created .env with VITE_API_URL=https://zakaa-artificial.com"
+else
+    # Update existing .env to use HTTPS
+    echo -e "${YELLOW}⚙️ Updating frontend .env file to use HTTPS...${NC}"
+    # Replace HTTP with HTTPS and placeholder with actual domain
+    sed -i 's|http://your_ec2_ip_or_domain|https://zakaa-artificial.com|g' .env
+    sed -i 's|http://[^/]*|https://zakaa-artificial.com|g' .env || true
+    echo "Updated .env to use HTTPS"
 fi
 
 # Build frontend for production
