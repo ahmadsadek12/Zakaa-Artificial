@@ -333,7 +333,8 @@ router.put('/:id', requireOwnership('menus'), upload.fields([
     updateData.menuImageUrls = finalImageUrls;
   } else if (existingImageUrls !== undefined) {
     // If no new images but existingImageUrls was provided (user removed some), update with kept images only
-    updateData.menuImageUrls = finalImageUrls;
+    // Note: existingImageUrls can be empty array [] to remove all images
+    updateData.menuImageUrls = finalImageUrls.length > 0 ? finalImageUrls : null;
   }
   
   const updatedMenu = await menuRepository.update(req.params.id, req.businessId, updateData);

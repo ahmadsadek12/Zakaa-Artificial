@@ -183,7 +183,8 @@ async function migrateMenus(dryRun = false, deleteOld = false) {
           }
         } catch (error) {
           logger.warn('Failed to parse menu_image_urls', { menuId: menu.id, error: error.message });
-          continue;
+          // Don't continue - still try to migrate PDF if it exists
+          imageUrls = [];
         }
         
         const newImageUrls = [];

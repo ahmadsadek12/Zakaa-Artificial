@@ -60,9 +60,9 @@ export default function Menus() {
         formDataToSend.append('menuPdf', formData.menuPdf)
       }
       
-      // Append existing image URLs to keep (only when editing)
-      if (editingMenu && formData.existingImageUrls.length > 0) {
-        formDataToSend.append('existingImageUrls', JSON.stringify(formData.existingImageUrls))
+      // Always send existingImageUrls when editing (even if empty array - to allow removing all images)
+      if (editingMenu) {
+        formDataToSend.append('existingImageUrls', JSON.stringify(formData.existingImageUrls || []))
       }
       
       // Append multiple images
