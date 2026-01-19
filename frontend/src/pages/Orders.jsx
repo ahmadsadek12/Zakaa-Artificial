@@ -3,10 +3,14 @@ import axios from 'axios'
 import { Search, Filter, Eye, X, User, Phone, Calendar, MapPin, CreditCard, FileText, Plus, ShoppingCart, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
+import { useAuth } from '../contexts/AuthContext'
+import { getTerminology } from '../utils/terminology'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 export default function Orders() {
+  const { user } = useAuth()
+  const terms = getTerminology(user?.business_type)
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
@@ -298,7 +302,7 @@ export default function Orders() {
   }
 
   const statusOptions = [
-    { value: 'all', label: 'All Orders' },
+    { value: 'all', label: `All ${terms.orders}` },
     { value: 'accepted', label: 'Accepted' },
     { value: 'delivering', label: 'Delivering' },
     { value: 'completed', label: 'Completed' },
@@ -317,15 +321,15 @@ export default function Orders() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Orders</h1>
-          <p className="text-gray-600 mt-2">Manage and track all your orders</p>
+          <h1 className="text-3xl font-bold text-gray-900">{terms.orders}</h1>
+          <p className="text-gray-600 mt-2">Manage and track all your {terms.orders.toLowerCase()}</p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
           className="btn btn-primary flex items-center gap-2"
         >
           <Plus size={20} />
-          Create Order
+          Create {terms.order}
         </button>
       </div>
 
@@ -336,7 +340,7 @@ export default function Orders() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
             <input
               type="text"
-              placeholder="Search orders..."
+              placeholder={`Search ${terms.orders.toLowerCase()}...`}
               className="input pl-10"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -363,7 +367,7 @@ export default function Orders() {
       <div className="card">
         {filteredOrders.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
-            <p>No orders found</p>
+            <p>No {terms.orders.toLowerCase()} found</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -506,7 +510,7 @@ export default function Orders() {
               
               {/* Order Items */}
               <div>
-                <h3 className="text-lg font-semibold mb-4">Order Items</h3>
+                <h3 className="text-lg font-semibold mb-4">{terms.orderItems}</h3>
                 <div className="space-y-3">
                   {createFormData.selectedItems.map((item, index) => (
                     <div key={index} className="flex gap-3 items-start">
@@ -517,7 +521,7 @@ export default function Orders() {
                           onChange={(e) => updateOrderItem(index, 'itemId', e.target.value)}
                           required
                         >
-                          <option value="">Select item...</option>
+                          <option value="">{terms.selectItem}</option>
                           {items.map(i => (
                             <option key={i.id} value={i.id}>
                               {i.name} - ${i.price}
@@ -664,7 +668,7 @@ export default function Orders() {
                   type="submit"
                   className="btn btn-primary"
                 >
-                  Create Order
+                  Create {terms.order}
                 </button>
               </div>
             </form>
@@ -795,13 +799,13 @@ export default function Orders() {
 
                   {/* Order Items */}
                   <div className="border-b border-gray-200 pb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Items</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">{terms.orderItems}</h3>
                     {orderDetails.items && orderDetails.items.length > 0 ? (
                       <div className="overflow-x-auto">
                         <table className="w-full">
                           <thead>
                             <tr className="border-b border-gray-200">
-                              <th className="text-left py-2 px-3 text-sm font-semibold text-gray-700">Item</th>
+                              <th className="text-left py-2 px-3 text-sm font-semibold text-gray-700">{terms.itemName}</th>
                               <th className="text-right py-2 px-3 text-sm font-semibold text-gray-700">Quantity</th>
                               <th className="text-right py-2 px-3 text-sm font-semibold text-gray-700">Price</th>
                               <th className="text-right py-2 px-3 text-sm font-semibold text-gray-700">Subtotal</th>
@@ -827,7 +831,7 @@ export default function Orders() {
                         </table>
                       </div>
                     ) : (
-                      <p className="text-gray-500">No items found</p>
+                      <p className="text-gray-500">{terms.noItems}</p>
                     )}
                   </div>
 

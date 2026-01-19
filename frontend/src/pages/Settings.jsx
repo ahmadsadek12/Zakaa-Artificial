@@ -17,7 +17,6 @@ export default function Settings() {
     businessDescription: '',
     locationLatitude: '',
     locationLongitude: '',
-    deliveryRadiusKm: '10',
     deliveryPrice: '0',
     whatsappPhoneNumberId: '',
     whatsappBusinessAccountId: '',
@@ -69,7 +68,6 @@ export default function Settings() {
         businessDescription: user.business_description || '',
         locationLatitude: user.location_latitude || '',
         locationLongitude: user.location_longitude || '',
-        deliveryRadiusKm: user.delivery_radius_km || '10',
         deliveryPrice: user.delivery_price !== null && user.delivery_price !== undefined ? String(user.delivery_price) : '0',
         whatsappPhoneNumberId: user.whatsapp_phone_number_id || '',
         whatsappBusinessAccountId: user.whatsapp_business_account_id || '',
@@ -524,7 +522,7 @@ export default function Settings() {
                     onChange={(e) => setFormData({ ...formData, locationLatitude: e.target.value })}
                     placeholder="33.8938"
                   />
-                  <p className="text-sm text-gray-500 mt-1">Your business location (for delivery radius calculation)</p>
+                  <p className="text-sm text-gray-500 mt-1">Your business location</p>
                 </div>
                 <div>
                   <label className="label">Longitude</label>
@@ -536,22 +534,7 @@ export default function Settings() {
                     onChange={(e) => setFormData({ ...formData, locationLongitude: e.target.value })}
                     placeholder="35.5018"
                   />
-                  <p className="text-sm text-gray-500 mt-1">Your business location (for delivery radius calculation)</p>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="label">Delivery Radius (km)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    className="input"
-                    value={formData.deliveryRadiusKm}
-                    onChange={(e) => setFormData({ ...formData, deliveryRadiusKm: e.target.value })}
-                    placeholder="10"
-                  />
-                  <p className="text-sm text-gray-500 mt-1">
-                    Maximum distance you deliver to (in kilometers). Leave blank for unlimited.
-                  </p>
+                  <p className="text-sm text-gray-500 mt-1">Your business location</p>
                 </div>
                 <div className="md:col-span-2">
                   <label className="label">Delivery Price</label>

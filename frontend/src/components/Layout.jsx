@@ -17,6 +17,7 @@ import {
   Building2
 } from 'lucide-react'
 import { useState } from 'react'
+import { getTerminology, getNavTerminology } from '../utils/terminology'
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth()
@@ -37,16 +38,20 @@ export default function Layout({ children }) {
     { path: '/admin/profile', icon: Settings, label: 'My Profile' },
   ]
 
+  // Get terminology based on business type
+  const terms = getTerminology(user?.business_type)
+  const navTerms = getNavTerminology()
+
   // Business navigation items
   const businessNavItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/orders', icon: ShoppingCart, label: 'Orders' },
-    { path: '/carts', icon: ShoppingBag, label: 'Carts' },
+    { path: '/orders', icon: ShoppingCart, label: terms.orders },
+    { path: '/carts', icon: ShoppingBag, label: terms.activeRequests },
     { path: '/branches', icon: Store, label: 'Branches' },
-    { path: '/menus', icon: UtensilsCrossed, label: 'Menus' },
-    { path: '/items', icon: Package, label: 'Items' },
+    { path: '/menus', icon: UtensilsCrossed, label: terms.menus },
+    { path: '/items', icon: Package, label: terms.items },
     { path: '/scheduled', icon: Calendar, label: 'Scheduled' },
-    { path: '/analytics', icon: BarChart3, label: 'Analytics' },
+    { path: '/analytics', icon: BarChart3, label: navTerms.analytics },
     { path: '/settings', icon: Settings, label: 'Settings' },
   ]
 

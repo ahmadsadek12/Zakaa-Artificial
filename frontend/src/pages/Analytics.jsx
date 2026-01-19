@@ -3,6 +3,7 @@ import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import { BarChart3, TrendingUp, DollarSign, ShoppingCart, Users, Package, Clock } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts'
+import { getNavTerminology } from '../utils/terminology'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
@@ -10,6 +11,7 @@ const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 
 export default function Analytics() {
   const { user } = useAuth()
+  const navTerms = getNavTerminology()
   const [overview, setOverview] = useState(null)
   const [revenue, setRevenue] = useState([])
   const [topCustomers, setTopCustomers] = useState([])
@@ -74,8 +76,8 @@ export default function Analytics() {
       <div className="card text-center py-12">
         <BarChart3 size={64} className="mx-auto mb-4 text-gray-400" />
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Premium Feature</h2>
-        <p className="text-gray-600 mb-6">Upgrade to Premium to access advanced analytics</p>
-        <button className="btn btn-primary">Upgrade to Premium</button>
+        <p className="text-gray-600 mb-6">{navTerms.upgradeToPremium} to access advanced {navTerms.analytics.toLowerCase()}</p>
+        <button className="btn btn-primary">{navTerms.upgradeToPremium}</button>
       </div>
     )
   }
@@ -91,7 +93,7 @@ export default function Analytics() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Analytics</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{navTerms.analytics}</h1>
         <p className="text-gray-600 mt-2">Insights into your business performance</p>
       </div>
 

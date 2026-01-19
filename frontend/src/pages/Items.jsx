@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { Plus, Edit, Trash2, Image as ImageIcon, X, Clock, Calendar, TrendingUp } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { getTerminology } from '../utils/terminology'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
@@ -9,6 +10,7 @@ const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'
 
 export default function Items() {
   const { user } = useAuth()
+  const terms = getTerminology(user?.business_type)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -246,7 +248,7 @@ export default function Items() {
           className="btn btn-primary flex items-center gap-2"
         >
           <Plus size={20} />
-          <span>Add Item</span>
+          <span>{terms.addItem}</span>
         </button>
       </div>
 
@@ -322,7 +324,7 @@ export default function Items() {
 
       {items.length === 0 && (
         <div className="card text-center py-12">
-          <p className="text-gray-500 mb-4">No items yet</p>
+          <p className="text-gray-500 mb-4">No {terms.items.toLowerCase()} yet</p>
           <button
             onClick={() => {
               resetForm()
@@ -342,7 +344,7 @@ export default function Items() {
           <div className="bg-white rounded-xl max-w-2xl w-full p-6 my-8 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900">
-                {editingItem ? 'Edit Item' : 'Add Item'}
+                {editingItem ? terms.editItem : terms.addItem}
               </h2>
               <button
                 onClick={() => {
@@ -618,7 +620,7 @@ export default function Items() {
                   className="flex-1 btn btn-primary"
                   disabled={submitting}
                 >
-                  {submitting ? 'Saving...' : (editingItem ? 'Update Item' : 'Create Item')}
+                  {submitting ? 'Saving...' : (editingItem ? `Update ${terms.item}` : terms.createItem)}
                 </button>
               </div>
             </form>

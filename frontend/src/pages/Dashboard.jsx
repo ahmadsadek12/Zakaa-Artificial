@@ -3,10 +3,14 @@ import axios from 'axios'
 import { ShoppingCart, Store, Package, TrendingUp, Clock, CheckCircle, X, User, Phone, Calendar, MapPin, CreditCard, FileText } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
+import { useAuth } from '../contexts/AuthContext'
+import { getTerminology } from '../utils/terminology'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 export default function Dashboard() {
+  const { user } = useAuth()
+  const terms = getTerminology(user?.business_type)
   const [stats, setStats] = useState({
     orders: { total: 0, accepted: 0, completed: 0, today: 0 },
     branches: 0,
@@ -77,21 +81,21 @@ export default function Dashboard() {
 
   const statCards = [
     {
-      title: 'Accepted Orders',
+      title: `Accepted ${terms.orders}`,
       value: stats.orders.accepted,
       icon: Clock,
       color: 'text-blue-600 bg-blue-50',
       link: '/orders?status=accepted',
     },
     {
-      title: 'Completed Orders',
+      title: `Completed ${terms.orders}`,
       value: stats.orders.completed,
       icon: CheckCircle,
       color: 'text-green-600 bg-green-50',
       link: '/orders?status=completed',
     },
     {
-      title: 'Total Orders',
+      title: `Total ${terms.orders}`,
       value: stats.orders.total,
       icon: ShoppingCart,
       color: 'text-gray-600 bg-gray-50',
@@ -105,7 +109,7 @@ export default function Dashboard() {
       link: '/branches',
     },
     {
-      title: 'Items',
+      title: terms.items,
       value: stats.items,
       icon: Package,
       color: 'text-indigo-600 bg-indigo-50',
@@ -391,13 +395,13 @@ export default function Dashboard() {
 
                   {/* Order Items */}
                   <div className="border-b border-gray-200 pb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Items</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">{terms.orderItems}</h3>
                     {orderDetails.items && orderDetails.items.length > 0 ? (
                       <div className="overflow-x-auto">
                         <table className="w-full">
                           <thead>
                             <tr className="border-b border-gray-200">
-                              <th className="text-left py-2 px-3 text-sm font-semibold text-gray-700">Item</th>
+                              <th className="text-left py-2 px-3 text-sm font-semibold text-gray-700">{terms.itemName}</th>
                               <th className="text-right py-2 px-3 text-sm font-semibold text-gray-700">Quantity</th>
                               <th className="text-right py-2 px-3 text-sm font-semibold text-gray-700">Price</th>
                               <th className="text-right py-2 px-3 text-sm font-semibold text-gray-700">Subtotal</th>
@@ -423,7 +427,7 @@ export default function Dashboard() {
                         </table>
                       </div>
                     ) : (
-                      <p className="text-gray-500">No items found</p>
+                      <p className="text-gray-500">{terms.noItems}</p>
                     )}
                   </div>
 

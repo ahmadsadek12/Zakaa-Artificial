@@ -2,10 +2,14 @@ import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { Search, Eye, X, User, Phone, Clock, ShoppingCart, Trash2, AlertCircle } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import { useAuth } from '../contexts/AuthContext'
+import { getTerminology } from '../utils/terminology'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 export default function Carts() {
+  const { user } = useAuth()
+  const terms = getTerminology(user?.business_type)
   const [carts, setCarts] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -127,9 +131,9 @@ export default function Carts() {
   return (
     <div className="max-w-7xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Active Carts</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">{terms.activeRequests}</h1>
         <p className="text-gray-600">
-          Customer shopping carts that haven't been completed yet. Carts are automatically cancelled after 2 hours of inactivity.
+          Customer {terms.activeRequests.toLowerCase()} that haven't been completed yet. {terms.activeRequests} are automatically cancelled after 2 hours of inactivity.
         </p>
       </div>
 
@@ -181,8 +185,8 @@ export default function Carts() {
                 <tr>
                   <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
                     <ShoppingCart className="mx-auto mb-2 text-gray-400" size={48} />
-                    <p className="text-lg">No active carts</p>
-                    <p className="text-sm">Customer carts will appear here when they start shopping</p>
+                    <p className="text-lg">No {terms.activeRequests.toLowerCase()}</p>
+                    <p className="text-sm">Customer {terms.activeRequests.toLowerCase()} will appear here when they start shopping</p>
                   </td>
                 </tr>
               ) : (
@@ -263,7 +267,7 @@ export default function Carts() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-              <h2 className="text-xl font-bold text-gray-900">Cart Details</h2>
+              <h2 className="text-xl font-bold text-gray-900">{terms.activeRequest} Details</h2>
               <button onClick={closeCartModal} className="text-gray-400 hover:text-gray-600">
                 <X size={24} />
               </button>
@@ -305,7 +309,7 @@ export default function Carts() {
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
                     <ShoppingCart className="mr-2" size={20} />
-                    Cart Information
+                    {terms.activeRequest} Information
                   </h3>
                   <div className="bg-gray-50 rounded-lg p-4 space-y-2">
                     <div className="flex justify-between">
