@@ -9,6 +9,8 @@
     "init": "node database/init.js",
     "mongodb-init": "node database/mongodb_init.js",
     "migrate": "node database/migrate.js",
+    "migrate-s3": "node database/migrate_s3_to_business_folders.js",
+    "migrate-s3:dry-run": "node database/migrate_s3_to_business_folders.js --dry-run",
     "test": "jest --coverage",
     "test:watch": "jest --watch"
   },
