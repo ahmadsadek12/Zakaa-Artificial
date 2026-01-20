@@ -198,6 +198,9 @@ require('dotenv').config();
     \`).catch(e => console.log('google_calendar_integration_json:', e.message));
   }
 
+  // Re-enable foreign key checks
+  await conn.query('SET FOREIGN_KEY_CHECKS = 1');
+
   await conn.end();
   console.log('✓ Tables created/updated');
 })();
