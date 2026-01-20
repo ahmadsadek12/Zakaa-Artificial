@@ -61,6 +61,69 @@ require('dotenv').config();
     if (!e.message.includes('Duplicate column')) console.log('source_message_id:', e.message);
   });
 
+  // Create addons table
+  await conn.query(\`
+    CREATE TABLE IF NOT EXISTS addons (
+      id CHAR(36) PRIMARY KEY,
+      addon_key VARCHAR(50) NOT NULL UNIQUE,
+      name VARCHAR(100) NOT NULL,
+      default_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_addon_key (addon_key)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  \`).catch(e => console.log('addons:', e.message));
+
+  // Create business_addons table
+  await conn.query(\`
+    CREATE TABLE IF NOT EXISTS business_addons (
+      id CHAR(36) PRIMARY KEY,
+      business_id CHAR(36) NOT NULL,
+      addon_id CHAR(36) NOT NULL,
+      status ENUM('active','inactive') NOT NULL DEFAULT 'inactive',
+      price_override DECIMAL(10,2) NULL,
+      starts_at TIMESTAMP NULL,
+      ends_at TIMESTAMP NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_business_addon (business_id, addon_id),
+      INDEX idx_business (business_id),
+      CONSTRAINT fk_ba_business FOREIGN KEY (business_id) REFERENCES users(id) ON DELETE CASCADE,
+      CONSTRAINT fk_ba_addon FOREIGN KEY (addon_id) REFERENCES addons(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  \`).catch(e => console.log('business_addons:', e.message));
+
+  // Create service_categories table
+  await conn.query(\`
+    CREATE TABLE IF NOT EXISTS service_categories (
+      id CHAR(36) PRIMARY KEY,
+      business_id CHAR(36) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      sort_order INT NOT NULL DEFAULT 0,
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_business (business_id),
+      CONSTRAINT fk_cat_business FOREIGN KEY (business_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  \`).catch(e => console.log('service_categories:', e.message));
+
+  // Create service_customizations table
+  await conn.query(\`
+    CREATE TABLE IF NOT EXISTS service_customizations (
+      id CHAR(36) PRIMARY KEY,
+      item_id CHAR(36) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      price DECIMAL(10,2) NOT NULL DEFAULT 0,
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_item (item_id),
+      CONSTRAINT fk_custom_item FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  \`).catch(e => console.log('service_customizations:', e.message));
+
   await conn.end();
   console.log('✓ Tables created/updated');
 })();
