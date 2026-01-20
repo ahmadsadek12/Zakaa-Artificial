@@ -1,0 +1,24 @@
+═══════════════════════════════════════════════════════════════
+  EC2 QUICK PULL - COPY & PASTE THESE COMMANDS
+═══════════════════════════════════════════════════════════════
+
+1. CONNECT TO EC2:
+   ssh -i "your-key.pem" ubuntu@52.28.59.163
+
+2. PULL & DEPLOY (run these in order):
+   cd ~/Zakaa-Artificial
+   git pull origin main
+   npm install
+   node database/migrate_major_update.js
+   pm2 restart zakaa
+   pm2 logs zakaa --lines 50
+
+═══════════════════════════════════════════════════════════════
+  REPOSITORY INFO
+═══════════════════════════════════════════════════════════════
+GitHub: https://github.com/ahmadsadek12/Zakaa-Artificial.git
+Branch: main
+EC2 IP: 52.28.59.163
+User: ubuntu
+
+═══════════════════════════════════════════════════════════════
