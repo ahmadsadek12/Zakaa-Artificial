@@ -3,7 +3,7 @@
 
 const { queryMySQL, getMySQLConnection } = require('../config/database');
 const { generateUUID } = require('../utils/uuid');
-const { encryptToken, decryptToken } = require('../../../utils/encryption');
+const { encryptToken, decryptToken } = require('../../utils/encryption');
 
 /**
  * Find integration by owner and platform
