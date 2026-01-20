@@ -65,10 +65,99 @@ async function find(filters = {}) {
     params.push(filters.availability);
   }
   
+  if (filters.availabilityStatus) {
+    sql += ' AND availability_status = ?';
+    params.push(filters.availabilityStatus);
+  }
+  
+  if (filters.serviceType) {
+    sql += ' AND service_type = ?';
+    params.push(filters.serviceType);
+  }
+  
+  if (filters.categoryId) {
+    sql += ' AND category_id = ?';
+    params.push(filters.categoryId);
+  }
+  
   sql += ' ORDER BY name';
   
   const items = await queryMySQL(sql, params);
   return sanitizeItems(items);
+}
+
+/**
+ * Find items by category
+ */
+async function findByCategory(categoryId, businessId) {
+  return await queryMySQL(
+    `SELECT * FROM items 
+     WHERE category_id = ? AND business_id = ? AND deleted_at IS NULL
+     ORDER BY name`,
+    [categoryId, businessId]
+  );
+}
+
+/**
+ * Update stock quantity
+ */
+async function updateStockQuantity(itemId, businessId, quantity) {
+  await queryMySQL(
+    'UPDATE items SET stock_quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND business_id = ?',
+    [quantity, itemId, businessId]
+  );
+  
+  return await findById(itemId, businessId);
+}
+
+/**
+ * Decrement stock quantity
+ */
+async function decrementStock(itemId, businessId, quantity = 1) {
+  const connection = await getMySQLConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    // Get current stock
+    const [items] = await connection.query(
+      'SELECT stock_quantity FROM items WHERE id = ? AND business_id = ? FOR UPDATE',
+      [itemId, businessId]
+    );
+    
+    if (items.length === 0) {
+      throw new Error('Item not found');
+    }
+    
+    const currentStock = items[0].stock_quantity;
+    
+    // If stock_quantity is NULL, it means unlimited - don't decrement
+    if (currentStock === null) {
+      await connection.commit();
+      return { stock_quantity: null };
+    }
+    
+    // Check if enough stock
+    if (currentStock < quantity) {
+      await connection.rollback();
+      throw new Error(`Insufficient stock. Available: ${currentStock}, Requested: ${quantity}`);
+    }
+    
+    // Decrement
+    const newStock = currentStock - quantity;
+    await connection.query(
+      'UPDATE items SET stock_quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND business_id = ?',
+      [newStock, itemId, businessId]
+    );
+    
+    await connection.commit();
+    return { stock_quantity: newStock };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 /**
@@ -88,12 +177,13 @@ async function create(itemData) {
       INSERT INTO items (
         id, business_id, menu_id, user_id, name, description,
         item_type, is_schedulable, min_schedule_hours,
-        price, cost, preparation_time_minutes, duration_minutes, quantity, is_reusable,
-        is_rental, track_quantity,
+        price, cost, preparation_time_minutes, duration_minutes, 
+        service_type, availability_status, stock_quantity, only_scheduled, reminder_minutes_before, category_id,
+        quantity, is_reusable, is_rental, track_quantity, -- Deprecated fields kept for backward compatibility
         available_from, available_to, days_available,
         ingredients, availability, item_image_url,
         times_ordered, times_delivered
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       itemId,
       itemData.businessId,
@@ -108,10 +198,16 @@ async function create(itemData) {
       itemData.cost || null,
       itemData.preparationTimeMinutes || null,
       itemData.durationMinutes || null,
-      itemData.quantity !== undefined ? itemData.quantity : null,
-      itemData.isReusable !== undefined ? (itemData.isReusable === true || itemData.isReusable === 'true') : true,
-      itemData.isRental !== undefined ? (itemData.isRental === true || itemData.isRental === 'true') : false,
-      itemData.trackQuantity !== undefined ? (itemData.trackQuantity === true || itemData.trackQuantity === 'true') : false,
+      itemData.serviceType || 'physical',
+      itemData.availabilityStatus || 'available',
+      itemData.stockQuantity !== undefined ? itemData.stockQuantity : null,
+      itemData.onlyScheduled !== undefined ? (itemData.onlyScheduled === true || itemData.onlyScheduled === 'true') : false,
+      itemData.reminderMinutesBefore || null,
+      itemData.categoryId || null,
+      itemData.quantity !== undefined ? itemData.quantity : null, // Deprecated
+      itemData.isReusable !== undefined ? (itemData.isReusable === true || itemData.isReusable === 'true') : true, // Deprecated
+      itemData.isRental !== undefined ? (itemData.isRental === true || itemData.isRental === 'true') : false, // Deprecated
+      itemData.trackQuantity !== undefined ? (itemData.trackQuantity === true || itemData.trackQuantity === 'true') : false, // Deprecated
       itemData.availableFrom || null,
       itemData.availableTo || null,
       itemData.daysAvailable ? JSON.stringify(itemData.daysAvailable) : null,
@@ -150,10 +246,16 @@ async function update(itemId, businessId, updateData) {
     cost: 'cost',
     preparationTimeMinutes: 'preparation_time_minutes',
     durationMinutes: 'duration_minutes',
-    quantity: 'quantity',
-    isReusable: 'is_reusable',
-    isRental: 'is_rental',
-    trackQuantity: 'track_quantity',
+    serviceType: 'service_type',
+    availabilityStatus: 'availability_status',
+    stockQuantity: 'stock_quantity',
+    onlyScheduled: 'only_scheduled',
+    reminderMinutesBefore: 'reminder_minutes_before',
+    categoryId: 'category_id',
+    quantity: 'quantity', // Deprecated
+    isReusable: 'is_reusable', // Deprecated
+    isRental: 'is_rental', // Deprecated
+    trackQuantity: 'track_quantity', // Deprecated
     availableFrom: 'available_from',
     availableTo: 'available_to',
     daysAvailable: 'days_available',
@@ -207,7 +309,10 @@ async function softDelete(itemId, businessId) {
 module.exports = {
   findById,
   find,
+  findByCategory,
   create,
   update,
+  updateStockQuantity,
+  decrementStock,
   softDelete
 };

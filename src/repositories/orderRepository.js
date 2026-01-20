@@ -139,14 +139,18 @@ async function create(orderData) {
     // Use user_id (which can be branch or business) instead of branch_id
     const userId = orderData.userId || orderData.branchId || orderData.businessId;
     
+    // Determine request_type: 'scheduled_request' if scheduled_for exists, else 'order'
+    const requestType = orderData.requestType || (orderData.scheduledFor ? 'scheduled_request' : 'order');
+    
     // Create order
     await connection.query(`
       INSERT INTO orders (
         id, business_id, user_id, customer_phone_number, whatsapp_user_id,
         language_used, order_source, delivery_type, status,
         subtotal, delivery_price, total, notes, scheduled_for,
-        payment_method, payment_status, delivery_address_location_id, customer_name
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        payment_method, payment_status, delivery_address_location_id, customer_name,
+        request_type, first_response_at, source_message_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       orderId,
       orderData.businessId,
@@ -165,7 +169,10 @@ async function create(orderData) {
       orderData.paymentMethod || 'unknown',
       orderData.paymentStatus || 'unpaid',
       orderData.deliveryAddressLocationId || null,
-      orderData.customerName || null
+      orderData.customerName || null,
+      requestType,
+      orderData.firstResponseAt || null,
+      orderData.sourceMessageId || null
     ]);
     
     // Create order items and increment times_ordered
@@ -216,7 +223,7 @@ async function create(orderData) {
 /**
  * Update order status
  */
-async function updateStatus(orderId, businessId, status, changedBy = 'system') {
+async function updateStatus(orderId, businessId, status, changedBy = 'system', additionalUpdates = {}) {
   const connection = await getMySQLConnection();
   
   try {
@@ -246,7 +253,13 @@ async function updateStatus(orderId, businessId, status, changedBy = 'system') {
     const values = [status, orderId, businessId];
     
     if (status === 'completed') {
-      updates.push('completed_at = CURRENT_TIMESTAMP');
+      // Use provided completedAt or set to current timestamp
+      if (additionalUpdates.completedAt) {
+        updates.push('completed_at = ?');
+        values.splice(values.length - 2, 0, additionalUpdates.completedAt);
+      } else {
+        updates.push('completed_at = CURRENT_TIMESTAMP');
+      }
       
       // Increment times_delivered for all order items
       const [orderItems] = await connection.query(`

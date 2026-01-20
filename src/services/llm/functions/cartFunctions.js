@@ -1,0 +1,365 @@
+// Cart Functions
+// Functions for managing the customer's cart/ongoing order
+
+const cartManager = require('../cartManager');
+const logger = require('../../../utils/logger');
+const { queryMySQL } = require('../../../config/database');
+const cache = require('../../../utils/cache');
+
+/**
+ * Get cart function definitions for OpenAI
+ */
+function getCartFunctionDefinitions() {
+  return [
+    {
+      type: 'function',
+      function: {
+        name: 'add_service_to_cart',
+        description: 'Add a service to the customer\'s ongoing order. Use this when customer wants to order something (e.g., "I want pizza", "baddi pizza", "give me burger"). Match the service name from available menu items.',
+        parameters: {
+          type: 'object',
+          properties: {
+            itemName: {
+              type: 'string',
+              description: 'The name of the item to add (match exactly from menu items, or use closest match)'
+            },
+            quantity: {
+              type: 'number',
+              description: 'Quantity to add (default: 1)',
+              default: 1
+            }
+          },
+          required: ['itemName']
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'remove_service_from_cart',
+        description: 'Remove a service from the customer\'s ongoing order. Use this when customer wants to remove something from their order.',
+        parameters: {
+          type: 'object',
+          properties: {
+            itemName: {
+              type: 'string',
+              description: 'The name of the item to remove from ongoing order'
+            }
+          },
+          required: ['itemName']
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'update_service_quantity',
+        description: 'Update the quantity of a service in the ongoing order.',
+        parameters: {
+          type: 'object',
+          properties: {
+            itemName: {
+              type: 'string',
+              description: 'The name of the item to update'
+            },
+            quantity: {
+              type: 'number',
+              description: 'New quantity (must be > 0, use remove_item_from_cart to remove)'
+            }
+          },
+          required: ['itemName', 'quantity']
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'get_cart',
+        description: 'Get the current ongoing order contents. Use this when customer asks to see their order, order summary, or what they ordered.',
+        parameters: {
+          type: 'object',
+          properties: {},
+          required: []
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'clear_cart',
+        description: 'Clear/empty the entire ongoing order. Remove all items and reset all prices to zero. Use this when customer wants to empty their order, start over, or clear everything.',
+        parameters: {
+          type: 'object',
+          properties: {},
+          required: []
+        }
+      }
+    }
+  ];
+}
+
+/**
+ * Execute cart function
+ */
+async function executeCartFunction(functionName, args, context) {
+  const { business, branch, customerPhoneNumber } = context;
+  const branchId = branch?.id || business.id;
+  
+  // Handle backward-compatible aliases
+  if (functionName === 'add_item_to_cart') {
+    functionName = 'add_service_to_cart';
+  } else if (functionName === 'remove_item_from_cart') {
+    functionName = 'remove_service_from_cart';
+  } else if (functionName === 'update_item_quantity') {
+    functionName = 'update_service_quantity';
+  }
+  
+  switch (functionName) {
+    case 'add_service_to_cart': {
+      const { itemName, quantity = 1 } = args;
+      
+      // Check cache for menu items first to reduce DB queries
+      const cacheKey = `menu_items_${business.id}`;
+      let cachedItems = cache.get(cacheKey);
+      
+      let item = null;
+      
+      // If we have cached items, try to find item in cache first
+      if (cachedItems && cachedItems.items) {
+        const itemNameLower = itemName.toLowerCase();
+        item = cachedItems.items.find(i => 
+          i.name.toLowerCase() === itemNameLower ||
+          i.name.toLowerCase().includes(itemNameLower) ||
+          itemNameLower.includes(i.name.toLowerCase())
+        );
+      }
+      
+      // If not found in cache or no cache, query database
+      if (!item) {
+        const items = await queryMySQL(
+          `SELECT * FROM items 
+           WHERE business_id = ? AND availability = 'available' AND deleted_at IS NULL
+           AND (LOWER(name) LIKE ? OR LOWER(name) LIKE ? OR LOWER(name) = ?)
+           ORDER BY CASE WHEN LOWER(name) = ? THEN 1 WHEN LOWER(name) LIKE ? THEN 2 ELSE 3 END
+           LIMIT 1`,
+          [
+            business.id,
+            `%${itemName.toLowerCase()}%`,
+            `${itemName.toLowerCase().split(' ')[0]}%`,
+            itemName.toLowerCase(),
+            itemName.toLowerCase(),
+            `${itemName.toLowerCase()}%`
+          ]
+        );
+        
+        if (items.length === 0) {
+          return {
+            success: false,
+            error: `Item "${itemName}" not found. Please check the menu for available items.`
+          };
+        }
+        
+        item = items[0];
+      }
+      
+      // Add item to cart first
+      const cart = await cartManager.addItemToCart(
+        business.id,
+        branchId,
+        customerPhoneNumber,
+        {
+          itemId: item.id,
+          name: item.name,
+          price: parseFloat(item.price),
+          quantity: parseInt(quantity)
+        }
+      );
+      
+      // Invalidate menu cache when cart changes (items might be out of stock)
+      cache.delete(cacheKey);
+      
+      logger.info('Item added to cart via function call', { 
+        itemName: item.name, 
+        quantity,
+        cartId: cart.id,
+        isOnlyScheduled: item.is_schedulable
+      });
+      
+      // Check if item is "only scheduled" (is_schedulable = true means ONLY scheduled, not direct order)
+      if (item.is_schedulable) {
+        // Item can only be scheduled, inform customer
+        return {
+          success: true,
+          message: `Added ${quantity}x ${item.name} to your ongoing order. Note: This item can only be scheduled for a future time. Please use the scheduling function to set a date and time before confirming your order.`,
+          cart: cart,
+          requiresScheduling: true
+        };
+      }
+      
+      // Check if approaching last order time and warn user
+      const { isOpenNow } = require('../conversationManager');
+      const openStatus = await isOpenNow(business.id, branchId);
+      let warningMessage = '';
+      
+      if (openStatus.minutesUntilLastOrder !== null && openStatus.minutesUntilLastOrder <= 30) {
+        warningMessage = `\n⚠️ Please note: Last order time is in ${openStatus.minutesUntilLastOrder} minutes (${openStatus.lastOrderTime}). Please confirm your order quickly!`;
+      }
+      
+      return {
+        success: true,
+        message: `Added ${quantity}x ${item.name} to your ongoing order${warningMessage}`,
+        cart: cart
+      };
+    }
+    
+    case 'remove_service_from_cart': {
+      const { itemName } = args;
+      const cart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
+      
+      const cartItem = cart.items?.find(item => 
+        item.name.toLowerCase().includes(itemName.toLowerCase()) ||
+        itemName.toLowerCase().includes(item.name.toLowerCase())
+      );
+      
+      if (!cartItem) {
+        return {
+          success: false,
+          error: `Item "${itemName}" not found in your ongoing order.`
+        };
+      }
+      
+      const updatedCart = await cartManager.removeItemFromCart(
+        business.id,
+        branchId,
+        customerPhoneNumber,
+        cartItem.item_id
+      );
+      
+      logger.info('Item removed from cart via function call', { itemName: cartItem.name });
+      
+      return {
+        success: true,
+        message: `Removed ${cartItem.name} from your ongoing order`,
+        cart: updatedCart
+      };
+    }
+    
+    case 'update_service_quantity': {
+      const { itemName, quantity } = args;
+      const cart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
+      
+      const cartItem = cart.items?.find(item => 
+        item.name.toLowerCase().includes(itemName.toLowerCase()) ||
+        itemName.toLowerCase().includes(item.name.toLowerCase())
+      );
+      
+      if (!cartItem) {
+        return {
+          success: false,
+          error: `Item "${itemName}" not found in your ongoing order.`
+        };
+      }
+      
+      if (quantity <= 0) {
+        // Use remove instead
+        const updatedCart = await cartManager.removeItemFromCart(
+          business.id,
+          branchId,
+          customerPhoneNumber,
+          cartItem.item_id
+        );
+        return {
+          success: true,
+          message: `Removed ${cartItem.name} from your ongoing order`,
+          cart: updatedCart
+        };
+      }
+      
+      const updatedCart = await cartManager.updateItemQuantity(
+        business.id,
+        branchId,
+        customerPhoneNumber,
+        cartItem.item_id,
+        parseInt(quantity)
+      );
+      
+      return {
+        success: true,
+        message: `Updated ${cartItem.name} quantity to ${quantity}`,
+        cart: updatedCart
+      };
+    }
+    
+    case 'get_cart': {
+      const cart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
+      const summary = cartManager.getCartSummary(cart);
+      
+      return {
+        success: true,
+        message: summary,
+        cart: cart
+      };
+    }
+    
+    case 'clear_cart': {
+      try {
+        // Get cart first to check if it exists
+        const cart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
+        
+        if (!cart || !cart.id) {
+          return {
+            success: true,
+            message: 'Your ongoing order is already empty.',
+            cart: { items: [], subtotal: 0, total: 0 }
+          };
+        }
+        
+        // Clear cart items and totals
+        await cartManager.clearCart(business.id, branchId, customerPhoneNumber);
+        
+        // Also clear delivery-related fields
+        const { getMySQLConnection } = require('../../../config/database');
+        const connection = await getMySQLConnection();
+        
+        try {
+          await connection.query(`
+            UPDATE orders 
+            SET delivery_type = NULL, 
+                location_address = NULL,
+                location_latitude = NULL,
+                location_longitude = NULL,
+                location_name = NULL,
+                scheduled_for = NULL,
+                notes = '__cart__',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `, [cart.id]);
+        } finally {
+          connection.release();
+        }
+        
+        const clearedCart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
+        
+        return {
+          success: true,
+          message: 'Your ongoing order has been cleared. It\'s now empty and ready for new items.',
+          cart: clearedCart
+        };
+      } catch (error) {
+        logger.error('Error clearing cart:', error);
+        return {
+          success: false,
+          error: `Failed to clear ongoing order: ${error.message}`
+        };
+      }
+    }
+    
+    default:
+      return null; // Not handled by this module
+  }
+}
+
+module.exports = {
+  getCartFunctionDefinitions,
+  executeCartFunction
+};

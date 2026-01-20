@@ -5,6 +5,7 @@ const logger = require('../../utils/logger');
 const chatbotService = require('../llm/chatbot');
 const telegramMessageSender = require('./telegramMessageSender');
 const userRepository = require('../../repositories/userRepository');
+const botIntegrationRepository = require('../../repositories/botIntegrationRepository');
 const { generateUUID } = require('../../utils/uuid');
 const { getMongoCollection } = require('../../config/database');
 

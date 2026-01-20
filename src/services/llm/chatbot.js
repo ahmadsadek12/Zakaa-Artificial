@@ -49,6 +49,23 @@ function sanitizeResponse(text) {
   // Remove numbered markdown links like: "1. ![Menu Image](url)" or "2. ![Menu Image](url)"
   text = text.replace(/\d+\.\s*!\[([^\]]*)\]\([^\)]*\)/gi, '');
   
+  // Remove menu caption text when sending menu media (no caption should be included)
+  const menuCaptionPatterns = [
+    /here\s+is\s+our\s+menu/gi,
+    /here\s+is\s+the\s+menu/gi,
+    /this\s+is\s+our\s+menu/gi,
+    /this\s+is\s+the\s+menu/gi,
+    /our\s+menu/gi,
+    /the\s+menu/gi,
+    /menu\s+below/gi,
+    /menu\s+attached/gi,
+    /menu\s+image/gi
+  ];
+  
+  for (const pattern of menuCaptionPatterns) {
+    text = text.replace(pattern, '');
+  }
+  
   // WhatsApp message limit: 4096 characters per message
   const MAX_LENGTH = 4096;
   
@@ -115,17 +132,18 @@ async function getConversationHistory(businessId, branchId, customerPhoneNumber,
     }
     
     // Get the last message timestamp to check if more than 3 hours have passed
+    // Include platform in query to avoid cross-platform mixing
     const lastMessageQuery = {
-      business_id: businessId,
-      branch_id: branchId || businessId,
-      customer_phone_number: customerPhoneNumber
+      businessId: businessId,
+      branchId: branchId || businessId,
+      customerPhoneNumber: customerPhoneNumber
     };
     
     const lastMessage = await messageLogs
-      .findOne(lastMessageQuery, { sort: { timestamp: -1 } });
+      .findOne(lastMessageQuery, { sort: { receivedAt: -1 } });
     
     if (lastMessage) {
-      const lastMessageTime = new Date(lastMessage.timestamp);
+      const lastMessageTime = new Date(lastMessage.receivedAt || lastMessage.timestamp);
       const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
       
       // If last message was more than 3 hours ago, reset conversation (fresh start)
@@ -143,10 +161,10 @@ async function getConversationHistory(businessId, branchId, customerPhoneNumber,
     const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
     
     const query = {
-      business_id: businessId,
-      branch_id: branchId || businessId,
-      customer_phone_number: customerPhoneNumber,
-      timestamp: { $gte: threeHoursAgo }
+      businessId: businessId,
+      branchId: branchId || businessId,
+      customerPhoneNumber: customerPhoneNumber,
+      receivedAt: { $gte: threeHoursAgo }
     };
     
     logger.info('Fetching conversation history', {
@@ -158,7 +176,7 @@ async function getConversationHistory(businessId, branchId, customerPhoneNumber,
     
     const allMessages = await messageLogs
       .find(query)
-      .sort({ timestamp: 1 })
+      .sort({ receivedAt: 1 })
       .limit(limit)
       .toArray();
     
@@ -167,14 +185,14 @@ async function getConversationHistory(businessId, branchId, customerPhoneNumber,
       messageCount: allMessages.length,
       messages: allMessages.map(m => ({
         direction: m.direction,
-        timestamp: m.timestamp,
+        receivedAt: m.receivedAt,
         textPreview: (m.text || '').substring(0, 50)
       }))
     });
     
     // Map to role and text
     const formattedMessages = allMessages.map(m => ({
-      role: m.direction === 'inbound' ? 'customer' : 'assistant',
+      role: m.direction === 'in' ? 'customer' : 'assistant',
       text: m.text || ''
     }));
     

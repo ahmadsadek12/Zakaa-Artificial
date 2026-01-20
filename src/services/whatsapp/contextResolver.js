@@ -3,6 +3,7 @@
 
 const branchRepository = require('../../repositories/branchRepository');
 const userRepository = require('../../repositories/userRepository');
+const botIntegrationRepository = require('../../repositories/botIntegrationRepository');
 const { decryptToken } = require('../../../utils/encryption');
 const logger = require('../../utils/logger');
 
@@ -15,10 +16,34 @@ async function resolveContext(phoneNumberId) {
   }
   
   try {
-    // Try to find branch first (branches are in branches table)
+    // Find integration by phone_number_id (new bot_integrations table)
+    const integration = await botIntegrationRepository.findByPhoneNumberId(phoneNumberId);
+    
+    if (integration) {
+      // Get owner (business or branch)
+      const owner = await userRepository.findById(integration.owner_id);
+      
+      if (!owner) {
+        logger.warn('Integration found but owner not found', { ownerId: integration.owner_id });
+        return null;
+      }
+      
+      // If branch, get parent business
+      if (integration.owner_type === 'branch') {
+        const business = await userRepository.getParentBusiness(integration.owner_id);
+        if (business) {
+          return { business, branch: owner };
+        }
+      } else {
+        // Business owner
+        const branches = await branchRepository.findByBusinessId(owner.id);
+        return { business: owner, branch: branches.length === 1 ? branches[0] : null };
+      }
+    }
+    
+    // Fallback: Try old method (for backward compatibility during migration)
     const branch = await branchRepository.findByWhatsAppPhoneId(phoneNumberId);
     if (branch) {
-      // Branch has business_id pointing to business
       const businessId = branch.business_id;
       if (!businessId) {
         logger.warn('Branch found but has no business_id', { branchId: branch.id });
@@ -27,34 +52,13 @@ async function resolveContext(phoneNumberId) {
       
       const business = await userRepository.findById(businessId);
       if (business) {
-        // Decrypt WhatsApp token
-        if (branch.whatsapp_access_token_encrypted) {
-          try {
-            branch.whatsapp_access_token = decryptToken(branch.whatsapp_access_token_encrypted);
-          } catch (error) {
-            logger.error('Failed to decrypt branch WhatsApp token:', error);
-          }
-        }
-        
         return { business, branch };
       }
     }
     
-    // Try to find business
     const business = await userRepository.findByWhatsAppPhoneId(phoneNumberId);
     if (business) {
-      // Decrypt WhatsApp token
-      if (business.whatsapp_access_token_encrypted) {
-        try {
-          business.whatsapp_access_token = decryptToken(business.whatsapp_access_token_encrypted);
-        } catch (error) {
-          logger.error('Failed to decrypt business WhatsApp token:', error);
-        }
-      }
-      
-      // Check if business has multiple branches - might need branch selection
       const branches = await branchRepository.findByBusinessId(business.id);
-      
       return { business, branch: branches.length === 1 ? branches[0] : null };
     }
     

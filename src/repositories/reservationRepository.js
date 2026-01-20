@@ -43,16 +43,31 @@ async function findByBusiness(businessUserId, filters = {}) {
   }
   
   if (filters.startDate) {
-    sql += ' AND reservation_date >= ?';
-    params.push(filters.startDate);
+    sql += ' AND (reservation_date >= ? OR start_at >= ?)';
+    params.push(filters.startDate, filters.startDate);
   }
   
   if (filters.endDate) {
-    sql += ' AND reservation_date <= ?';
-    params.push(filters.endDate);
+    sql += ' AND (reservation_date <= ? OR start_at <= ?)';
+    params.push(filters.endDate, filters.endDate);
   }
   
-  sql += ' ORDER BY reservation_date ASC, reservation_time ASC';
+  if (filters.reservationKind) {
+    sql += ' AND reservation_kind = ?';
+    params.push(filters.reservationKind);
+  }
+  
+  if (filters.from) {
+    sql += ' AND start_at >= ?';
+    params.push(filters.from);
+  }
+  
+  if (filters.to) {
+    sql += ' AND start_at <= ?';
+    params.push(filters.to);
+  }
+  
+  sql += ' ORDER BY COALESCE(start_at, CONCAT(reservation_date, " ", reservation_time)) ASC';
   
   // LIMIT cannot be a parameter in prepared statements, must use string interpolation
   if (filters.limit) {
@@ -96,12 +111,19 @@ async function findByTable(tableId, date = null) {
 async function create(reservationData) {
   const reservationId = generateUUID();
   
+  // Calculate start_at from reservation_date + reservation_time if not provided
+  let startAt = reservationData.startAt;
+  if (!startAt && reservationData.reservationDate && reservationData.reservationTime) {
+    startAt = `${reservationData.reservationDate} ${reservationData.reservationTime}`;
+  }
+  
   await queryMySQL(`
     INSERT INTO reservations (
       id, user_id, business_user_id, table_id, item_id,
       customer_phone_number, customer_name,
-      reservation_date, reservation_time, number_of_guests, notes, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      reservation_date, reservation_time, number_of_guests, notes, status,
+      reservation_kind, start_at, source
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     reservationId,
     reservationData.userId || null,
@@ -114,7 +136,10 @@ async function create(reservationData) {
     reservationData.reservationTime,
     reservationData.numberOfGuests || null,
     reservationData.notes || null,
-    reservationData.status || 'confirmed'
+    reservationData.status || 'confirmed',
+    reservationData.reservationKind || 'table',
+    startAt || null,
+    reservationData.source || 'whatsapp'
   ]);
   
   // If table is assigned, mark it as reserved
@@ -139,7 +164,10 @@ async function update(reservationId, businessUserId, updateData) {
     reservationTime: 'reservation_time',
     numberOfGuests: 'number_of_guests',
     notes: 'notes',
-    status: 'status'
+    status: 'status',
+    reservationKind: 'reservation_kind',
+    startAt: 'start_at',
+    source: 'source'
   };
   
   const connection = await getMySQLConnection();
@@ -159,8 +187,23 @@ async function update(reservationId, businessUserId, updateData) {
     for (const [key, value] of Object.entries(updateData)) {
       const dbKey = fieldMap[key];
       if (dbKey && value !== undefined) {
-        updates.push(`${dbKey} = ?`);
-        values.push(value);
+        // If updating reservation_date or reservation_time, recalculate start_at
+        if (key === 'reservationDate' || key === 'reservationTime') {
+          // Will be handled after this loop
+        } else {
+          updates.push(`${dbKey} = ?`);
+          values.push(value);
+        }
+      }
+    }
+    
+    // Recalculate start_at if date or time changed
+    if (updateData.reservationDate !== undefined || updateData.reservationTime !== undefined) {
+      const newDate = updateData.reservationDate || current.reservation_date;
+      const newTime = updateData.reservationTime || current.reservation_time;
+      if (newDate && newTime) {
+        updates.push('start_at = ?');
+        values.push(`${newDate} ${newTime}`);
       }
     }
     

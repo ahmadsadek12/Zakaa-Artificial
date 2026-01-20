@@ -7,6 +7,9 @@ const chatbotService = require('../llm/chatbot');
 const messageSender = require('./messageSender');
 const cartManager = require('../llm/cartManager');
 const { generateUUID } = require('../../utils/uuid');
+const { requireContractApproved } = require('../../middleware/contractGate');
+const botIntegrationRepository = require('../../repositories/botIntegrationRepository');
+const { queryMySQL } = require('../../config/database');
 
 // Track which conversations have already received the "unavailable" message
 // Key: `${businessId}:${customerPhoneNumber}`, Value: true
@@ -57,6 +60,56 @@ async function processMessage(message, value) {
     }
     
     const { business, branch } = context;
+    
+    // Check contract approval (CRITICAL GATE)
+    if (business.contract_status !== 'approved') {
+      logger.warn('Contract not approved - blocking webhook', {
+        businessId: business.id,
+        contractStatus: business.contract_status
+      });
+      
+      const conversationKey = `${business.id}:${message.from}`;
+      const alreadySent = unavailableMessageSent.has(conversationKey);
+      
+      if (!alreadySent) {
+        await messageSender.sendMessage({
+          business,
+          branch,
+          to: message.from,
+          message: 'Our service is currently unavailable. Please contact support.'
+        });
+        unavailableMessageSent.set(conversationKey, true);
+      }
+      return;
+    }
+    
+    // Check if WhatsApp integration is enabled
+    const integration = await botIntegrationRepository.findByOwnerAndPlatform(
+      branch ? 'branch' : 'business',
+      branch?.id || business.id,
+      'whatsapp'
+    );
+    
+    if (!integration || !integration.enabled) {
+      logger.warn('WhatsApp integration not enabled - blocking webhook', {
+        businessId: business.id,
+        branchId: branch?.id
+      });
+      
+      const conversationKey = `${business.id}:${message.from}`;
+      const alreadySent = unavailableMessageSent.has(conversationKey);
+      
+      if (!alreadySent) {
+        await messageSender.sendMessage({
+          business,
+          branch,
+          to: message.from,
+          message: 'WhatsApp integration is not enabled. Please contact support.'
+        });
+        unavailableMessageSent.set(conversationKey, true);
+      }
+      return;
+    }
     
     // Check if chatbot is enabled for this business
     // MySQL returns 0/1 (tinyint), not boolean - convert to boolean

@@ -324,15 +324,7 @@ async function updateCart(businessId, branchId, customerPhoneNumber, updates) {
       values.push('__cart__'); // Always keep the cart marker
     }
     
-    if (updates.location_latitude !== undefined) {
-      updateFields.push('location_latitude = ?');
-      values.push(updates.location_latitude);
-    }
-    
-    if (updates.location_longitude !== undefined) {
-      updateFields.push('location_longitude = ?');
-      values.push(updates.location_longitude);
-    }
+    // Deprecated: location_latitude, location_longitude - do not use
     
     if (updates.location_name !== undefined) {
       updateFields.push('location_name = ?');
@@ -412,8 +404,8 @@ async function updateCart(businessId, branchId, customerPhoneNumber, updates) {
  * Add item to cart
  */
 /**
- * Add item to cart
- * Supports rental items with booking date, time, and duration tier
+ * Add service to cart
+ * Supports physical services (with stock) and time-based services (with booking)
  */
 async function addItemToCart(businessId, branchId, customerPhoneNumber, item) {
   const cart = await getCart(businessId, branchId, customerPhoneNumber);
@@ -422,8 +414,35 @@ async function addItemToCart(businessId, branchId, customerPhoneNumber, item) {
   try {
     await connection.beginTransaction();
     
-    // For rental items, don't update existing - each booking is separate
-    const isRentalBooking = item.bookingDate && item.bookingStartTime && item.durationTierId;
+    // Get item details to check service_type
+    const [itemDetails] = await connection.query(
+      'SELECT service_type, stock_quantity, only_scheduled FROM items WHERE id = ?',
+      [item.itemId]
+    );
+    
+    if (itemDetails.length === 0) {
+      throw new Error('Item not found');
+    }
+    
+    const itemDetail = itemDetails[0];
+    const isTimeBased = itemDetail.service_type === 'time_based';
+    const isPhysical = itemDetail.service_type === 'physical';
+    
+    // For time-based services, require booking fields
+    if (isTimeBased && (!item.bookingDate || !item.bookingStartTime)) {
+      throw new Error('Time-based services require booking_date and booking_start_time');
+    }
+    
+    // For physical services, check stock_quantity if not NULL
+    if (isPhysical && itemDetail.stock_quantity !== null) {
+      const requestedQuantity = item.quantity || 1;
+      if (itemDetail.stock_quantity < requestedQuantity) {
+        throw new Error(`Insufficient stock. Available: ${itemDetail.stock_quantity}, Requested: ${requestedQuantity}`);
+      }
+    }
+    
+    // For time-based services, don't update existing - each booking is separate
+    const isRentalBooking = isTimeBased && item.bookingDate && item.bookingStartTime;
     
     // Check if item already in cart (only for non-rental items)
     if (!isRentalBooking) {
@@ -665,23 +684,58 @@ async function confirmCart(businessId, branchId, customerPhoneNumber) {
   try {
     await connection.beginTransaction();
     
+    // Determine request_type: 'scheduled_request' if scheduled_for exists, else 'order'
+    const requestType = cart.scheduled_for ? 'scheduled_request' : 'order';
+    
+    // Check if any items require scheduling (only_scheduled = true)
+    const [cartItems] = await connection.query(`
+      SELECT i.only_scheduled 
+      FROM order_items oi
+      INNER JOIN items i ON oi.item_id = i.id
+      WHERE oi.order_id = ?
+    `, [cart.id]);
+    
+    const hasOnlyScheduledItems = cartItems.some(ci => ci.only_scheduled === true || ci.only_scheduled === 1);
+    
+    // If has only_scheduled items and no scheduled_for, require scheduling
+    if (hasOnlyScheduledItems && !cart.scheduled_for) {
+      throw new Error('Items that can only be scheduled require a scheduled time');
+    }
+    
+    // For physical services, decrement stock_quantity
+    const [physicalItems] = await connection.query(`
+      SELECT oi.item_id, oi.quantity, i.service_type, i.stock_quantity
+      FROM order_items oi
+      INNER JOIN items i ON oi.item_id = i.id
+      WHERE oi.order_id = ? AND i.service_type = 'physical' AND i.stock_quantity IS NOT NULL
+    `, [cart.id]);
+    
+    for (const physicalItem of physicalItems) {
+      await connection.query(
+        `UPDATE items 
+         SET stock_quantity = stock_quantity - ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND stock_quantity >= ?`,
+        [physicalItem.quantity, physicalItem.item_id, physicalItem.quantity]
+      );
+    }
+    
     // Remove cart marker (notes='__cart__') and set status to 'accepted'
-    // This effectively converts the cart to a real order
+    // Set request_type based on scheduled_for
     await connection.query(`
       UPDATE orders 
-      SET notes = NULL, status = 'accepted', updated_at = CURRENT_TIMESTAMP
+      SET notes = NULL, status = 'accepted', request_type = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND status = 'cart' AND notes = '__cart__'
-    `, [cart.id]);
+    `, [requestType, cart.id]);
     
     // Create initial status history entry
     await connection.query(`
       INSERT INTO order_status_history (id, order_id, status, changed_by)
-      VALUES (?, ?, 'pending', 'customer')
+      VALUES (?, ?, 'accepted', 'customer')
     `, [generateUUID(), cart.id]);
     
     await connection.commit();
     
-    logger.info(`Cart confirmed as order: ${cart.id}`);
+    logger.info(`Cart confirmed as order: ${cart.id}, request_type: ${requestType}`);
     
     return await queryMySQL('SELECT * FROM orders WHERE id = ?', [cart.id]);
   } catch (error) {

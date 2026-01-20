@@ -39,6 +39,17 @@ async function findByWhatsAppPhoneId(whatsappPhoneNumberId) {
 }
 
 /**
+ * Find user by username (for branch login)
+ */
+async function findByUsername(username) {
+  const users = await queryMySQL(
+    'SELECT * FROM users WHERE username = ? AND deleted_at IS NULL',
+    [username]
+  );
+  return users[0] || null;
+}
+
+/**
  * Create new user
  */
 async function create(userData) {
@@ -108,11 +119,15 @@ async function update(userId, updateData) {
     defaultLanguage: 'default_language',
     // languages field removed - column doesn't exist, language preferences no longer stored
     timezone: 'timezone',
-    locationLatitude: 'location_latitude',
-    locationLongitude: 'location_longitude',
-    deliveryRadiusKm: 'delivery_radius_km',
+    // Deprecated fields (keep in map but don't use): location_latitude, location_longitude, delivery_radius_km
     deliveryPrice: 'delivery_price',
     lastOrderBeforeClosingMinutes: 'last_order_before_closing_minutes',
+    googleMapsLink: 'google_maps_link',
+    carrierPhoneNumber: 'carrier_phone_number',
+    estimatedDeliveryTimeMin: 'estimated_delivery_time_min',
+    estimatedDeliveryTimeMax: 'estimated_delivery_time_max',
+    googleCalendarIntegrationJson: 'google_calendar_integration_json',
+    username: 'username',
     subscriptionType: 'subscription_type',
     subscriptionPrice: 'subscription_price',
     subscriptionStatus: 'subscription_status',
@@ -130,10 +145,14 @@ async function update(userId, updateData) {
     telegramBotToken: 'telegram_bot_token',
     isActive: 'is_active',
     locationId: 'location_id',
-    locationLatitude: 'location_latitude',
-    locationLongitude: 'location_longitude',
-    deliveryRadiusKm: 'delivery_radius_km',
-    deliveryPrice: 'delivery_price'
+    // Deprecated: locationLatitude, locationLongitude, deliveryRadiusKm
+    deliveryPrice: 'delivery_price',
+    googleMapsLink: 'google_maps_link',
+    carrierPhoneNumber: 'carrier_phone_number',
+    estimatedDeliveryTimeMin: 'estimated_delivery_time_min',
+    estimatedDeliveryTimeMax: 'estimated_delivery_time_max',
+    googleCalendarIntegrationJson: 'google_calendar_integration_json',
+    username: 'username'
   };
   
   const allowedFields = Object.values(fieldMap);
@@ -431,10 +450,49 @@ async function getParentBusiness(userId) {
   return await findById(users[0].parent_user_id);
 }
 
+/**
+ * Update contract status (admin only)
+ */
+async function updateContractStatus(businessId, status, approvedAt = null) {
+  const updates = ['contract_status = ?'];
+  const values = [status];
+  
+  if (status === 'approved' && approvedAt) {
+    updates.push('contract_approved_at = ?');
+    values.push(approvedAt);
+  } else if (status === 'approved') {
+    updates.push('contract_approved_at = CURRENT_TIMESTAMP');
+  } else {
+    updates.push('contract_approved_at = NULL');
+  }
+  
+  values.push(businessId);
+  
+  await queryMySQL(
+    `UPDATE users SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    values
+  );
+  
+  return await findById(businessId);
+}
+
+/**
+ * Update contract file URL
+ */
+async function updateContractFile(businessId, contractFileUrl) {
+  await queryMySQL(
+    'UPDATE users SET contract_file_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [contractFileUrl, businessId]
+  );
+  
+  return await findById(businessId);
+}
+
 module.exports = {
   findById,
   findByEmail,
   findByWhatsAppPhoneId,
+  findByUsername,
   create,
   update,
   updatePassword,
@@ -445,5 +503,7 @@ module.exports = {
   createBranch,
   createBranchUser,
   isBranch,
-  getParentBusiness
+  getParentBusiness,
+  updateContractStatus,
+  updateContractFile
 };

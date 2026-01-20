@@ -9,6 +9,7 @@ const CONSTANTS = require('./src/config/constants');
 const { startArchiveJob } = require('./src/jobs/archiveJob');
 const { startCartCleanupJob } = require('./src/jobs/cartCleanupJob');
 const cartTimeoutJob = require('./src/jobs/cartTimeoutJob');
+const { startScheduledRequestCompletionJob } = require('./src/jobs/scheduledRequestCompletionJob');
 
 const PORT = CONSTANTS.PORT;
 
@@ -43,6 +44,10 @@ async function startServer() {
       // Start cart timeout job
       cartTimeoutJob.start();
       logger.info('Cart timeout job started');
+      
+      // Start scheduled request completion job
+      startScheduledRequestCompletionJob();
+      logger.info('Scheduled request completion job started');
     });
   } catch (error) {
     logger.error('Failed to start server:', error);

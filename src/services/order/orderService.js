@@ -39,7 +39,11 @@ async function createOrder(orderData) {
         throw new Error(`Item ${cartItem.itemId} not found`);
       }
       
-      if (item.availability !== 'available') {
+      // Check availability_status (new field) or fallback to availability (old field)
+      const isAvailable = (item.availability_status === 'available' || item.availability === 'available') 
+        && item.availability_status !== 'unavailable' && item.availability_status !== 'hidden';
+      
+      if (!isAvailable) {
         throw new Error(`Item ${item.name} is not available`);
       }
       
@@ -75,6 +79,9 @@ async function createOrder(orderData) {
       // Otherwise, status remains 'accepted' for future scheduled orders
     }
     
+    // Determine request_type: 'scheduled_request' if scheduled_for exists, else 'order'
+    const requestType = orderData.scheduledFor ? 'scheduled_request' : 'order';
+    
     // Create order
     const order = await orderRepository.create({
       ...orderData,
@@ -83,7 +90,9 @@ async function createOrder(orderData) {
       subtotal,
       deliveryPrice,
       total,
-      status: initialStatus // Use determined status
+      status: initialStatus, // Use determined status
+      requestType: requestType,
+      firstResponseAt: orderData.firstResponseAt || null // Set when order created from message
     });
     
     logger.info(`Order created: ${order.id} for business: ${orderData.businessId}`);
@@ -143,7 +152,13 @@ async function updateOrderStatus(orderId, businessId, status, changedBy = 'syste
     }
     
     // Note: times_delivered increment is handled in orderRepository.updateStatus
-    const updatedOrder = await orderRepository.updateStatus(orderId, businessId, status, changedBy);
+    // Set completed_at when status becomes 'completed'
+    const updateData = {};
+    if (status === 'completed') {
+      updateData.completedAt = new Date();
+    }
+    
+    const updatedOrder = await orderRepository.updateStatus(orderId, businessId, status, changedBy, updateData);
     
     logger.info(`Order status updated: ${orderId} from ${order.status} to ${status}`);
     
