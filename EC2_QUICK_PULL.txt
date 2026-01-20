@@ -9,8 +9,10 @@
    cd ~/Zakaa-Artificial
    git pull origin main
    npm install
+   cd frontend && npm install && npm run build && cd ..
    node database/migrate_major_update.js
    pm2 restart zakaa
+   sudo nginx -t && sudo systemctl reload nginx
    pm2 logs zakaa --lines 50
 
 ═══════════════════════════════════════════════════════════════

@@ -56,16 +56,36 @@ git stash pop
 
 ---
 
-### Step 4: Install New Dependencies (if any)
+### Step 4: Install Backend Dependencies
 
 ```bash
-# Install any new npm packages
+# Install any new npm packages for backend
 npm install
 ```
 
 ---
 
-### Step 5: Run Database Migrations (if needed)
+### Step 5: Build Frontend (if frontend changed)
+
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Install frontend dependencies
+npm install
+
+# Build for production (creates frontend/dist folder)
+npm run build
+
+# Go back to root directory
+cd ..
+```
+
+**Note**: The frontend build creates a `frontend/dist` folder that nginx serves. If you only changed backend code, you can skip this step.
+
+---
+
+### Step 6: Run Database Migrations (if needed)
 
 ```bash
 # Run the major update migration
@@ -74,7 +94,7 @@ node database/migrate_major_update.js
 
 ---
 
-### Step 6: Restart the Application
+### Step 7: Restart the Application
 
 **If using PM2:**
 ```bash
@@ -112,16 +132,25 @@ cd ~/Zakaa-Artificial
 # 2. Pull changes
 git pull origin main
 
-# 3. Install dependencies
+# 3. Install backend dependencies
 npm install
 
-# 4. Run migrations (if needed)
+# 4. Build frontend (if frontend changed)
+cd frontend
+npm install
+npm run build
+cd ..
+
+# 5. Run migrations (if needed)
 node database/migrate_major_update.js
 
-# 5. Restart with PM2
+# 6. Restart with PM2
 pm2 restart zakaa
 
-# 6. Check status
+# 7. Reload nginx (if frontend changed)
+sudo nginx -t && sudo systemctl reload nginx
+
+# 8. Check status
 pm2 status
 pm2 logs zakaa --lines 50
 ```
@@ -180,6 +209,16 @@ pm2 save
 pm2 startup
 ```
 
+### If frontend build fails:
+```bash
+# Clear frontend cache and rebuild
+cd frontend
+rm -rf node_modules package-lock.json dist
+npm install
+npm run build
+cd ..
+```
+
 ### If database migration fails:
 ```bash
 # Check MySQL connection
@@ -187,6 +226,18 @@ mysql -u root -p -e "USE zakaa_db; SHOW TABLES;"
 
 # Check MongoDB connection (if using)
 mongo --eval "db.version()"
+```
+
+### If nginx needs reload:
+```bash
+# Test nginx configuration
+sudo nginx -t
+
+# Reload nginx (applies changes without downtime)
+sudo systemctl reload nginx
+
+# Or restart nginx (full restart)
+sudo systemctl restart nginx
 ```
 
 ---
