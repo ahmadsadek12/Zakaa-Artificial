@@ -201,6 +201,134 @@ require('dotenv').config();
     \`).catch(e => console.log('google_calendar_integration_json:', e.message));
   }
 
+  // Add items table columns
+  const [itemColumns] = await conn.query(\`
+    SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+    WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'items' AND COLUMN_NAME IN 
+    ('service_type', 'availability_status', 'stock_quantity', 'only_scheduled', 
+     'reminder_minutes_before', 'category_id')
+  \`, [process.env.MYSQL_DATABASE || 'zakaa_db']);
+  
+  const existingItemColumns = itemColumns.map(c => c.COLUMN_NAME);
+
+  if (!existingItemColumns.includes('service_type')) {
+    await conn.query(\`
+      ALTER TABLE items 
+      ADD COLUMN service_type ENUM('physical','time_based') NOT NULL DEFAULT 'physical'
+    \`).catch(e => console.log('service_type:', e.message));
+  }
+
+  if (!existingItemColumns.includes('availability_status')) {
+    await conn.query(\`
+      ALTER TABLE items 
+      ADD COLUMN availability_status ENUM('available','unavailable','hidden') NOT NULL DEFAULT 'available'
+    \`).catch(e => console.log('availability_status:', e.message));
+  }
+
+  if (!existingItemColumns.includes('stock_quantity')) {
+    await conn.query(\`
+      ALTER TABLE items 
+      ADD COLUMN stock_quantity INT NULL
+    \`).catch(e => console.log('stock_quantity:', e.message));
+  }
+
+  if (!existingItemColumns.includes('only_scheduled')) {
+    await conn.query(\`
+      ALTER TABLE items 
+      ADD COLUMN only_scheduled BOOLEAN NOT NULL DEFAULT false
+    \`).catch(e => console.log('only_scheduled:', e.message));
+  }
+
+  if (!existingItemColumns.includes('reminder_minutes_before')) {
+    await conn.query(\`
+      ALTER TABLE items 
+      ADD COLUMN reminder_minutes_before INT NULL
+    \`).catch(e => console.log('reminder_minutes_before:', e.message));
+  }
+
+  if (!existingItemColumns.includes('category_id')) {
+    await conn.query(\`
+      ALTER TABLE items 
+      ADD COLUMN category_id CHAR(36) NULL
+    \`).catch(e => console.log('category_id:', e.message));
+  }
+
+  // Add menus table columns
+  const [menuColumns] = await conn.query(\`
+    SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+    WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'menus' AND COLUMN_NAME IN 
+    ('sort_order', 'menu_type')
+  \`, [process.env.MYSQL_DATABASE || 'zakaa_db']);
+  
+  const existingMenuColumns = menuColumns.map(c => c.COLUMN_NAME);
+
+  if (!existingMenuColumns.includes('sort_order')) {
+    await conn.query(\`
+      ALTER TABLE menus 
+      ADD COLUMN sort_order INT NOT NULL DEFAULT 0
+    \`).catch(e => console.log('menus.sort_order:', e.message));
+  }
+
+  if (!existingMenuColumns.includes('menu_type')) {
+    await conn.query(\`
+      ALTER TABLE menus 
+      ADD COLUMN menu_type VARCHAR(50) NULL
+    \`).catch(e => console.log('menus.menu_type:', e.message));
+  }
+
+  // Add tables table columns
+  const [tableColumns] = await conn.query(\`
+    SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+    WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tables' AND COLUMN_NAME IN 
+    ('is_active', 'label')
+  \`, [process.env.MYSQL_DATABASE || 'zakaa_db']);
+  
+  const existingTableColumns = tableColumns.map(c => c.COLUMN_NAME);
+
+  if (!existingTableColumns.includes('is_active')) {
+    await conn.query(\`
+      ALTER TABLE tables 
+      ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT true
+    \`).catch(e => console.log('tables.is_active:', e.message));
+  }
+
+  if (!existingTableColumns.includes('label')) {
+    await conn.query(\`
+      ALTER TABLE tables 
+      ADD COLUMN label VARCHAR(100) NULL
+    \`).catch(e => console.log('tables.label:', e.message));
+  }
+
+  // Add reservations table columns
+  const [reservationColumns] = await conn.query(\`
+    SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+    WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'reservations' AND COLUMN_NAME IN 
+    ('reservation_kind', 'start_at', 'source')
+  \`, [process.env.MYSQL_DATABASE || 'zakaa_db']);
+  
+  const existingReservationColumns = reservationColumns.map(c => c.COLUMN_NAME);
+
+  if (!existingReservationColumns.includes('reservation_kind')) {
+    await conn.query(\`
+      ALTER TABLE reservations 
+      ADD COLUMN reservation_kind ENUM('table','appointment') NOT NULL DEFAULT 'table'
+    \`).catch(e => console.log('reservations.reservation_kind:', e.message));
+  }
+
+  if (!existingReservationColumns.includes('start_at')) {
+    await conn.query(\`
+      ALTER TABLE reservations 
+      ADD COLUMN start_at TIMESTAMP NULL
+    \`).catch(e => console.log('reservations.start_at:', e.message));
+  }
+
+  if (!existingReservationColumns.includes('source')) {
+    await conn.query(\`
+      ALTER TABLE reservations 
+      ADD COLUMN source ENUM('whatsapp','telegram','instagram','facebook','dashboard') NOT NULL DEFAULT 'whatsapp'
+    \`).catch(e => console.log('reservations.source:', e.message));
+  }
+
   // Re-enable foreign key checks
   await conn.query('SET FOREIGN_KEY_CHECKS = 1');
 
