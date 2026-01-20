@@ -50,9 +50,9 @@ async function isOpenNow(businessId, branchId) {
     let hours = [];
     if (branchId && branchId !== businessId) {
       hours = await queryMySQL(`
-        SELECT * FROM opening_hours 
-        WHERE owner_type = ? AND owner_id = ? AND day_of_week = ?
-      `, ['branch', branchId, dayOfWeek]);
+      SELECT * FROM opening_hours 
+      WHERE owner_type = ? AND owner_id = ? AND day_of_week = ?
+    `, ['branch', branchId, dayOfWeek]);
     }
     
     // If no branch hours, check business-level hours
@@ -62,23 +62,23 @@ async function isOpenNow(businessId, branchId) {
         WHERE owner_type = ? AND owner_id = ? AND day_of_week = ?
       `, ['business', businessId, dayOfWeek]);
     }
-    
+      
     if (hours.length === 0) {
       logger.warn('No opening hours found', { businessId, branchId, dayOfWeek });
-      return { isOpen: false, reason: 'No opening hours configured' };
-    }
-    
+        return { isOpen: false, reason: 'No opening hours configured' };
+      }
+      
     const hour = hours[0];
-    if (hour.is_closed) {
+      if (hour.is_closed) {
       logger.info('Business is closed today', { dayOfWeek, is_closed: hour.is_closed });
-      return { isOpen: false, reason: 'Closed today' };
-    }
-    
-    if (!hour.open_time || !hour.close_time) {
+        return { isOpen: false, reason: 'Closed today' };
+      }
+      
+      if (!hour.open_time || !hour.close_time) {
       logger.info('No specific hours set, assuming open', { dayOfWeek });
-      return { isOpen: true }; // Assume open if no specific hours
-    }
-    
+        return { isOpen: true }; // Assume open if no specific hours
+      }
+      
     // Convert times to minutes for accurate comparison
     const timeToMinutes = (timeStr) => {
       const [hours, minutes] = timeStr.substring(0, 5).split(':').map(Number);
@@ -89,11 +89,48 @@ async function isOpenNow(businessId, branchId) {
     const openMinutes = timeToMinutes(hour.open_time);
     const closeMinutes = timeToMinutes(hour.close_time);
     
-    // Check last order before closing
-    const lastOrderBeforeClosing = hour.last_order_before_closing_minutes || 0;
-    const effectiveCloseMinutes = closeMinutes - lastOrderBeforeClosing;
+    // Get last order before closing from users table (business or branch)
+    const ownerId = branchId && branchId !== businessId ? branchId : businessId;
+    const [ownerUsers] = await queryMySQL(
+      'SELECT last_order_before_closing_minutes FROM users WHERE id = ?',
+      [ownerId]
+    );
+    const lastOrderBeforeClosing = ownerUsers?.[0]?.last_order_before_closing_minutes || 0;
+    const lastOrderMinutes = lastOrderBeforeClosing > 0 ? closeMinutes - lastOrderBeforeClosing : closeMinutes;
     
-    const isOpen = currentMinutes >= openMinutes && currentMinutes <= effectiveCloseMinutes;
+    // Business is "open" for general purposes if within opening hours
+    const isWithinOpeningHours = currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
+    
+    // Business can accept immediate orders only if before last order time
+    const isOpenForOrders = currentMinutes >= openMinutes && currentMinutes <= lastOrderMinutes;
+    
+    // Check if last order time has passed
+    const lastOrderTimePassed = lastOrderBeforeClosing > 0 && currentMinutes > lastOrderMinutes;
+    
+    // Calculate minutes until last order time
+    const minutesUntilLastOrder = lastOrderBeforeClosing > 0 && currentMinutes < lastOrderMinutes 
+      ? lastOrderMinutes - currentMinutes 
+      : null;
+    
+    // Format last order time as HH:MM
+    const lastOrderTime = lastOrderBeforeClosing > 0 
+      ? `${Math.floor(lastOrderMinutes / 60)}:${String(lastOrderMinutes % 60).padStart(2, '0')}`
+      : null;
+    
+    // Determine reason message
+    let reason;
+    if (currentMinutes < openMinutes) {
+      reason = `Closed. We open at ${hour.open_time.substring(0, 5)}`;
+    } else if (lastOrderTimePassed && isWithinOpeningHours) {
+      reason = `We're still open but past last order time (${lastOrderTime}). Please schedule your order.`;
+    } else if (!isWithinOpeningHours) {
+      reason = `Closed. Hours: ${hour.open_time.substring(0, 5)} - ${hour.close_time.substring(0, 5)}`;
+    } else {
+      reason = 'Open';
+      if (minutesUntilLastOrder !== null && minutesUntilLastOrder <= 30) {
+        reason += ` (Last order in ${minutesUntilLastOrder} minutes at ${lastOrderTime})`;
+      }
+    }
     
     logger.info('Opening hours check result', {
       dayOfWeek,
@@ -101,17 +138,25 @@ async function isOpenNow(businessId, branchId) {
       openTime: hour.open_time.substring(0, 5),
       closeTime: hour.close_time.substring(0, 5),
       lastOrderBeforeClosing,
-      effectiveCloseMinutes,
-      isOpen,
+      lastOrderTime,
+      isOpenForOrders,
+      lastOrderTimePassed,
+      minutesUntilLastOrder,
+      isWithinOpeningHours,
       currentMinutes,
       openMinutes,
       closeMinutes,
-      reason: isOpen ? 'Open' : `Closed. Hours: ${hour.open_time.substring(0, 5)} - ${hour.close_time.substring(0, 5)} (last order before ${Math.floor(effectiveCloseMinutes / 60)}:${String(effectiveCloseMinutes % 60).padStart(2, '0')})`
+      lastOrderMinutes,
+      reason
     });
     
     return {
-      isOpen,
-      reason: isOpen ? 'Open' : `Closed. Hours: ${hour.open_time.substring(0, 5)} - ${hour.close_time.substring(0, 5)}${lastOrderBeforeClosing > 0 ? ` (last order ${lastOrderBeforeClosing} minutes before closing)` : ''}`
+      isOpen: isOpenForOrders, // Only true if before last order time
+      isWithinOpeningHours, // True if between open and close (even if past last order)
+      lastOrderTimePassed, // True if past last order time but before close
+      minutesUntilLastOrder, // Minutes until last order (null if past or no limit)
+      lastOrderTime, // HH:MM format of last order time
+      reason
     };
   } catch (error) {
     logger.error('Error checking opening hours:', error);
@@ -362,7 +407,7 @@ async function processChatbotResponse({
               order_source = ?,
               customer_name = COALESCE(?, customer_name),
               notes = CASE 
-                WHEN notes = '__cart__' THEN NULL
+                WHEN notes = '__cart__' THEN NULL 
                 WHEN notes LIKE '__cart__\nNOTES: %' THEN SUBSTRING(notes FROM LENGTH('__cart__\nNOTES: ') + 1)
                 WHEN notes LIKE '__cart__\r\nNOTES: %' THEN SUBSTRING(notes FROM LENGTH('__cart__\r\nNOTES: ') + 1)
                 ELSE COALESCE(?, notes) 

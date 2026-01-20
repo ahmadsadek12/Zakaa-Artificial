@@ -441,9 +441,18 @@ async function executeFunction(functionName, args, context) {
           };
         }
         
+        // Check if approaching last order time and warn user
+        const { isOpenNow } = require('./conversationManager');
+        const openStatus = await isOpenNow(business.id, branchId);
+        let warningMessage = '';
+        
+        if (openStatus.minutesUntilLastOrder !== null && openStatus.minutesUntilLastOrder <= 30) {
+          warningMessage = `\n⚠️ Please note: Last order time is in ${openStatus.minutesUntilLastOrder} minutes (${openStatus.lastOrderTime}). Please confirm your order quickly!`;
+        }
+        
         return {
           success: true,
-          message: `Added ${quantity}x ${item.name} to your ongoing order`,
+          message: `Added ${quantity}x ${item.name} to your ongoing order${warningMessage}`,
           cart: cart
         };
       }
@@ -913,8 +922,13 @@ async function executeFunction(functionName, args, context) {
           const openMinutes = timeToMinutes(openTime);
           const closeMinutes = timeToMinutes(closeTime);
           
-          // Check last order before closing
-          const lastOrderBeforeClosing = dayHours.last_order_before_closing_minutes || 0;
+          // Get last order before closing from users table
+          const ownerIdForDay = (branchId && branchId !== business.id) ? branchId : business.id;
+          const [ownerUsers] = await queryMySQL(
+            'SELECT last_order_before_closing_minutes FROM users WHERE id = ?',
+            [ownerIdForDay]
+          );
+          const lastOrderBeforeClosing = ownerUsers?.[0]?.last_order_before_closing_minutes || 0;
           const effectiveCloseMinutes = closeMinutes - lastOrderBeforeClosing;
           
           if (scheduledMinutes < openMinutes || scheduledMinutes > effectiveCloseMinutes) {
@@ -1145,6 +1159,30 @@ async function executeFunction(functionName, args, context) {
         const conversationManager = require('./conversationManager');
         const openStatus = await conversationManager.isOpenNow(business.id, branchId);
         
+        // Get closing time for error messages
+        const businessTimezone = business.timezone || 'Asia/Beirut';
+        const now = new Date();
+        const nowInTimezone = new Date(now.toLocaleString('en-US', { timeZone: businessTimezone }));
+        const dayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][nowInTimezone.getDay()];
+        
+        let closingTime = 'closing';
+        let hours = [];
+        if (branchId && branchId !== business.id) {
+          hours = await queryMySQL(`
+            SELECT close_time FROM opening_hours 
+            WHERE owner_type = ? AND owner_id = ? AND day_of_week = ?
+          `, ['branch', branchId, dayOfWeek]);
+        }
+        if (hours.length === 0) {
+          hours = await queryMySQL(`
+            SELECT close_time FROM opening_hours 
+            WHERE owner_type = ? AND owner_id = ? AND day_of_week = ?
+          `, ['business', business.id, dayOfWeek]);
+        }
+        if (hours.length > 0 && hours[0].close_time) {
+          closingTime = hours[0].close_time.substring(0, 5);
+        }
+        
         logger.info('confirm_order: Checking order confirmation', {
           businessId: business.id,
           branchId,
@@ -1247,8 +1285,13 @@ async function executeFunction(functionName, args, context) {
             const openMinutes = timeToMinutes(openTime);
             const closeMinutes = timeToMinutes(closeTime);
             
-            // Check last order before closing
-            const lastOrderBeforeClosing = dayHours.last_order_before_closing_minutes || 0;
+            // Get last order before closing from users table
+            const ownerIdForScheduled = (branchId && branchId !== business.id) ? branchId : business.id;
+            const [ownerUsersScheduled] = await queryMySQL(
+              'SELECT last_order_before_closing_minutes FROM users WHERE id = ?',
+              [ownerIdForScheduled]
+            );
+            const lastOrderBeforeClosing = ownerUsersScheduled?.[0]?.last_order_before_closing_minutes || 0;
             const effectiveCloseMinutes = closeMinutes - lastOrderBeforeClosing;
             
             if (scheduledMinutes < openMinutes || scheduledMinutes > effectiveCloseMinutes) {
@@ -1261,23 +1304,47 @@ async function executeFunction(functionName, args, context) {
         }
         
         // Check if business is closed for immediate (non-scheduled) orders
-        if (!cart.scheduled_for && !openStatus.isOpen) {
-          // Order is not scheduled and business is closed - BLOCK IT
-          logger.warn('confirm_order: Attempting to confirm unscheduled order while closed', {
-            isOpen: openStatus.isOpen,
-            reason: openStatus.reason,
-            hasScheduledTime: !!cart.scheduled_for
-          });
-          return {
-            success: false,
-            error: `We're currently closed (${openStatus.reason}). Please schedule your order for when we're open.`,
-            requiresScheduling: true
-          };
+        if (!cart.scheduled_for) {
+          // For immediate orders, check if last order time has passed
+          if (openStatus.lastOrderTimePassed && openStatus.isWithinOpeningHours) {
+            // Past last order time but still within opening hours - require scheduling
+            logger.warn('confirm_order: Attempting immediate order after last order time', {
+              lastOrderTime: openStatus.lastOrderTime,
+              reason: openStatus.reason,
+              isWithinOpeningHours: openStatus.isWithinOpeningHours
+            });
+            return {
+              success: false,
+              error: `We're past our last order time (${openStatus.lastOrderTime}). We're still open until ${closingTime}, but you'll need to schedule your order for a future time. Please use the scheduling function to set a date and time.`,
+              requiresScheduling: true
+            };
+          } else if (!openStatus.isOpen) {
+            // Business is closed (before opening hours or after closing)
+            logger.warn('confirm_order: Attempting to confirm unscheduled order while closed', {
+              isOpen: openStatus.isOpen,
+              isWithinOpeningHours: openStatus.isWithinOpeningHours,
+              reason: openStatus.reason,
+              hasScheduledTime: !!cart.scheduled_for
+            });
+            return {
+              success: false,
+              error: `We're currently closed (${openStatus.reason}). Please schedule your order for when we're open.`,
+              requiresScheduling: true
+            };
+          }
         }
         
-        // Business is open OR order is scheduled - allow order
+        // Business is open for orders OR order is scheduled - allow order
+        // If approaching last order time, add warning
+        let warningMessage = '';
+        if (!cart.scheduled_for && openStatus.minutesUntilLastOrder !== null && openStatus.minutesUntilLastOrder <= 30) {
+          warningMessage = `\n⚠️ Note: Last order time is in ${openStatus.minutesUntilLastOrder} minutes (${openStatus.lastOrderTime}). Please confirm quickly!`;
+        }
+        
         logger.info('confirm_order: Business is open, allowing immediate order confirmation', {
           isOpen: openStatus.isOpen,
+          lastOrderTimePassed: openStatus.lastOrderTimePassed,
+          minutesUntilLastOrder: openStatus.minutesUntilLastOrder,
           hasScheduledTime: !!cart.scheduled_for,
           itemCount: cart.items?.length || 0
         });
@@ -1289,7 +1356,7 @@ async function executeFunction(functionName, args, context) {
         // For now, return success and let the main handler process it
         return {
           success: true,
-          message: `${cartSummary}\n\nOrder validated. Confirming order...`,
+          message: `${cartSummary}${warningMessage}\n\nOrder validated. Confirming order...`,
           cart: cart,
           readyToConfirm: true
         };
@@ -2084,10 +2151,19 @@ async function executeFunction(functionName, args, context) {
         }
         
         let message = `We close at **${hour.close_time.substring(0, 5)}** today (${dayOfWeek}).`;
-        if (hour.last_order_before_closing_minutes && hour.last_order_before_closing_minutes > 0) {
+        
+        // Get last order before closing from users table
+        const ownerIdForClosing = (branchId && branchId !== business.id) ? branchId : business.id;
+        const [ownerUsersClosing] = await queryMySQL(
+          'SELECT last_order_before_closing_minutes FROM users WHERE id = ?',
+          [ownerIdForClosing]
+        );
+        const lastOrderBeforeClosing = ownerUsersClosing?.[0]?.last_order_before_closing_minutes || 0;
+        
+        if (lastOrderBeforeClosing && lastOrderBeforeClosing > 0) {
           const closeTime = hour.close_time.substring(0, 5);
           const [closeHour, closeMin] = closeTime.split(':').map(Number);
-          const lastOrderMinutes = closeHour * 60 + closeMin - hour.last_order_before_closing_minutes;
+          const lastOrderMinutes = closeHour * 60 + closeMin - lastOrderBeforeClosing;
           const lastOrderHour = Math.floor(lastOrderMinutes / 60);
           const lastOrderMin = lastOrderMinutes % 60;
           message += ` Last order accepted at **${String(lastOrderHour).padStart(2, '0')}:${String(lastOrderMin).padStart(2, '0')}**.`;
