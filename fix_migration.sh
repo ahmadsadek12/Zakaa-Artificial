@@ -124,6 +124,9 @@ require('dotenv').config();
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   \`).catch(e => console.log('service_customizations:', e.message));
 
+  // Disable foreign key checks temporarily to avoid constraint errors
+  await conn.query('SET FOREIGN_KEY_CHECKS = 0');
+
   // Check and add users table columns (check if they exist first)
   const [columns] = await conn.query(\`
     SELECT COLUMN_NAME FROM information_schema.COLUMNS 
