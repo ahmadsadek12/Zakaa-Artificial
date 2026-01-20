@@ -57,11 +57,17 @@ async function runMigration() {
         try {
           await connection.query(trimmed);
         } catch (error) {
-          // Ignore "Duplicate column" errors
-          if (!error.message.includes('Duplicate column') && 
-              !error.message.includes('Duplicate key name') &&
-              !error.message.includes('already exists')) {
-            console.warn('Warning:', error.message);
+          // Ignore "Duplicate column" and "already exists" errors
+          if (error.message.includes('Duplicate column') || 
+              error.message.includes('Duplicate key name') ||
+              error.message.includes('already exists') ||
+              error.message.includes('Duplicate entry')) {
+            // Silently ignore - these are expected on re-runs
+          } else {
+            // Show actual errors that might prevent table creation
+            console.error(`SQL Error executing statement: ${error.message}`);
+            console.error(`Statement: ${trimmed.substring(0, 100)}...`);
+            // Don't throw - continue with other statements
           }
         }
       }
