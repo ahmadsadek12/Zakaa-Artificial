@@ -124,6 +124,70 @@ require('dotenv').config();
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   \`).catch(e => console.log('service_customizations:', e.message));
 
+  // Add users table columns
+  await conn.query(\`
+    ALTER TABLE users 
+    ADD COLUMN google_maps_link TEXT NULL
+  \`).catch(e => {
+    if (!e.message.includes('Duplicate column')) console.log('google_maps_link:', e.message);
+  });
+
+  await conn.query(\`
+    ALTER TABLE users 
+    ADD COLUMN carrier_phone_number VARCHAR(20) NULL
+  \`).catch(e => {
+    if (!e.message.includes('Duplicate column')) console.log('carrier_phone_number:', e.message);
+  });
+
+  await conn.query(\`
+    ALTER TABLE users 
+    ADD COLUMN estimated_delivery_time_min INT NULL
+  \`).catch(e => {
+    if (!e.message.includes('Duplicate column')) console.log('estimated_delivery_time_min:', e.message);
+  });
+
+  await conn.query(\`
+    ALTER TABLE users 
+    ADD COLUMN estimated_delivery_time_max INT NULL
+  \`).catch(e => {
+    if (!e.message.includes('Duplicate column')) console.log('estimated_delivery_time_max:', e.message);
+  });
+
+  await conn.query(\`
+    ALTER TABLE users 
+    ADD COLUMN contract_file_url TEXT NULL
+  \`).catch(e => {
+    if (!e.message.includes('Duplicate column')) console.log('contract_file_url:', e.message);
+  });
+
+  await conn.query(\`
+    ALTER TABLE users 
+    ADD COLUMN contract_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending'
+  \`).catch(e => {
+    if (!e.message.includes('Duplicate column')) console.log('contract_status:', e.message);
+  });
+
+  await conn.query(\`
+    ALTER TABLE users 
+    ADD COLUMN contract_approved_at TIMESTAMP NULL
+  \`).catch(e => {
+    if (!e.message.includes('Duplicate column')) console.log('contract_approved_at:', e.message);
+  });
+
+  await conn.query(\`
+    ALTER TABLE users 
+    ADD COLUMN username VARCHAR(100) UNIQUE NULL
+  \`).catch(e => {
+    if (!e.message.includes('Duplicate column')) console.log('username:', e.message);
+  });
+
+  await conn.query(\`
+    ALTER TABLE users 
+    ADD COLUMN google_calendar_integration_json JSON NULL
+  \`).catch(e => {
+    if (!e.message.includes('Duplicate column')) console.log('google_calendar_integration_json:', e.message);
+  });
+
   await conn.end();
   console.log('✓ Tables created/updated');
 })();
