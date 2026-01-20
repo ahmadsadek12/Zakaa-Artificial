@@ -68,6 +68,20 @@ async function runMigration() {
     }
     console.log('✓ SQL migration completed');
     
+    // Verify critical tables were created
+    console.log('\n=== Verifying Tables ===');
+    const botIntegrationsExists = await tableExists(connection, 'bot_integrations');
+    if (!botIntegrationsExists) {
+      throw new Error('bot_integrations table was not created. Please check the SQL migration file.');
+    }
+    console.log('✓ bot_integrations table exists');
+    
+    const addonsExists = await tableExists(connection, 'addons');
+    if (!addonsExists) {
+      throw new Error('addons table was not created. Please check the SQL migration file.');
+    }
+    console.log('✓ addons table exists');
+    
     // ========================================================================
     // DATA MIGRATION
     // ========================================================================
@@ -77,7 +91,7 @@ async function runMigration() {
     // 1. Migrate existing WhatsApp data from users to bot_integrations
     console.log('1. Migrating WhatsApp data to bot_integrations...');
     const [businesses] = await connection.query(
-      `SELECT id, whatsapp_phone_number, whatsapp_phone_number_id, whatsapp_access_token_encrypted 
+      `SELECT id, user_type, whatsapp_phone_number, whatsapp_phone_number_id, whatsapp_access_token_encrypted 
        FROM users 
        WHERE user_type IN ('business', 'branch') 
        AND (whatsapp_phone_number IS NOT NULL OR whatsapp_phone_number_id IS NOT NULL)`
