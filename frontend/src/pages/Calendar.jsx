@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { Calendar as CalendarIcon, Clock, Users, MapPin, Phone, Plus, Edit, Trash2, CheckCircle } from 'lucide-react'
-import { Calendar, momentLocalizer, Views } from 'react-big-calendar'
+import { Calendar as BigCalendar, momentLocalizer, Views } from 'react-big-calendar'
 import moment from 'moment'
 import { format } from 'date-fns'
 import { useAuth } from '../contexts/AuthContext'
@@ -538,7 +538,7 @@ export default function Calendar() {
 
       {/* Calendar */}
       <div className="card p-4">
-        <Calendar
+        <BigCalendar
           localizer={localizer}
           events={calendarEvents}
           startAccessor="start"
