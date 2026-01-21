@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
-import { Save, Building2, CreditCard, Phone, MapPin, Globe, MessageSquare, Key, Clock, Eye, EyeOff, Check } from 'lucide-react'
+import { Save, Building2, CreditCard, Phone, MapPin, Globe, MessageSquare, Key, Clock, Eye, EyeOff, Check, Calendar } from 'lucide-react'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
@@ -209,6 +209,164 @@ function IntegrationSetup({ platform, user, onUpdate, isAdmin = false }) {
           )}
         </button>
       </form>
+    </div>
+  )
+}
+
+// Google Calendar Integration Component
+function GoogleCalendarIntegration({ user, onUpdate }) {
+  const [status, setStatus] = useState({ connected: false, enabled: false })
+  const [loading, setLoading] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+
+  useEffect(() => {
+    fetchStatus()
+  }, [])
+
+  const fetchStatus = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await axios.get(`${API_URL}/api/calendar/google/status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setStatus(response.data.data)
+    } catch (error) {
+      console.error('Error fetching Google Calendar status:', error)
+      setStatus({ connected: false, enabled: false })
+    }
+  }
+
+  const handleConnect = async () => {
+    try {
+      setLoading(true)
+      const token = localStorage.getItem('token')
+      const response = await axios.get(`${API_URL}/api/calendar/google/oauth/url`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      // Redirect to Google OAuth
+      window.location.href = response.data.data.authUrl
+    } catch (error) {
+      console.error('Error connecting Google Calendar:', error)
+      alert(error.response?.data?.error?.message || 'Failed to connect Google Calendar')
+      setLoading(false)
+    }
+  }
+
+  const handleDisconnect = async () => {
+    if (!confirm('Are you sure you want to disconnect Google Calendar?')) return
+    setLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      await axios.delete(`${API_URL}/api/calendar/google`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      await fetchStatus()
+      await onUpdate()
+      alert('Google Calendar disconnected successfully')
+    } catch (error) {
+      console.error('Error disconnecting Google Calendar:', error)
+      alert(error.response?.data?.error?.message || 'Failed to disconnect Google Calendar')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSync = async () => {
+    setSyncing(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await axios.post(`${API_URL}/api/calendar/google/sync`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      alert(`Sync completed! ${response.data.data.synced} events synced, ${response.data.data.failed} failed.`)
+    } catch (error) {
+      console.error('Error syncing to Google Calendar:', error)
+      alert(error.response?.data?.error?.message || 'Failed to sync to Google Calendar')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  // Check for OAuth callback success/error
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('google_calendar') === 'connected') {
+      alert('Google Calendar connected successfully!')
+      fetchStatus()
+      onUpdate()
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname)
+    } else if (params.get('google_calendar') === 'error') {
+      alert(`Error: ${params.get('message') || 'Failed to connect Google Calendar'}`)
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }
+  }, [])
+
+  return (
+    <div className="space-y-4">
+      {status.connected ? (
+        <>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-green-900">✓ Google Calendar Connected</p>
+                <p className="text-xs text-green-700 mt-1">Calendar ID: {status.calendarId || 'primary'}</p>
+              </div>
+              <button
+                onClick={handleDisconnect}
+                disabled={loading}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {loading ? 'Disconnecting...' : 'Disconnect'}
+              </button>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="btn btn-primary flex items-center gap-2"
+            >
+              {syncing ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+              ) : (
+                <>
+                  <Calendar size={18} />
+                  Sync Events to Google Calendar
+                </>
+              )}
+            </button>
+          </div>
+          <p className="text-sm text-gray-500">
+            Your scheduled requests and reservations will be synced to your Google Calendar. Click "Sync Events" to sync existing events.
+          </p>
+        </>
+      ) : (
+        <>
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <p className="text-sm text-gray-700 mb-4">
+              Connect your Google Calendar to automatically sync scheduled requests and reservations.
+            </p>
+            <button
+              onClick={handleConnect}
+              disabled={loading}
+              className="btn btn-primary flex items-center gap-2"
+            >
+              {loading ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+              ) : (
+                <>
+                  <Calendar size={18} />
+                  Connect Google Calendar
+                </>
+              )}
+            </button>
+          </div>
+          <p className="text-xs text-gray-500">
+            You'll be redirected to Google to authorize access to your calendar.
+          </p>
+        </>
+      )}
     </div>
   )
 }
@@ -1135,6 +1293,14 @@ export default function Settings() {
                 user={user}
                 onUpdate={fetchUser}
               />
+            </div>
+
+            <div className="border-t border-gray-200 pt-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Calendar size={24} />
+                Google Calendar Integration
+              </h2>
+              <GoogleCalendarIntegration user={user} onUpdate={fetchUser} />
             </div>
           </div>
         )}

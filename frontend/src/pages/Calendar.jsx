@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import { Calendar as CalendarIcon, Clock, Users, MapPin, Phone, Plus, Edit, Trash2, CheckCircle } from 'lucide-react'
+import { Calendar as CalendarIcon, Clock, Users, MapPin, Phone, Plus, Edit, Trash2, CheckCircle, RefreshCw } from 'lucide-react'
 import { Calendar as BigCalendar, momentLocalizer, Views } from 'react-big-calendar'
 import moment from 'moment'
 import { format } from 'date-fns'
@@ -31,6 +31,8 @@ export default function Calendar() {
   const [sortBy, setSortBy] = useState('time') // 'time' or 'income'
   const [newEventType, setNewEventType] = useState('reservation')
   const [selectedSlot, setSelectedSlot] = useState(null)
+  const [googleCalendarStatus, setGoogleCalendarStatus] = useState({ connected: false })
+  const [syncing, setSyncing] = useState(false)
   const [formData, setFormData] = useState({
     customerName: '',
     customerPhoneNumber: '',
@@ -47,7 +49,37 @@ export default function Calendar() {
 
   useEffect(() => {
     fetchScheduledData()
+    fetchGoogleCalendarStatus()
   }, [currentDate, currentView])
+
+  const fetchGoogleCalendarStatus = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await axios.get(`${API_URL}/api/calendar/google/status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setGoogleCalendarStatus(response.data.data)
+    } catch (error) {
+      // Silently fail if not connected
+      setGoogleCalendarStatus({ connected: false })
+    }
+  }
+
+  const handleSyncToGoogle = async () => {
+    setSyncing(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await axios.post(`${API_URL}/api/calendar/google/sync`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      alert(`Sync completed! ${response.data.data.synced} events synced, ${response.data.data.failed} failed.`)
+    } catch (error) {
+      console.error('Error syncing to Google Calendar:', error)
+      alert(error.response?.data?.error?.message || 'Failed to sync to Google Calendar')
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   const fetchScheduledData = async () => {
     try {
@@ -513,6 +545,23 @@ export default function Calendar() {
           >
             Today
           </button>
+          {googleCalendarStatus.connected && (
+            <button
+              onClick={handleSyncToGoogle}
+              disabled={syncing}
+              className="btn btn-primary flex items-center gap-2"
+              title="Sync events to Google Calendar"
+            >
+              {syncing ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+              ) : (
+                <>
+                  <RefreshCw size={18} />
+                  Sync to Google
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
