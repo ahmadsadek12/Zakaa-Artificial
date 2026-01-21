@@ -778,6 +778,7 @@ router.get('/me/integrations/:platform', [
 /**
  * Update integration (enable/disable)
  * PUT /api/businesses/me/integrations/:platform
+ * Note: Instagram requires admin access
  */
 router.put('/me/integrations/:platform', [
   param('platform').isIn(['whatsapp', 'telegram', 'instagram', 'facebook']).withMessage('Invalid platform'),
@@ -788,6 +789,14 @@ router.put('/me/integrations/:platform', [
     return res.status(400).json({
       success: false,
       error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+  
+  // Instagram requires admin access
+  if (req.params.platform === 'instagram' && req.user.user_type !== CONSTANTS.USER_TYPES.ADMIN) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Only administrators can modify Instagram integration' }
     });
   }
   
