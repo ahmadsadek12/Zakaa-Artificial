@@ -148,11 +148,17 @@ async function update(userId, updateData) {
     // Deprecated: locationLatitude, locationLongitude, deliveryRadiusKm
     deliveryPrice: 'delivery_price',
     googleMapsLink: 'google_maps_link',
+    contractFileUrl: 'contract_file_url',
+    contractStatus: 'contract_status',
+    contractApprovedAt: 'contract_approved_at',
     carrierPhoneNumber: 'carrier_phone_number',
     estimatedDeliveryTimeMin: 'estimated_delivery_time_min',
     estimatedDeliveryTimeMax: 'estimated_delivery_time_max',
     googleCalendarIntegrationJson: 'google_calendar_integration_json',
-    username: 'username'
+    username: 'username',
+    contractFileUrl: 'contract_file_url',
+    contractStatus: 'contract_status',
+    contractApprovedAt: 'contract_approved_at'
   };
   
   const allowedFields = Object.values(fieldMap);

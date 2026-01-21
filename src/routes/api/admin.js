@@ -5,12 +5,17 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
 const { queryMySQL, getMongoCollection } = require('../../config/database');
 const { asyncHandler } = require('../../middleware/errorHandler');
 const { authenticate, requireUserType } = require('../../middleware/auth');
 const CONSTANTS = require('../../config/constants');
 const logger = require('../../utils/logger');
 const { encryptToken } = require('../../../utils/encryption');
+const { uploadToS3 } = require('../../config/aws');
+const userRepository = require('../../repositories/userRepository');
+const { generateUUID } = require('../../utils/uuid');
+const { body, param, validationResult } = require('express-validator');
 
 // All admin routes require authentication and admin role
 router.use(authenticate);
@@ -1553,6 +1558,190 @@ router.delete('/admins/:id', asyncHandler(async (req, res) => {
     success: true,
     data: { message: 'Admin user deleted successfully' }
   });
+}));
+
+// Configure multer for contract file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB
+  },
+  fileFilter: (req, file, cb) => {
+    // Allow PDF files
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'));
+    }
+  }
+});
+
+// Multer error handler
+const handleMulterError = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: 'File too large. Maximum file size is 10MB.',
+          code: 'FILE_TOO_LARGE'
+        }
+      });
+    }
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: `Upload error: ${err.message}`,
+        code: 'UPLOAD_ERROR'
+      }
+    });
+  }
+  if (err) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: err.message || 'File upload error',
+        code: 'FILE_UPLOAD_ERROR'
+      }
+    });
+  }
+  next();
+};
+
+/**
+ * Upload contract file for business
+ * POST /api/admin/businesses/:id/contract
+ */
+router.post('/businesses/:id/contract', upload.single('contract'), handleMulterError, [
+  param('id').isUUID().withMessage('Invalid business ID'),
+  body('contract').optional() // File is handled by multer
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', details: errors.array() }
+    });
+  }
+  
+  const businessId = req.params.id;
+  
+  // Verify business exists
+  const business = await userRepository.findById(businessId);
+  if (!business || business.user_type !== 'business') {
+    return res.status(404).json({
+      success: false,
+      error: { message: 'Business not found' }
+    });
+  }
+  
+  if (!req.file || !req.file.buffer) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Contract file is required' }
+    });
+  }
+  
+  try {
+    // Upload to S3
+    const fileName = `${generateUUID()}-contract.pdf`;
+    const contractUrl = await uploadToS3(req.file.buffer, fileName, 'application/pdf', 'contracts', businessId);
+    
+    // Update business with contract URL and set status to pending
+    const updateData = {
+      contractFileUrl: contractUrl,
+      contractStatus: 'pending',
+      contractApprovedAt: null
+    };
+    await userRepository.update(businessId, updateData);
+    
+    logger.info('Contract uploaded for business', {
+      businessId,
+      contractUrl,
+      uploadedBy: req.user.id
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        contract_file_url: contractUrl,
+        contract_status: 'pending'
+      }
+    });
+  } catch (error) {
+    logger.error('Error uploading contract:', error);
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to upload contract file' }
+    });
+  }
+}));
+
+/**
+ * Update contract status
+ * PATCH /api/admin/businesses/:id/contract-status
+ */
+router.patch('/businesses/:id/contract-status', [
+  param('id').isUUID().withMessage('Invalid business ID'),
+  body('contract_status').isIn(['pending', 'approved', 'rejected']).withMessage('contract_status must be pending, approved, or rejected')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', details: errors.array() }
+    });
+  }
+  
+  const businessId = req.params.id;
+  const { contract_status } = req.body;
+  
+  // Verify business exists
+  const business = await userRepository.findById(businessId);
+  if (!business || business.user_type !== 'business') {
+    return res.status(404).json({
+      success: false,
+      error: { message: 'Business not found' }
+    });
+  }
+  
+  try {
+    const updateData = {
+      contractStatus: contract_status
+    };
+    
+    // Set contract_approved_at if approved
+    if (contract_status === 'approved') {
+      updateData.contractApprovedAt = new Date();
+    } else {
+      updateData.contractApprovedAt = null;
+    }
+    
+    await userRepository.update(businessId, updateData);
+    
+    logger.info('Contract status updated', {
+      businessId,
+      contract_status,
+      updatedBy: req.user.id
+    });
+    
+    const updatedBusiness = await userRepository.findById(businessId);
+    
+    res.json({
+      success: true,
+      data: {
+        contract_file_url: updatedBusiness.contract_file_url,
+        contract_status: updatedBusiness.contract_status,
+        contract_approved_at: updatedBusiness.contract_approved_at
+      }
+    });
+  } catch (error) {
+    logger.error('Error updating contract status:', error);
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to update contract status' }
+    });
+  }
 }));
 
 module.exports = router;

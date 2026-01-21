@@ -1,9 +1,189 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
-import { Save, Building2, CreditCard, Phone, MapPin, Globe, MessageSquare, Key, Clock, Eye, EyeOff } from 'lucide-react'
+import { Save, Building2, CreditCard, Phone, MapPin, Globe, MessageSquare, Key, Clock, Eye, EyeOff, Check } from 'lucide-react'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+
+// Integration Setup Component
+function IntegrationSetup({ platform, user, onUpdate }) {
+  const [integration, setIntegration] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [formData, setFormData] = useState({
+    page_id: '',
+    access_token: '',
+    app_id: ''
+  })
+  const [enabled, setEnabled] = useState(false)
+
+  useEffect(() => {
+    fetchIntegration()
+  }, [platform, user])
+
+  const fetchIntegration = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await axios.get(`${API_URL}/api/businesses/me/integrations/${platform}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (response.data.data.integration) {
+        setIntegration(response.data.data.integration)
+        setEnabled(response.data.data.enabled)
+        setFormData({
+          page_id: response.data.data.integration.page_id || '',
+          access_token: response.data.data.integration.access_token ? '***' : '',
+          app_id: response.data.data.integration.app_id || ''
+        })
+      }
+    } catch (error) {
+      console.error(`Error fetching ${platform} integration:`, error)
+    }
+  }
+
+  const handleConnect = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      await axios.post(`${API_URL}/api/businesses/me/integrations/${platform}`, formData, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      await fetchIntegration()
+      await onUpdate()
+      alert(`${platform.charAt(0).toUpperCase() + platform.slice(1)} connected successfully!`)
+    } catch (error) {
+      console.error(`Error connecting ${platform}:`, error)
+      alert(error.response?.data?.error?.message || `Failed to connect ${platform}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleToggle = async () => {
+    setLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      await axios.put(
+        `${API_URL}/api/businesses/me/integrations/${platform}`,
+        { enabled: !enabled },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      setEnabled(!enabled)
+      await fetchIntegration()
+    } catch (error) {
+      console.error(`Error toggling ${platform}:`, error)
+      alert(error.response?.data?.error?.message || `Failed to update ${platform}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDisconnect = async () => {
+    if (!confirm(`Are you sure you want to disconnect ${platform}?`)) return
+    setLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      await axios.delete(`${API_URL}/api/businesses/me/integrations/${platform}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setIntegration(null)
+      setEnabled(false)
+      setFormData({ page_id: '', access_token: '', app_id: '' })
+      await onUpdate()
+    } catch (error) {
+      console.error(`Error disconnecting ${platform}:`, error)
+      alert(error.response?.data?.error?.message || `Failed to disconnect ${platform}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (integration) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
+          <div>
+            <p className="font-medium text-green-900">Connected</p>
+            <p className="text-sm text-green-700">Page ID: {integration.page_id}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleToggle}
+              disabled={loading}
+              className={`px-4 py-2 rounded-md text-sm font-medium ${
+                enabled
+                  ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+              } disabled:opacity-50`}
+            >
+              {enabled ? 'Enabled' : 'Disabled'}
+            </button>
+            <button
+              onClick={handleDisconnect}
+              disabled={loading}
+              className="px-4 py-2 rounded-md text-sm font-medium bg-red-100 text-red-800 hover:bg-red-200 disabled:opacity-50"
+            >
+              Disconnect
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <form onSubmit={handleConnect} className="space-y-4">
+      <div>
+        <label className="label">Page ID *</label>
+        <input
+          type="text"
+          className="input font-mono"
+          value={formData.page_id}
+          onChange={(e) => setFormData({ ...formData, page_id: e.target.value })}
+          placeholder="1234567890123456"
+          required
+        />
+        <p className="text-sm text-gray-500 mt-1">Your {platform} page ID from Meta Business Suite</p>
+      </div>
+      <div>
+        <label className="label">Access Token *</label>
+        <input
+          type="password"
+          className="input font-mono"
+          value={formData.access_token}
+          onChange={(e) => setFormData({ ...formData, access_token: e.target.value })}
+          placeholder="EAAxxxxxxxxxxxxx..."
+          required
+        />
+        <p className="text-sm text-gray-500 mt-1">Permanent access token from Meta Business Suite</p>
+      </div>
+      <div>
+        <label className="label">App ID (Optional)</label>
+        <input
+          type="text"
+          className="input font-mono"
+          value={formData.app_id}
+          onChange={(e) => setFormData({ ...formData, app_id: e.target.value })}
+          placeholder="1234567890123456"
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={loading}
+        className="btn btn-primary flex items-center gap-2"
+      >
+        {loading ? (
+          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+        ) : (
+          <>
+            <Check size={18} />
+            Connect {platform.charAt(0).toUpperCase() + platform.slice(1)}
+          </>
+        )}
+      </button>
+    </form>
+  )
+}
 
 export default function Settings() {
   const { user, fetchUser } = useAuth()
@@ -18,11 +198,20 @@ export default function Settings() {
     locationLatitude: '',
     locationLongitude: '',
     deliveryPrice: '0',
+    googleMapsLink: '',
+    carrierPhoneNumber: '',
+    estimatedDeliveryTimeMin: '',
+    estimatedDeliveryTimeMax: '',
     whatsappPhoneNumberId: '',
     whatsappBusinessAccountId: '',
     whatsappAccessToken: '',
     telegramBotToken: '',
     chatbotEnabled: true,
+  })
+  const [contractInfo, setContractInfo] = useState({
+    contract_file_url: null,
+    contract_status: 'pending',
+    contract_approved_at: null
   })
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -69,6 +258,10 @@ export default function Settings() {
         locationLatitude: user.location_latitude || '',
         locationLongitude: user.location_longitude || '',
         deliveryPrice: user.delivery_price !== null && user.delivery_price !== undefined ? String(user.delivery_price) : '0',
+        googleMapsLink: user.google_maps_link || '',
+        carrierPhoneNumber: user.carrier_phone_number || '',
+        estimatedDeliveryTimeMin: user.estimated_delivery_time_min || '',
+        estimatedDeliveryTimeMax: user.estimated_delivery_time_max || '',
         whatsappPhoneNumberId: user.whatsapp_phone_number_id || '',
         whatsappBusinessAccountId: user.whatsapp_business_account_id || '',
         whatsappAccessToken: user.whatsapp_access_token || '',
@@ -76,11 +269,28 @@ export default function Settings() {
         chatbotEnabled: user.chatbot_enabled !== undefined ? user.chatbot_enabled : true,
       })
       
+      // Fetch contract info
+      fetchContractInfo()
+      
       // Fetch opening hours
       fetchOpeningHours()
     }
   }, [user])
   
+  const fetchContractInfo = async () => {
+    if (!user || user.userType !== 'business') return
+    
+    try {
+      const token = localStorage.getItem('token')
+      const response = await axios.get(`${API_URL}/api/businesses/me/contract`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setContractInfo(response.data.data || {})
+    } catch (error) {
+      console.error('Error fetching contract info:', error)
+    }
+  }
+
   const fetchOpeningHours = async () => {
     if (!user) return
     
@@ -426,26 +636,22 @@ export default function Settings() {
                   <label className="label">Business Name *</label>
                   <input
                     type="text"
-                    className={`input ${!isAdmin ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                    className="input bg-gray-50 cursor-not-allowed"
                     value={formData.businessName}
-                    onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                    disabled={!isAdmin}
+                    disabled
                     required
-                    title={!isAdmin ? 'Only admin can edit this field' : ''}
+                    title="This field cannot be changed after registration"
                   />
-                  {!isAdmin && (
-                    <p className="text-xs text-gray-500 mt-1">This field can only be edited by admin</p>
-                  )}
+                  <p className="text-xs text-gray-500 mt-1">This field cannot be changed</p>
                 </div>
                 <div>
                   <label className="label">Business Type *</label>
                   <select
-                    className={`input ${!isAdmin ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                    className="input bg-gray-50 cursor-not-allowed"
                     value={formData.businessType}
-                    onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
-                    disabled={!isAdmin}
+                    disabled
                     required
-                    title={!isAdmin ? 'Only admin can edit this field' : ''}
+                    title="This field cannot be changed after registration"
                   >
                     <option value="food and beverage">Food & Beverage</option>
                     <option value="entertainment">Entertainment</option>
@@ -455,24 +661,19 @@ export default function Settings() {
                     <option value="rentals">Rentals</option>
                     <option value="other">Other</option>
                   </select>
-                  {!isAdmin && (
-                    <p className="text-xs text-gray-500 mt-1">This field can only be edited by admin</p>
-                  )}
+                  <p className="text-xs text-gray-500 mt-1">This field cannot be changed</p>
                 </div>
                 <div>
                   <label className="label">Email *</label>
                   <input
                     type="email"
-                    className={`input ${!isAdmin ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                    className="input bg-gray-50 cursor-not-allowed"
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    disabled={!isAdmin}
+                    disabled
                     required
-                    title={!isAdmin ? 'Only admin can edit this field' : ''}
+                    title="This field cannot be changed after registration"
                   />
-                  {!isAdmin && (
-                    <p className="text-xs text-gray-500 mt-1">This field can only be edited by admin</p>
-                  )}
+                  <p className="text-xs text-gray-500 mt-1">This field cannot be changed</p>
                 </div>
                 <div>
                   <label className="label">Phone Number *</label>
@@ -550,6 +751,54 @@ export default function Settings() {
                   <p className="text-sm text-gray-500 mt-1">
                     The price charged for delivery orders. This will be automatically added to the order total when customers choose delivery.
                   </p>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="label">Google Maps Link</label>
+                  <input
+                    type="url"
+                    className="input"
+                    value={formData.googleMapsLink}
+                    onChange={(e) => setFormData({ ...formData, googleMapsLink: e.target.value })}
+                    placeholder="https://maps.google.com/..."
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Link to your business location on Google Maps
+                  </p>
+                </div>
+                <div>
+                  <label className="label">Carrier Phone Number</label>
+                  <input
+                    type="tel"
+                    className="input"
+                    value={formData.carrierPhoneNumber}
+                    onChange={(e) => setFormData({ ...formData, carrierPhoneNumber: e.target.value })}
+                    placeholder="+961..."
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Phone number for delivery carrier
+                  </p>
+                </div>
+                <div>
+                  <label className="label">Estimated Delivery Time (Min) - minutes</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="input"
+                    value={formData.estimatedDeliveryTimeMin}
+                    onChange={(e) => setFormData({ ...formData, estimatedDeliveryTimeMin: e.target.value })}
+                    placeholder="30"
+                  />
+                </div>
+                <div>
+                  <label className="label">Estimated Delivery Time (Max) - minutes</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="input"
+                    value={formData.estimatedDeliveryTimeMax}
+                    onChange={(e) => setFormData({ ...formData, estimatedDeliveryTimeMax: e.target.value })}
+                    placeholder="60"
+                  />
                 </div>
                 <div className="md:col-span-2">
                   <label className="label">Last Order Before Closing (minutes)</label>
@@ -834,6 +1083,30 @@ export default function Settings() {
                 </p>
               </div>
             </div>
+
+            <div className="border-t border-gray-200 pt-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <MessageSquare size={24} />
+                Instagram Configuration
+              </h2>
+              <IntegrationSetup 
+                platform="instagram"
+                user={user}
+                onUpdate={fetchUser}
+              />
+            </div>
+
+            <div className="border-t border-gray-200 pt-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <MessageSquare size={24} />
+                Facebook Configuration
+              </h2>
+              <IntegrationSetup 
+                platform="facebook"
+                user={user}
+                onUpdate={fetchUser}
+              />
+            </div>
           </div>
         )}
 
@@ -972,6 +1245,59 @@ export default function Settings() {
           </div>
         )}
 
+        {/* Contract Tab */}
+        {activeTab === 'contract' && user?.userType === 'business' && (
+          <div className="card space-y-6">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Contract Information</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="label">Contract Status</label>
+                  <div className={`px-4 py-2 rounded-md font-medium ${
+                    contractInfo.contract_status === 'approved' ? 'bg-green-100 text-green-800' :
+                    contractInfo.contract_status === 'rejected' ? 'bg-red-100 text-red-800' :
+                    'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {contractInfo.contract_status?.toUpperCase() || 'PENDING'}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Your contract approval status</p>
+                </div>
+                
+                {contractInfo.contract_file_url && (
+                  <div>
+                    <label className="label">Contract File</label>
+                    <a
+                      href={contractInfo.contract_file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 underline"
+                    >
+                      View Contract PDF
+                    </a>
+                  </div>
+                )}
+                
+                {contractInfo.contract_approved_at && (
+                  <div>
+                    <label className="label">Approved At</label>
+                    <p className="text-gray-700">
+                      {new Date(contractInfo.contract_approved_at).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+                
+                {!contractInfo.contract_file_url && (
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800">
+                      Your contract will be uploaded by an administrator. Please contact support for more information.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Subscription Tab */}
         {activeTab === 'subscription' && (
           <div className="card">
@@ -1000,7 +1326,7 @@ export default function Settings() {
         )}
 
         {/* Save Button & Success Message */}
-        {activeTab !== 'subscription' && activeTab !== 'password' && (
+        {activeTab !== 'subscription' && activeTab !== 'password' && activeTab !== 'contract' && (
           <>
             {saved && (
               <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">

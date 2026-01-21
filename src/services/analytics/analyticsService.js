@@ -537,6 +537,299 @@ function getWeekNumber(date) {
   return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
 }
 
+/**
+ * Get FREE metrics (available to all businesses)
+ * Returns: milestones, requests_handled, avg_response_time_ms
+ */
+async function getFreeMetrics(businessId, startDate, endDate) {
+  try {
+    // 1. Milestones: Max completed orders per minute (last 7 days)
+    const [milestoneResult] = await queryMySQL(`
+      SELECT 
+        DATE_FORMAT(completed_at, '%Y-%m-%d %H:%i') as minute,
+        COUNT(*) as count
+      FROM orders
+      WHERE business_id = ? 
+        AND status = 'completed' 
+        AND completed_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        AND completed_at IS NOT NULL
+      GROUP BY minute
+      ORDER BY count DESC
+      LIMIT 1
+    `, [businessId]);
+    
+    const milestones = milestoneResult && milestoneResult.length > 0 ? {
+      minute: milestoneResult[0].minute,
+      count: milestoneResult[0].count
+    } : { minute: null, count: 0 };
+    
+    // 2. Requests handled: Count inbound message_logs from MongoDB
+    let requestsHandled = 0;
+    try {
+      const messageLogs = await getMongoCollection('message_logs');
+      const query = {
+        business_id: businessId,
+        direction: 'inbound'
+      };
+      
+      if (startDate || endDate) {
+        query.created_at = {};
+        if (startDate) query.created_at.$gte = new Date(startDate);
+        if (endDate) query.created_at.$lte = new Date(endDate);
+      }
+      
+      requestsHandled = await messageLogs.countDocuments(query);
+    } catch (mongoError) {
+      logger.warn('MongoDB not available for requests_handled metric:', mongoError.message);
+      // Fallback: count from orders (less accurate)
+      const [orderCount] = await queryMySQL(`
+        SELECT COUNT(*) as count
+        FROM orders
+        WHERE business_id = ?
+          ${startDate ? 'AND created_at >= ?' : ''}
+          ${endDate ? 'AND created_at <= ?' : ''}
+      `, [businessId, startDate, endDate].filter(Boolean));
+      requestsHandled = orderCount[0]?.count || 0;
+    }
+    
+    // 3. Average response time: Average latency from inbound to first outbound
+    let avgResponseTimeMs = 0;
+    try {
+      const messageLogs = await getMongoCollection('message_logs');
+      const query = {
+        business_id: businessId,
+        direction: 'inbound'
+      };
+      
+      if (startDate || endDate) {
+        query.created_at = {};
+        if (startDate) query.created_at.$gte = new Date(startDate);
+        if (endDate) query.created_at.$lte = new Date(endDate);
+      }
+      
+      const inboundMessages = await messageLogs.find(query).sort({ created_at: 1 }).toArray();
+      
+      let totalResponseTime = 0;
+      let responseCount = 0;
+      
+      for (const inbound of inboundMessages) {
+        // Find next outbound message within 5 minutes
+        const outbound = await messageLogs.findOne({
+          business_id: businessId,
+          customer_phone_number: inbound.customer_phone_number,
+          direction: 'outbound',
+          created_at: {
+            $gte: inbound.created_at,
+            $lte: new Date(inbound.created_at.getTime() + 5 * 60 * 1000) // 5 minutes
+          }
+        });
+        
+        if (outbound) {
+          const responseTime = outbound.created_at.getTime() - inbound.created_at.getTime();
+          totalResponseTime += responseTime;
+          responseCount++;
+        }
+      }
+      
+      avgResponseTimeMs = responseCount > 0 ? Math.round(totalResponseTime / responseCount) : 0;
+    } catch (mongoError) {
+      logger.warn('MongoDB not available for avg_response_time_ms metric:', mongoError.message);
+      // Fallback: use first_response_at from orders
+      const [responseTimeResult] = await queryMySQL(`
+        SELECT AVG(TIMESTAMPDIFF(MILLISECOND, created_at, first_response_at)) as avg_ms
+        FROM orders
+        WHERE business_id = ?
+          AND first_response_at IS NOT NULL
+          ${startDate ? 'AND created_at >= ?' : ''}
+          ${endDate ? 'AND created_at <= ?' : ''}
+      `, [businessId, startDate, endDate].filter(Boolean));
+      
+      avgResponseTimeMs = responseTimeResult && responseTimeResult[0]?.avg_ms 
+        ? Math.round(responseTimeResult[0].avg_ms) 
+        : 0;
+    }
+    
+    return {
+      milestones,
+      requests_handled: requestsHandled,
+      avg_response_time_ms: avgResponseTimeMs
+    };
+  } catch (error) {
+    logger.error('Error getting FREE metrics:', error);
+    return {
+      milestones: { minute: null, count: 0 },
+      requests_handled: 0,
+      avg_response_time_ms: 0
+    };
+  }
+}
+
+/**
+ * Get loyal customer (most orders by customerPhoneNumber) - PAID ADDON
+ */
+async function getLoyalCustomer(businessId, startDate, endDate) {
+  try {
+    const [result] = await queryMySQL(`
+      SELECT 
+        customer_phone_number,
+        COUNT(*) as order_count,
+        SUM(total) as total_spent
+      FROM orders
+      WHERE business_id = ?
+        AND status = 'completed'
+        ${startDate ? 'AND created_at >= ?' : ''}
+        ${endDate ? 'AND created_at <= ?' : ''}
+      GROUP BY customer_phone_number
+      ORDER BY order_count DESC
+      LIMIT 1
+    `, [businessId, startDate, endDate].filter(Boolean));
+    
+    if (result && result.length > 0) {
+      return {
+        customer_phone_number: result[0].customer_phone_number,
+        order_count: result[0].order_count,
+        total_spent: parseFloat(result[0].total_spent || 0)
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    logger.error('Error getting loyal customer:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get most ordered service (top service by sum(qty)) - PAID ADDON
+ */
+async function getMostOrdered(businessId, startDate, endDate) {
+  try {
+    const [result] = await queryMySQL(`
+      SELECT 
+        oi.item_id,
+        i.name,
+        SUM(oi.quantity) as total_qty,
+        COUNT(DISTINCT oi.order_id) as order_count
+      FROM order_items oi
+      INNER JOIN orders o ON oi.order_id = o.id
+      LEFT JOIN items i ON oi.item_id = i.id
+      WHERE o.business_id = ?
+        AND o.status = 'completed'
+        ${startDate ? 'AND o.created_at >= ?' : ''}
+        ${endDate ? 'AND o.created_at <= ?' : ''}
+      GROUP BY oi.item_id, i.name
+      ORDER BY total_qty DESC
+      LIMIT 1
+    `, [businessId, startDate, endDate].filter(Boolean));
+    
+    if (result && result.length > 0) {
+      return {
+        item_id: result[0].item_id,
+        name: result[0].name,
+        total_quantity: result[0].total_qty,
+        order_count: result[0].order_count
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    logger.error('Error getting most ordered:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get most rewarding service (max (priceAtTime - costAtTime) * qty per service) - PAID ADDON
+ */
+async function getMostRewarding(businessId, startDate, endDate) {
+  try {
+    const [result] = await queryMySQL(`
+      SELECT 
+        oi.item_id,
+        i.name,
+        SUM((oi.price_at_time - COALESCE(oi.cost_at_time, 0)) * oi.quantity) as total_profit,
+        SUM(oi.quantity) as total_qty
+      FROM order_items oi
+      INNER JOIN orders o ON oi.order_id = o.id
+      LEFT JOIN items i ON oi.item_id = i.id
+      WHERE o.business_id = ?
+        AND o.status = 'completed'
+        ${startDate ? 'AND o.created_at >= ?' : ''}
+        ${endDate ? 'AND o.created_at <= ?' : ''}
+      GROUP BY oi.item_id, i.name
+      ORDER BY total_profit DESC
+      LIMIT 1
+    `, [businessId, startDate, endDate].filter(Boolean));
+    
+    if (result && result.length > 0) {
+      return {
+        item_id: result[0].item_id,
+        name: result[0].name,
+        total_profit: parseFloat(result[0].total_profit || 0),
+        total_quantity: result[0].total_qty
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    logger.error('Error getting most rewarding:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get time breakdown (group stats per hour/day/month) - PAID ADDON
+ */
+async function getTimeBreakdown(businessId, period, startDate, endDate) {
+  try {
+    let dateFormat, groupBy;
+    
+    switch (period) {
+      case 'hour':
+        dateFormat = '%Y-%m-%d %H:00:00';
+        groupBy = 'DATE_FORMAT(completed_at, "%Y-%m-%d %H:00:00")';
+        break;
+      case 'day':
+        dateFormat = '%Y-%m-%d';
+        groupBy = 'DATE(completed_at)';
+        break;
+      case 'month':
+        dateFormat = '%Y-%m';
+        groupBy = 'DATE_FORMAT(completed_at, "%Y-%m")';
+        break;
+      default:
+        dateFormat = '%Y-%m-%d';
+        groupBy = 'DATE(completed_at)';
+    }
+    
+    const [result] = await queryMySQL(`
+      SELECT 
+        ${groupBy} as period,
+        COUNT(*) as order_count,
+        SUM(total) as total_revenue,
+        AVG(total) as avg_order_value
+      FROM orders
+      WHERE business_id = ?
+        AND status = 'completed'
+        AND completed_at IS NOT NULL
+        ${startDate ? 'AND completed_at >= ?' : ''}
+        ${endDate ? 'AND completed_at <= ?' : ''}
+      GROUP BY ${groupBy}
+      ORDER BY period ASC
+    `, [businessId, startDate, endDate].filter(Boolean));
+    
+    return result.map(row => ({
+      period: row.period,
+      order_count: row.order_count,
+      total_revenue: parseFloat(row.total_revenue || 0),
+      avg_order_value: parseFloat(row.avg_order_value || 0)
+    }));
+  } catch (error) {
+    logger.error('Error getting time breakdown:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   getOverview,
   getRevenue,
@@ -547,5 +840,10 @@ module.exports = {
   getRecurringCustomers,
   getCustomerLifetimeValue,
   getPopularItems,
-  getMostDeliveredItems
+  getMostDeliveredItems,
+  getFreeMetrics,
+  getLoyalCustomer,
+  getMostOrdered,
+  getMostRewarding,
+  getTimeBreakdown
 };

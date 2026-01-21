@@ -53,14 +53,16 @@ async function create(tableData) {
   const tableId = generateUUID();
   
   await queryMySQL(`
-    INSERT INTO tables (id, user_id, seats, number, reserved)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO tables (id, user_id, seats, number, reserved, is_active, label)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `, [
     tableId,
     tableData.userId,
     tableData.seats,
     tableData.number,
-    tableData.reserved !== undefined ? tableData.reserved : false
+    tableData.reserved !== undefined ? tableData.reserved : false,
+    tableData.isActive !== undefined ? tableData.isActive : true,
+    tableData.label || null
   ]);
   
   return await findById(tableId);
@@ -73,7 +75,9 @@ async function update(tableId, userId, updateData) {
   const fieldMap = {
     seats: 'seats',
     number: 'number',
-    reserved: 'reserved'
+    reserved: 'reserved',
+    isActive: 'is_active',
+    label: 'label'
   };
   
   const updates = [];

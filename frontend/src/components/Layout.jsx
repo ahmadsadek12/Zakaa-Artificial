@@ -51,7 +51,9 @@ export default function Layout({ children }) {
     { path: '/menus', icon: UtensilsCrossed, label: terms.menus },
     { path: '/items', icon: Package, label: terms.items },
     { path: '/scheduled', icon: Calendar, label: 'Scheduled' },
+    { path: '/calendar', icon: Calendar, label: 'Calendar' },
     { path: '/analytics', icon: BarChart3, label: navTerms.analytics },
+    { path: '/addons', icon: Package, label: 'Add-ons' },
     { path: '/settings', icon: Settings, label: 'Settings' },
   ]
 

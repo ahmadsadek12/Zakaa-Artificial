@@ -7,6 +7,7 @@ const { body, param, query, validationResult } = require('express-validator');
 const reservationRepository = require('../../repositories/reservationRepository');
 const { tenantIsolation } = require('../../middleware/tenant');
 const { authenticate } = require('../../middleware/auth');
+const { addonGuard } = require('../../middleware/addonGuard');
 
 /**
  * GET /api/reservations - List reservations
@@ -14,6 +15,7 @@ const { authenticate } = require('../../middleware/auth');
 router.get('/',
   authenticate,
   tenantIsolation,
+  addonGuard('reservations'),
   query('status').optional().isIn(['confirmed', 'cancelled', 'completed']),
   query('reservationDate').optional().matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('reservationDate must be in YYYY-MM-DD format'),
   query('tableId').optional().isUUID(),
@@ -72,6 +74,7 @@ router.get('/',
 router.get('/by-date/:date',
   authenticate,
   tenantIsolation,
+  addonGuard('reservations'),
   param('date').matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('Date must be in YYYY-MM-DD format'),
   async (req, res) => {
     try {
@@ -105,6 +108,7 @@ router.get('/by-date/:date',
 router.post('/',
   authenticate,
   tenantIsolation,
+  addonGuard('reservations'),
   body('customerPhoneNumber').notEmpty().withMessage('Customer phone number is required'),
   body('customerName').notEmpty().withMessage('Customer name is required'),
   body('reservationDate').matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('Valid reservation date is required (YYYY-MM-DD format)'),
@@ -113,6 +117,9 @@ router.post('/',
   body('tableId').optional().isUUID(),
   body('itemId').optional().isUUID(),
   body('status').optional().isIn(['confirmed', 'cancelled', 'completed']),
+  body('reservation_kind').optional().isIn(['table', 'appointment']),
+  body('start_at').optional().isISO8601().withMessage('start_at must be a valid ISO 8601 date'),
+  body('source').optional().isIn(['whatsapp', 'telegram', 'instagram', 'facebook', 'dashboard']),
   async (req, res) => {
     try {
       const errors = validationResult(req);
@@ -133,7 +140,10 @@ router.post('/',
         reservationTime: req.body.reservationTime,
         numberOfGuests: req.body.numberOfGuests || null,
         notes: req.body.notes || null,
-        status: req.body.status || 'confirmed'
+        status: req.body.status || 'confirmed',
+        reservationKind: req.body.reservation_kind || 'table',
+        startAt: req.body.start_at || null,
+        source: req.body.source || 'dashboard'
       });
       
       res.status(201).json({
@@ -156,6 +166,7 @@ router.post('/',
 router.get('/:id',
   authenticate,
   tenantIsolation,
+  addonGuard('reservations'),
   param('id').isUUID().withMessage('Invalid reservation ID'),
   async (req, res) => {
     try {
@@ -194,6 +205,7 @@ router.get('/:id',
 router.put('/:id',
   authenticate,
   tenantIsolation,
+  addonGuard('reservations'),
   param('id').isUUID().withMessage('Invalid reservation ID'),
   body('customerPhoneNumber').optional().notEmpty(),
   body('customerName').optional().notEmpty(),
@@ -203,6 +215,9 @@ router.put('/:id',
   body('tableId').optional().isUUID(),
   body('itemId').optional().isUUID(),
   body('notes').optional().isString(),
+  body('reservation_kind').optional().isIn(['table', 'appointment']),
+  body('start_at').optional().isISO8601().withMessage('start_at must be a valid ISO 8601 date'),
+  body('source').optional().isIn(['whatsapp', 'telegram', 'instagram', 'facebook', 'dashboard']),
   async (req, res) => {
     try {
       const errors = validationResult(req);
@@ -221,6 +236,9 @@ router.put('/:id',
       if (req.body.tableId !== undefined) updateData.tableId = req.body.tableId;
       if (req.body.itemId !== undefined) updateData.itemId = req.body.itemId;
       if (req.body.notes !== undefined) updateData.notes = req.body.notes;
+      if (req.body.reservation_kind !== undefined) updateData.reservationKind = req.body.reservation_kind;
+      if (req.body.start_at !== undefined) updateData.startAt = req.body.start_at;
+      if (req.body.source !== undefined) updateData.source = req.body.source;
       
       const reservation = await reservationRepository.update(req.params.id, businessUserId, updateData);
       
@@ -251,6 +269,7 @@ router.put('/:id',
 router.put('/:id/status',
   authenticate,
   tenantIsolation,
+  addonGuard('reservations'),
   param('id').isUUID().withMessage('Invalid reservation ID'),
   body('status').isIn(['confirmed', 'cancelled', 'completed']).withMessage('Valid status is required'),
   async (req, res) => {
@@ -291,6 +310,7 @@ router.put('/:id/status',
 router.delete('/:id',
   authenticate,
   tenantIsolation,
+  addonGuard('reservations'),
   param('id').isUUID().withMessage('Invalid reservation ID'),
   async (req, res) => {
     try {

@@ -8,6 +8,7 @@ const tableRepository = require('../../repositories/tableRepository');
 const { tenantIsolation, requireOwnership } = require('../../middleware/tenant');
 const { authenticate } = require('../../middleware/auth');
 const { requirePremium } = require('../../middleware/premium');
+const { addonGuard } = require('../../middleware/addonGuard');
 
 /**
  * GET /api/tables - List tables
@@ -15,6 +16,7 @@ const { requirePremium } = require('../../middleware/premium');
 router.get('/', 
   authenticate,
   tenantIsolation,
+  addonGuard('reservations'),
   query('includeReserved').optional().isBoolean().toBoolean(),
   async (req, res) => {
     try {
@@ -60,6 +62,7 @@ router.get('/',
 router.get('/available',
   authenticate,
   tenantIsolation,
+  addonGuard('reservations'),
   async (req, res) => {
     try {
       const userId = req.isBranchUser ? req.userId : req.businessId;
@@ -86,9 +89,12 @@ router.get('/available',
 router.post('/',
   authenticate,
   tenantIsolation,
+  addonGuard('reservations'),
   body('seats').isInt({ min: 1 }).withMessage('Seats must be at least 1'),
   body('number').notEmpty().withMessage('Table number is required'),
   body('reserved').optional().isBoolean().toBoolean(),
+  body('is_active').optional().isBoolean().toBoolean(),
+  body('label').optional().isString().trim(),
   async (req, res) => {
     try {
       const errors = validationResult(req);
@@ -102,7 +108,9 @@ router.post('/',
         userId,
         seats: req.body.seats,
         number: req.body.number,
-        reserved: req.body.reserved || false
+        reserved: req.body.reserved || false,
+        isActive: req.body.is_active !== undefined ? req.body.is_active : true,
+        label: req.body.label || null
       });
       
       res.status(201).json({
@@ -125,6 +133,7 @@ router.post('/',
 router.get('/:id',
   authenticate,
   tenantIsolation,
+  addonGuard('reservations'),
   param('id').isUUID().withMessage('Invalid table ID'),
   async (req, res) => {
     try {
@@ -163,10 +172,13 @@ router.get('/:id',
 router.put('/:id',
   authenticate,
   tenantIsolation,
+  addonGuard('reservations'),
   param('id').isUUID().withMessage('Invalid table ID'),
   body('seats').optional().isInt({ min: 1 }),
   body('number').optional().notEmpty(),
   body('reserved').optional().isBoolean().toBoolean(),
+  body('is_active').optional().isBoolean().toBoolean(),
+  body('label').optional().isString().trim(),
   async (req, res) => {
     try {
       const errors = validationResult(req);
@@ -180,6 +192,8 @@ router.put('/:id',
       if (req.body.seats !== undefined) updateData.seats = req.body.seats;
       if (req.body.number !== undefined) updateData.number = req.body.number;
       if (req.body.reserved !== undefined) updateData.reserved = req.body.reserved;
+      if (req.body.is_active !== undefined) updateData.isActive = req.body.is_active;
+      if (req.body.label !== undefined) updateData.label = req.body.label;
       
       const table = await tableRepository.update(req.params.id, userId, updateData);
       
@@ -210,6 +224,7 @@ router.put('/:id',
 router.put('/:id/reserved',
   authenticate,
   tenantIsolation,
+  addonGuard('reservations'),
   param('id').isUUID().withMessage('Invalid table ID'),
   body('reserved').isBoolean().toBoolean().withMessage('Reserved status is required'),
   async (req, res) => {
@@ -250,6 +265,7 @@ router.put('/:id/reserved',
 router.delete('/:id',
   authenticate,
   tenantIsolation,
+  addonGuard('reservations'),
   param('id').isUUID().withMessage('Invalid table ID'),
   async (req, res) => {
     try {

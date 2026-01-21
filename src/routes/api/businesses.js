@@ -3,7 +3,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { body, validationResult } = require('express-validator');
+const { body, param, validationResult } = require('express-validator');
 const { authenticate, requireUserType } = require('../../middleware/auth');
 const { tenantIsolation } = require('../../middleware/tenant');
 const { asyncHandler } = require('../../middleware/errorHandler');
@@ -12,6 +12,7 @@ const { encryptToken, decryptToken } = require('../../../utils/encryption');
 const logger = require('../../utils/logger');
 const CONSTANTS = require('../../config/constants');
 const { setupTelegramBotWebhook } = require('../../services/telegram/telegramWebhookSetup');
+const { immutableFieldsGuard } = require('../../middleware/immutableFieldsGuard');
 const bcrypt = require('bcryptjs');
 
 // All routes require authentication and business/admin/branch access
@@ -51,10 +52,41 @@ router.get('/me', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * Get business contract information
+ * GET /api/businesses/me/contract
+ */
+router.get('/me/contract', asyncHandler(async (req, res) => {
+  // Only business users can view their own contract
+  if (req.user.userType !== CONSTANTS.USER_TYPES.BUSINESS) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Only business users can view contract information' }
+    });
+  }
+  
+  const user = await userRepository.findById(req.user.id);
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      error: { message: 'Business not found' }
+    });
+  }
+  
+  res.json({
+    success: true,
+    data: {
+      contract_file_url: user.contract_file_url || null,
+      contract_status: user.contract_status || 'pending',
+      contract_approved_at: user.contract_approved_at || null
+    }
+  });
+}));
+
+/**
  * Update business profile
  * PUT /api/businesses/me
  */
-router.put('/me', [
+router.put('/me', immutableFieldsGuard(['email', 'business_name', 'business_type', 'contract_file_url', 'contract_status']), [
   // Note: businessName, email, businessType, contactPhoneNumber are admin-only fields
   // Note: defaultLanguage and timezone removed - not needed
   body('businessDescription').optional({ checkFalsy: true }).isString(),
@@ -103,7 +135,11 @@ router.put('/me', [
     if (typeof value === 'boolean') return true;
     if (typeof value === 'string' && (value === 'true' || value === 'false')) return true;
     throw new Error('Allow on site must be true or false');
-  }).toBoolean()
+  }).toBoolean(),
+  body('googleMapsLink').optional({ checkFalsy: true }).isString().isURL().withMessage('Google Maps link must be a valid URL'),
+  body('carrierPhoneNumber').optional({ checkFalsy: true }).isString().matches(/^\+?[1-9]\d{1,14}$/).withMessage('Carrier phone number must be a valid phone number'),
+  body('estimatedDeliveryTimeMin').optional().isInt({ min: 0 }).withMessage('Estimated delivery time min must be a non-negative integer'),
+  body('estimatedDeliveryTimeMax').optional().isInt({ min: 0 }).withMessage('Estimated delivery time max must be a non-negative integer')
 ], asyncHandler(async (req, res) => {
   // Log the request body for debugging
   logger.info('Business update request received', {
@@ -141,7 +177,8 @@ router.put('/me', [
     'businessDescription',
     'locationLatitude', 'locationLongitude', 'deliveryRadiusKm', 'deliveryPrice',
     'lastOrderBeforeClosingMinutes',
-    'allowScheduledOrders', 'allowDelivery', 'allowTakeaway', 'allowOnSite'
+    'allowScheduledOrders', 'allowDelivery', 'allowTakeaway', 'allowOnSite',
+    'googleMapsLink', 'carrierPhoneNumber', 'estimatedDeliveryTimeMin', 'estimatedDeliveryTimeMax'
   ];
   
   logger.info('Request body received:', { 
@@ -576,6 +613,268 @@ router.get('/me/whatsapp/status', asyncHandler(async (req, res) => {
       whatsappPhoneNumberId: user.whatsapp_phone_number_id || null
     }
   });
+}));
+
+/**
+ * Get all bot integrations for business
+ * GET /api/businesses/me/integrations
+ */
+router.get('/me/integrations', asyncHandler(async (req, res) => {
+  try {
+    const botIntegrationRepository = require('../../repositories/botIntegrationRepository');
+    const integrations = await botIntegrationRepository.findByOwner('business', req.businessId);
+    
+    res.json({
+      success: true,
+      data: { integrations }
+    });
+  } catch (error) {
+    logger.error('Error fetching integrations:', error);
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to fetch integrations' }
+    });
+  }
+}));
+
+/**
+ * Connect Instagram account
+ * POST /api/businesses/me/integrations/instagram
+ */
+router.post('/me/integrations/instagram', [
+  body('page_id').notEmpty().withMessage('Instagram page ID required'),
+  body('access_token').notEmpty().withMessage('Instagram access token required'),
+  body('app_id').optional().isString()
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+  
+  try {
+    const botIntegrationRepository = require('../../repositories/botIntegrationRepository');
+    
+    const { page_id, access_token, app_id } = req.body;
+    
+    // Encrypt access token
+    const encryptedToken = encryptToken(access_token);
+    
+    // Create or update integration
+    const integration = await botIntegrationRepository.upsert({
+      ownerType: 'business',
+      ownerId: req.businessId,
+      platform: 'instagram',
+      enabled: true,
+      accessTokenEncrypted: encryptedToken,
+      pageId: page_id,
+      appId: app_id || null,
+      configJson: {}
+    });
+    
+    logger.info(`Instagram connected for business: ${req.businessId}`);
+    
+    res.json({
+      success: true,
+      data: { integration },
+      message: 'Instagram account connected successfully'
+    });
+  } catch (error) {
+    logger.error('Error connecting Instagram:', error);
+    res.status(500).json({
+      success: false,
+      error: { message: error.message || 'Failed to connect Instagram account' }
+    });
+  }
+}));
+
+/**
+ * Connect Facebook account
+ * POST /api/businesses/me/integrations/facebook
+ */
+router.post('/me/integrations/facebook', [
+  body('page_id').notEmpty().withMessage('Facebook page ID required'),
+  body('access_token').notEmpty().withMessage('Facebook access token required'),
+  body('app_id').optional().isString()
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+  
+  try {
+    const botIntegrationRepository = require('../../repositories/botIntegrationRepository');
+    
+    const { page_id, access_token, app_id } = req.body;
+    
+    // Encrypt access token
+    const encryptedToken = encryptToken(access_token);
+    
+    // Create or update integration
+    const integration = await botIntegrationRepository.upsert({
+      ownerType: 'business',
+      ownerId: req.businessId,
+      platform: 'facebook',
+      enabled: true,
+      accessTokenEncrypted: encryptedToken,
+      pageId: page_id,
+      appId: app_id || null,
+      configJson: {}
+    });
+    
+    logger.info(`Facebook connected for business: ${req.businessId}`);
+    
+    res.json({
+      success: true,
+      data: { integration },
+      message: 'Facebook account connected successfully'
+    });
+  } catch (error) {
+    logger.error('Error connecting Facebook:', error);
+    res.status(500).json({
+      success: false,
+      error: { message: error.message || 'Failed to connect Facebook account' }
+    });
+  }
+}));
+
+/**
+ * Get integration status
+ * GET /api/businesses/me/integrations/:platform
+ */
+router.get('/me/integrations/:platform', [
+  param('platform').isIn(['whatsapp', 'telegram', 'instagram', 'facebook']).withMessage('Invalid platform')
+], asyncHandler(async (req, res) => {
+  try {
+    const botIntegrationRepository = require('../../repositories/botIntegrationRepository');
+    const integration = await botIntegrationRepository.findByOwnerAndPlatform(
+      'business',
+      req.businessId,
+      req.params.platform
+    );
+    
+    res.json({
+      success: true,
+      data: {
+        connected: !!integration,
+        enabled: integration?.enabled || false,
+        integration: integration || null
+      }
+    });
+  } catch (error) {
+    logger.error('Error fetching integration status:', error);
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to fetch integration status' }
+    });
+  }
+}));
+
+/**
+ * Update integration (enable/disable)
+ * PUT /api/businesses/me/integrations/:platform
+ */
+router.put('/me/integrations/:platform', [
+  param('platform').isIn(['whatsapp', 'telegram', 'instagram', 'facebook']).withMessage('Invalid platform'),
+  body('enabled').optional().isBoolean().withMessage('enabled must be boolean')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+  
+  try {
+    const botIntegrationRepository = require('../../repositories/botIntegrationRepository');
+    
+    // Get existing integration
+    let integration = await botIntegrationRepository.findByOwnerAndPlatform(
+      'business',
+      req.businessId,
+      req.params.platform
+    );
+    
+    if (!integration) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Integration not found. Please connect the account first.' }
+      });
+    }
+    
+    // Update enabled status if provided
+    if (req.body.enabled !== undefined) {
+      integration = await botIntegrationRepository.upsert({
+        ownerType: 'business',
+        ownerId: req.businessId,
+        platform: req.params.platform,
+        enabled: req.body.enabled,
+        accessTokenEncrypted: integration.access_token_encrypted,
+        pageId: integration.page_id,
+        appId: integration.app_id,
+        configJson: integration.config_json || {}
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: { integration },
+      message: 'Integration updated successfully'
+    });
+  } catch (error) {
+    logger.error('Error updating integration:', error);
+    res.status(500).json({
+      success: false,
+      error: { message: error.message || 'Failed to update integration' }
+    });
+  }
+}));
+
+/**
+ * Disconnect integration
+ * DELETE /api/businesses/me/integrations/:platform
+ */
+router.delete('/me/integrations/:platform', [
+  param('platform').isIn(['whatsapp', 'telegram', 'instagram', 'facebook']).withMessage('Invalid platform')
+], asyncHandler(async (req, res) => {
+  try {
+    const botIntegrationRepository = require('../../repositories/botIntegrationRepository');
+    
+    const integration = await botIntegrationRepository.findByOwnerAndPlatform(
+      'business',
+      req.businessId,
+      req.params.platform
+    );
+    
+    if (!integration) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Integration not found' }
+      });
+    }
+    
+    // Delete integration
+    await botIntegrationRepository.deleteIntegration('business', req.businessId, req.params.platform);
+    
+    logger.info(`Integration disconnected: ${req.params.platform} for business: ${req.businessId}`);
+    
+    res.json({
+      success: true,
+      message: `${req.params.platform} integration disconnected successfully`
+    });
+  } catch (error) {
+    logger.error('Error disconnecting integration:', error);
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to disconnect integration' }
+    });
+  }
 }));
 
 /**

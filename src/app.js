@@ -26,8 +26,12 @@ const cartRoutes = require('./routes/api/carts');
 const analyticsRoutes = require('./routes/api/analytics');
 const tableRoutes = require('./routes/api/tables');
 const reservationRoutes = require('./routes/api/reservations');
+const addonsRoutes = require('./routes/api/addons');
+const calendarRoutes = require('./routes/api/calendar');
 const webhookRoutes = require('./routes/webhook/whatsapp');
 const telegramWebhookRoutes = require('./routes/webhook/telegram');
+const instagramWebhookRoutes = require('./routes/webhook/instagram');
+const facebookWebhookRoutes = require('./routes/webhook/facebook');
 const messagesRoutes = require('./routes/api/messages');
 
 const app = express();
@@ -149,9 +153,13 @@ app.use('/api/carts', cartRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/tables', tableRoutes);
 app.use('/api/reservations', reservationRoutes);
+app.use('/api/addons', addonsRoutes);
+app.use('/api/calendar', calendarRoutes);
 app.use('/api/messages', messagesRoutes);
 app.use('/webhook/whatsapp', webhookRoutes);
 app.use('/webhook/telegram', telegramWebhookRoutes);
+app.use('/webhook/instagram', instagramWebhookRoutes);
+app.use('/webhook/facebook', facebookWebhookRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

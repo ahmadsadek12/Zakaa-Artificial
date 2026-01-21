@@ -64,6 +64,11 @@ async function find(filters = {}) {
     params.push(filters.status);
   }
   
+  if (filters.requestType) {
+    sql += ' AND o.request_type = ?';
+    params.push(filters.requestType);
+  }
+  
   if (filters.startDate) {
     sql += ' AND o.created_at >= ?';
     params.push(filters.startDate);
@@ -72,6 +77,16 @@ async function find(filters = {}) {
   if (filters.endDate) {
     sql += ' AND o.created_at <= ?';
     params.push(filters.endDate);
+  }
+  
+  if (filters.scheduledForFrom) {
+    sql += ' AND o.scheduled_for >= ?';
+    params.push(filters.scheduledForFrom);
+  }
+  
+  if (filters.scheduledForTo) {
+    sql += ' AND o.scheduled_for <= ?';
+    params.push(filters.scheduledForTo);
   }
   
   sql += ' ORDER BY o.created_at DESC';
