@@ -316,72 +316,70 @@ export default function Items() {
                 <h2 className="text-2xl font-bold text-gray-900">{category.name}</h2>
                 <span className="text-sm text-gray-500">({category.items.length} {category.items.length === 1 ? 'item' : 'items'})</span>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {category.items.map((item) => (
-                  <div key={item.id} className="card aspect-square flex flex-col">
+                  <div key={item.id} className="card w-[85%] mx-auto">
                     {item.item_image_url ? (
                       <img
                         src={item.item_image_url}
                         alt={item.name}
-                        className="w-full h-20 object-cover rounded-lg mb-2 flex-shrink-0"
+                        className="w-full h-20 object-cover rounded-lg mb-4"
                       />
                     ) : (
-                      <div className="w-full h-20 bg-gray-100 rounded-lg mb-2 flex items-center justify-center flex-shrink-0">
-                        <ImageIcon size={16} className="text-gray-400" />
+                      <div className="w-full h-20 bg-gray-100 rounded-lg mb-4 flex items-center justify-center">
+                        <ImageIcon size={32} className="text-gray-400" />
                       </div>
                     )}
-                    <div className="flex-1 flex flex-col min-h-0">
-                      <h3 className="font-semibold text-sm text-gray-900 mb-1 line-clamp-1">{item.name}</h3>
-                      {item.description && (
-                        <p className="text-xs text-gray-600 mb-1 line-clamp-1 flex-shrink-0">{item.description}</p>
-                      )}
-                      <p className="text-lg font-bold text-primary-600 mb-1 flex-shrink-0">${item.price}</p>
-                      
-                      {/* Availability info */}
-                      {(item.available_from || item.available_to || item.days_available) && (
-                        <div className="text-xs text-gray-500 mb-1 flex-shrink-0">
-                          {item.available_from && item.available_to && (
-                            <div className="flex items-center gap-1">
-                              <Clock size={10} />
-                              <span className="text-xs truncate">{item.available_from} - {item.available_to}</span>
-                            </div>
-                          )}
-                          {item.days_available && (() => {
-                            let daysCount = 0;
-                            try {
-                              if (Array.isArray(item.days_available)) {
-                                daysCount = item.days_available.length;
-                              } else if (typeof item.days_available === 'string') {
-                                const parsed = JSON.parse(item.days_available || '[]');
-                                daysCount = Array.isArray(parsed) ? parsed.length : 0;
-                              }
-                            } catch (e) {
-                              daysCount = 0;
-                            }
-                            return daysCount > 0 ? (
-                              <div className="flex items-center gap-1 mt-1">
-                                <Calendar size={10} />
-                                <span className="text-xs">{daysCount} days</span>
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-                      )}
-                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-1">{item.name}</h3>
+                    {item.description && (
+                      <p className="text-sm text-gray-600 mb-2 line-clamp-2">{item.description}</p>
+                    )}
+                    <p className="text-2xl font-bold text-primary-600 mb-2">${item.price}</p>
                     
-                    <div className="flex gap-1 pt-1 border-t border-gray-200 mt-auto flex-shrink-0">
+                    {/* Availability info */}
+                    {(item.available_from || item.available_to || item.days_available) && (
+                      <div className="text-xs text-gray-500 mb-2">
+                        {item.available_from && item.available_to && (
+                          <div className="flex items-center gap-1">
+                            <Clock size={12} />
+                            <span>{item.available_from} - {item.available_to}</span>
+                          </div>
+                        )}
+                        {item.days_available && (() => {
+                          let daysCount = 0;
+                          try {
+                            if (Array.isArray(item.days_available)) {
+                              daysCount = item.days_available.length;
+                            } else if (typeof item.days_available === 'string') {
+                              const parsed = JSON.parse(item.days_available || '[]');
+                              daysCount = Array.isArray(parsed) ? parsed.length : 0;
+                            }
+                          } catch (e) {
+                            daysCount = 0;
+                          }
+                          return daysCount > 0 ? (
+                            <div className="flex items-center gap-1 mt-1">
+                              <Calendar size={12} />
+                              <span>{daysCount} days</span>
+                            </div>
+                          ) : null;
+                        })()}
+                      </div>
+                    )}
+                    
+                    <div className="flex gap-2 pt-2 border-t border-gray-200">
                       <button
                         onClick={() => handleEdit(item)}
-                        className="flex-1 btn btn-secondary btn-sm flex items-center justify-center gap-1"
+                        className="flex-1 btn btn-secondary flex items-center justify-center gap-2"
                       >
-                        <Edit size={12} />
-                        <span className="text-xs">Edit</span>
+                        <Edit size={16} />
+                        <span>Edit</span>
                       </button>
                       <button
                         onClick={() => handleDelete(item.id)}
-                        className="btn btn-danger btn-sm flex items-center justify-center gap-1"
+                        className="btn btn-danger flex items-center justify-center gap-2"
                       >
-                        <Trash2 size={12} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
@@ -391,72 +389,70 @@ export default function Items() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {items.map((item) => (
-          <div key={item.id} className="card aspect-square flex flex-col">
+          <div key={item.id} className="card w-[85%] mx-auto">
             {item.item_image_url ? (
               <img
                 src={item.item_image_url}
                 alt={item.name}
-                className="w-full h-20 object-cover rounded-lg mb-2 flex-shrink-0"
+                className="w-full h-20 object-cover rounded-lg mb-4"
               />
             ) : (
-              <div className="w-full h-20 bg-gray-100 rounded-lg mb-2 flex items-center justify-center flex-shrink-0">
-                <ImageIcon size={16} className="text-gray-400" />
+              <div className="w-full h-20 bg-gray-100 rounded-lg mb-4 flex items-center justify-center">
+                <ImageIcon size={32} className="text-gray-400" />
               </div>
             )}
-            <div className="flex-1 flex flex-col min-h-0">
-              <h3 className="font-semibold text-sm text-gray-900 mb-1 line-clamp-1">{item.name}</h3>
-              {item.description && (
-                <p className="text-xs text-gray-600 mb-1 line-clamp-1 flex-shrink-0">{item.description}</p>
-              )}
-              <p className="text-lg font-bold text-primary-600 mb-1 flex-shrink-0">${item.price}</p>
-              
-              {/* Availability info */}
-              {(item.available_from || item.available_to || item.days_available) && (
-                <div className="text-xs text-gray-500 mb-1 flex-shrink-0">
-                  {item.available_from && item.available_to && (
-                    <div className="flex items-center gap-1">
-                      <Clock size={10} />
-                      <span className="text-xs truncate">{item.available_from} - {item.available_to}</span>
-                    </div>
-                  )}
-                  {item.days_available && (() => {
-                    let daysCount = 0;
-                    try {
-                      if (Array.isArray(item.days_available)) {
-                        daysCount = item.days_available.length;
-                      } else if (typeof item.days_available === 'string') {
-                        const parsed = JSON.parse(item.days_available || '[]');
-                        daysCount = Array.isArray(parsed) ? parsed.length : 0;
-                      }
-                    } catch (e) {
-                      daysCount = 0;
-                    }
-                    return daysCount > 0 ? (
-                      <div className="flex items-center gap-1 mt-1">
-                        <Calendar size={10} />
-                        <span className="text-xs">{daysCount} days</span>
-                      </div>
-                    ) : null;
-                  })()}
-                </div>
-              )}
-            </div>
+            <h3 className="font-semibold text-gray-900 mb-1">{item.name}</h3>
+            {item.description && (
+              <p className="text-sm text-gray-600 mb-2 line-clamp-2">{item.description}</p>
+            )}
+            <p className="text-2xl font-bold text-primary-600 mb-2">${item.price}</p>
             
-            <div className="flex gap-1 pt-1 border-t border-gray-200 mt-auto flex-shrink-0">
+            {/* Availability info */}
+            {(item.available_from || item.available_to || item.days_available) && (
+              <div className="text-xs text-gray-500 mb-2">
+                {item.available_from && item.available_to && (
+                  <div className="flex items-center gap-1">
+                    <Clock size={12} />
+                    <span>{item.available_from} - {item.available_to}</span>
+                  </div>
+                )}
+                {item.days_available && (() => {
+                  let daysCount = 0;
+                  try {
+                    if (Array.isArray(item.days_available)) {
+                      daysCount = item.days_available.length;
+                    } else if (typeof item.days_available === 'string') {
+                      const parsed = JSON.parse(item.days_available || '[]');
+                      daysCount = Array.isArray(parsed) ? parsed.length : 0;
+                    }
+                  } catch (e) {
+                    daysCount = 0;
+                  }
+                  return daysCount > 0 ? (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Calendar size={12} />
+                      <span>{daysCount} days</span>
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+            )}
+            
+            <div className="flex gap-2 pt-2 border-t border-gray-200">
               <button
                 onClick={() => handleEdit(item)}
-                className="flex-1 btn btn-secondary btn-sm flex items-center justify-center gap-1"
+                className="flex-1 btn btn-secondary flex items-center justify-center gap-2"
               >
-                <Edit size={12} />
-                <span className="text-xs">Edit</span>
+                <Edit size={16} />
+                <span>Edit</span>
               </button>
               <button
                 onClick={() => handleDelete(item.id)}
-                className="btn btn-danger btn-sm flex items-center justify-center gap-1"
+                className="btn btn-danger flex items-center justify-center gap-2"
               >
-                <Trash2 size={12} />
+                <Trash2 size={16} />
               </button>
             </div>
           </div>
