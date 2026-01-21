@@ -77,15 +77,16 @@ router.post('/', [
   
   const { name } = req.body;
   
-  // Get current max sort_order and add 1 for new category
+  // Get current categories to calculate sort_order and check for duplicates
   const existingCategories = await categoryRepository.findByBusiness(req.businessId);
+  
+  // Get current max sort_order and add 1 for new category
   const maxSortOrder = existingCategories.length > 0 
     ? Math.max(...existingCategories.map(c => c.sort_order || 0))
     : -1;
   const sortOrder = maxSortOrder + 1;
   
   // Check if category with same name already exists
-  const existingCategories = await categoryRepository.findByBusiness(req.businessId);
   const duplicate = existingCategories.find(cat => cat.name.toLowerCase() === name.toLowerCase());
   
   if (duplicate) {
