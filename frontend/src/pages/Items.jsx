@@ -318,56 +318,58 @@ export default function Items() {
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
                 {category.items.map((item) => (
-                  <div key={item.id} className="card">
+                  <div key={item.id} className="card aspect-square flex flex-col">
                     {item.item_image_url ? (
                       <img
                         src={item.item_image_url}
                         alt={item.name}
-                        className="w-full h-20 object-cover rounded-lg mb-2"
+                        className="w-full h-20 object-cover rounded-lg mb-2 flex-shrink-0"
                       />
                     ) : (
-                      <div className="w-full h-20 bg-gray-100 rounded-lg mb-2 flex items-center justify-center">
+                      <div className="w-full h-20 bg-gray-100 rounded-lg mb-2 flex items-center justify-center flex-shrink-0">
                         <ImageIcon size={16} className="text-gray-400" />
                       </div>
                     )}
-                    <h3 className="font-semibold text-sm text-gray-900 mb-1">{item.name}</h3>
-                    {item.description && (
-                      <p className="text-xs text-gray-600 mb-1 line-clamp-2">{item.description}</p>
-                    )}
-                    <p className="text-lg font-bold text-primary-600 mb-2">${item.price}</p>
-                    
-                    {/* Availability info */}
-                    {(item.available_from || item.available_to || item.days_available) && (
-                      <div className="text-xs text-gray-500 mb-1">
-                        {item.available_from && item.available_to && (
-                          <div className="flex items-center gap-1">
-                            <Clock size={10} />
-                            <span className="text-xs">{item.available_from} - {item.available_to}</span>
-                          </div>
-                        )}
-                        {item.days_available && (() => {
-                          let daysCount = 0;
-                          try {
-                            if (Array.isArray(item.days_available)) {
-                              daysCount = item.days_available.length;
-                            } else if (typeof item.days_available === 'string') {
-                              const parsed = JSON.parse(item.days_available || '[]');
-                              daysCount = Array.isArray(parsed) ? parsed.length : 0;
-                            }
-                          } catch (e) {
-                            daysCount = 0;
-                          }
-                          return daysCount > 0 ? (
-                            <div className="flex items-center gap-1 mt-1">
-                              <Calendar size={10} />
-                              <span className="text-xs">{daysCount} days</span>
+                    <div className="flex-1 flex flex-col min-h-0">
+                      <h3 className="font-semibold text-sm text-gray-900 mb-1 line-clamp-1">{item.name}</h3>
+                      {item.description && (
+                        <p className="text-xs text-gray-600 mb-1 line-clamp-1 flex-shrink-0">{item.description}</p>
+                      )}
+                      <p className="text-lg font-bold text-primary-600 mb-1 flex-shrink-0">${item.price}</p>
+                      
+                      {/* Availability info */}
+                      {(item.available_from || item.available_to || item.days_available) && (
+                        <div className="text-xs text-gray-500 mb-1 flex-shrink-0">
+                          {item.available_from && item.available_to && (
+                            <div className="flex items-center gap-1">
+                              <Clock size={10} />
+                              <span className="text-xs truncate">{item.available_from} - {item.available_to}</span>
                             </div>
-                          ) : null;
-                        })()}
-                      </div>
-                    )}
+                          )}
+                          {item.days_available && (() => {
+                            let daysCount = 0;
+                            try {
+                              if (Array.isArray(item.days_available)) {
+                                daysCount = item.days_available.length;
+                              } else if (typeof item.days_available === 'string') {
+                                const parsed = JSON.parse(item.days_available || '[]');
+                                daysCount = Array.isArray(parsed) ? parsed.length : 0;
+                              }
+                            } catch (e) {
+                              daysCount = 0;
+                            }
+                            return daysCount > 0 ? (
+                              <div className="flex items-center gap-1 mt-1">
+                                <Calendar size={10} />
+                                <span className="text-xs">{daysCount} days</span>
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
+                      )}
+                    </div>
                     
-                    <div className="flex gap-1 pt-1 border-t border-gray-200">
+                    <div className="flex gap-1 pt-1 border-t border-gray-200 mt-auto flex-shrink-0">
                       <button
                         onClick={() => handleEdit(item)}
                         className="flex-1 btn btn-secondary btn-sm flex items-center justify-center gap-1"
@@ -391,56 +393,58 @@ export default function Items() {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
           {items.map((item) => (
-          <div key={item.id} className="card">
+          <div key={item.id} className="card aspect-square flex flex-col">
             {item.item_image_url ? (
               <img
                 src={item.item_image_url}
                 alt={item.name}
-                className="w-full h-20 object-cover rounded-lg mb-2"
+                className="w-full h-20 object-cover rounded-lg mb-2 flex-shrink-0"
               />
             ) : (
-              <div className="w-full h-20 bg-gray-100 rounded-lg mb-2 flex items-center justify-center">
+              <div className="w-full h-20 bg-gray-100 rounded-lg mb-2 flex items-center justify-center flex-shrink-0">
                 <ImageIcon size={16} className="text-gray-400" />
               </div>
             )}
-            <h3 className="font-semibold text-sm text-gray-900 mb-1">{item.name}</h3>
-            {item.description && (
-              <p className="text-xs text-gray-600 mb-1 line-clamp-2">{item.description}</p>
-            )}
-            <p className="text-lg font-bold text-primary-600 mb-2">${item.price}</p>
-            
-            {/* Availability info */}
-            {(item.available_from || item.available_to || item.days_available) && (
-              <div className="text-xs text-gray-500 mb-1">
-                {item.available_from && item.available_to && (
-                  <div className="flex items-center gap-1">
-                    <Clock size={10} />
-                    <span className="text-xs">{item.available_from} - {item.available_to}</span>
-                  </div>
-                )}
-                {item.days_available && (() => {
-                  let daysCount = 0;
-                  try {
-                    if (Array.isArray(item.days_available)) {
-                      daysCount = item.days_available.length;
-                    } else if (typeof item.days_available === 'string') {
-                      const parsed = JSON.parse(item.days_available || '[]');
-                      daysCount = Array.isArray(parsed) ? parsed.length : 0;
-                    }
-                  } catch (e) {
-                    daysCount = 0;
-                  }
-                  return daysCount > 0 ? (
-                    <div className="flex items-center gap-1 mt-1">
-                      <Calendar size={10} />
-                      <span className="text-xs">{daysCount} days</span>
+            <div className="flex-1 flex flex-col min-h-0">
+              <h3 className="font-semibold text-sm text-gray-900 mb-1 line-clamp-1">{item.name}</h3>
+              {item.description && (
+                <p className="text-xs text-gray-600 mb-1 line-clamp-1 flex-shrink-0">{item.description}</p>
+              )}
+              <p className="text-lg font-bold text-primary-600 mb-1 flex-shrink-0">${item.price}</p>
+              
+              {/* Availability info */}
+              {(item.available_from || item.available_to || item.days_available) && (
+                <div className="text-xs text-gray-500 mb-1 flex-shrink-0">
+                  {item.available_from && item.available_to && (
+                    <div className="flex items-center gap-1">
+                      <Clock size={10} />
+                      <span className="text-xs truncate">{item.available_from} - {item.available_to}</span>
                     </div>
-                  ) : null;
-                })()}
-              </div>
-            )}
+                  )}
+                  {item.days_available && (() => {
+                    let daysCount = 0;
+                    try {
+                      if (Array.isArray(item.days_available)) {
+                        daysCount = item.days_available.length;
+                      } else if (typeof item.days_available === 'string') {
+                        const parsed = JSON.parse(item.days_available || '[]');
+                        daysCount = Array.isArray(parsed) ? parsed.length : 0;
+                      }
+                    } catch (e) {
+                      daysCount = 0;
+                    }
+                    return daysCount > 0 ? (
+                      <div className="flex items-center gap-1 mt-1">
+                        <Calendar size={10} />
+                        <span className="text-xs">{daysCount} days</span>
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              )}
+            </div>
             
-            <div className="flex gap-1 pt-1 border-t border-gray-200">
+            <div className="flex gap-1 pt-1 border-t border-gray-200 mt-auto flex-shrink-0">
               <button
                 onClick={() => handleEdit(item)}
                 className="flex-1 btn btn-secondary btn-sm flex items-center justify-center gap-1"
