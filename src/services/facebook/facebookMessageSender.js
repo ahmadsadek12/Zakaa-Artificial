@@ -3,7 +3,7 @@
 
 const logger = require('../../utils/logger');
 const botIntegrationRepository = require('../../repositories/botIntegrationRepository');
-const { decryptToken } = require('../../utils/encryption');
+const { decryptToken } = require('../../../utils/encryption');
 
 /**
  * Send text message via Facebook Messenger
