@@ -768,6 +768,175 @@ export default function Items() {
           </div>
         </div>
       )}
+
+      {/* Category Management Modal */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">
+                {editingCategory ? 'Edit Category' : 'Manage Categories'}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowCategoryModal(false)
+                  setEditingCategory(null)
+                  setCategoryFormData({ name: '', sortOrder: 0 })
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Category Form */}
+            {editingCategory !== null && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  try {
+                    const token = localStorage.getItem('token')
+                    if (editingCategory) {
+                      await axios.put(
+                        `${API_URL}/api/categories/${editingCategory.id}`,
+                        categoryFormData,
+                        { headers: { Authorization: `Bearer ${token}` } }
+                      )
+                    } else {
+                      await axios.post(
+                        `${API_URL}/api/categories`,
+                        categoryFormData,
+                        { headers: { Authorization: `Bearer ${token}` } }
+                      )
+                    }
+                    await fetchCategories()
+                    await fetchItems()
+                    setEditingCategory(null)
+                    setCategoryFormData({ name: '', sortOrder: categories.length })
+                    alert(editingCategory ? 'Category updated' : 'Category created')
+                  } catch (error) {
+                    console.error('Error saving category:', error)
+                    alert(error.response?.data?.error?.message || 'Failed to save category')
+                  }
+                }}
+                className="mb-6 p-4 bg-gray-50 rounded-lg space-y-4"
+              >
+                <div>
+                  <label className="label">Category Name *</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={categoryFormData.name}
+                    onChange={(e) => setCategoryFormData({ ...categoryFormData, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label">Sort Order</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="input"
+                    value={categoryFormData.sortOrder}
+                    onChange={(e) => setCategoryFormData({ ...categoryFormData, sortOrder: parseInt(e.target.value) || 0 })}
+                  />
+                  <p className="text-sm text-gray-500 mt-1">Lower numbers appear first</p>
+                </div>
+                <div className="flex gap-2">
+                  <button type="submit" className="btn btn-primary">
+                    {editingCategory ? 'Update' : 'Create'} Category
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingCategory(null)
+                      setCategoryFormData({ name: '', sortOrder: categories.length })
+                    }}
+                    className="btn btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Categories List */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Your Categories</h3>
+                {editingCategory === null && (
+                  <button
+                    onClick={() => {
+                      setEditingCategory(false)
+                      setCategoryFormData({ name: '', sortOrder: categories.length })
+                    }}
+                    className="btn btn-primary flex items-center gap-2"
+                  >
+                    <FolderPlus size={18} />
+                    <span>New Category</span>
+                  </button>
+                )}
+              </div>
+
+              {categories.length === 0 && editingCategory === null ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Folder size={48} className="mx-auto mb-4 text-gray-400" />
+                  <p>No categories yet. Create your first category!</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {categories.map((category) => (
+                    <div
+                      key={category.id}
+                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        <GripVertical className="text-gray-400" size={20} />
+                        <div>
+                          <p className="font-medium text-gray-900">{category.name}</p>
+                          <p className="text-sm text-gray-500">Sort order: {category.sort_order}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingCategory(category)
+                            setCategoryFormData({ name: category.name, sortOrder: category.sort_order })
+                          }}
+                          className="btn btn-secondary flex items-center gap-2"
+                        >
+                          <Edit size={16} />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Delete category "${category.name}"? Items in this category will become uncategorized.`)) return
+                            try {
+                              const token = localStorage.getItem('token')
+                              await axios.delete(`${API_URL}/api/categories/${category.id}`, {
+                                headers: { Authorization: `Bearer ${token}` }
+                              })
+                              await fetchCategories()
+                              await fetchItems()
+                              alert('Category deleted')
+                            } catch (error) {
+                              console.error('Error deleting category:', error)
+                              alert(error.response?.data?.error?.message || 'Failed to delete category')
+                            }
+                          }}
+                          className="btn btn-danger flex items-center gap-2"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
