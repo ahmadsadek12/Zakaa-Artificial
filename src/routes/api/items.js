@@ -77,17 +77,63 @@ const handleMulterError = (err, req, res, next) => {
 
 /**
  * List items with filters
- * GET /api/items?menuId=&branchId=&availability=
+ * GET /api/items?menuId=&branchId=&availability=&groupByCategory=true
  */
 router.get('/', asyncHandler(async (req, res) => {
   const filters = {
     businessId: req.businessId,
     menuId: req.query.menuId || null,
     userId: req.query.userId || req.query.branchId || (req.isBranchUser ? req.userId : null),
-    availability: req.query.availability || null
+    availability: req.query.availability || null,
+    categoryId: req.query.categoryId || null
   };
   
   const items = await itemRepository.find(filters);
+  
+  // If groupByCategory is requested, group items by category
+  if (req.query.groupByCategory === 'true') {
+    const categoryRepository = require('../../repositories/serviceCategoryRepository');
+    const categories = await categoryRepository.findByBusiness(req.businessId);
+    
+    // Create a map of category_id -> category
+    const categoryMap = {};
+    categories.forEach(cat => {
+      categoryMap[cat.id] = { ...cat, items: [] };
+    });
+    
+    // Add "Uncategorized" category for items without category
+    categoryMap['uncategorized'] = {
+      id: null,
+      name: 'Uncategorized',
+      sort_order: 9999,
+      items: []
+    };
+    
+    // Group items by category
+    items.forEach(item => {
+      const categoryId = item.category_id || 'uncategorized';
+      if (categoryMap[categoryId]) {
+        categoryMap[categoryId].items.push(item);
+      } else {
+        categoryMap['uncategorized'].items.push(item);
+      }
+    });
+    
+    // Convert to array and sort by sort_order
+    const groupedCategories = Object.values(categoryMap)
+      .filter(cat => cat.items.length > 0) // Only include categories with items
+      .sort((a, b) => a.sort_order - b.sort_order);
+    
+    return res.json({
+      success: true,
+      data: { 
+        items,
+        categories: groupedCategories,
+        grouped: true
+      },
+      count: items.length
+    });
+  }
   
   res.json({
     success: true,
@@ -181,7 +227,19 @@ router.post('/', upload.single('itemImage'), handleMulterError, [
     });
   }
   
-  const { name, description, menuId, userId, branchId, price, cost, preparationTimeMinutes, durationMinutes, quantity, isReusable, itemType, isSchedulable, minScheduleHours, availableFrom, availableTo, daysAvailable, ingredients, availability } = req.body;
+  const { name, description, menuId, userId, branchId, price, cost, preparationTimeMinutes, durationMinutes, quantity, isReusable, itemType, isSchedulable, minScheduleHours, availableFrom, availableTo, daysAvailable, ingredients, availability, categoryId } = req.body;
+  
+  // Validate categoryId if provided
+  if (categoryId) {
+    const categoryRepository = require('../../repositories/serviceCategoryRepository');
+    const category = await categoryRepository.findById(categoryId, req.businessId);
+    if (!category) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid category ID' }
+      });
+    }
+  }
   
   // Handle file upload - compress and upload to S3
   let itemImageUrl = null;
@@ -242,7 +300,8 @@ router.post('/', upload.single('itemImage'), handleMulterError, [
     daysAvailable: daysAvailable || null,
     ingredients: ingredients || null,
     availability: availability || 'available',
-    itemImageUrl
+    itemImageUrl,
+    categoryId: categoryId || null
   });
   
   logger.info(`Item created: ${item.id} for business: ${req.businessId}`);
@@ -290,7 +349,8 @@ router.put('/:id', requireOwnership('items'), upload.single('itemImage'), handle
     return false;
   }).withMessage('Days available must be an array or JSON string'),
   body('daysAvailable.*').optional().isIn(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']).withMessage('Invalid day name'),
-  body('ingredients').optional().isString().withMessage('Ingredients must be a string')
+  body('ingredients').optional().isString().withMessage('Ingredients must be a string'),
+  body('categoryId').optional().isUUID().withMessage('categoryId must be a valid UUID')
 ], asyncHandler(async (req, res) => {
   // Parse daysAvailable from JSON string if it's a string (FormData sends it as JSON string)
   if (req.body.daysAvailable && typeof req.body.daysAvailable === 'string') {
@@ -320,8 +380,20 @@ router.put('/:id', requireOwnership('items'), upload.single('itemImage'), handle
     });
   }
   
+  // Validate categoryId if provided
+  if (req.body.categoryId) {
+    const categoryRepository = require('../../repositories/serviceCategoryRepository');
+    const category = await categoryRepository.findById(req.body.categoryId, req.businessId);
+    if (!category) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid category ID' }
+      });
+    }
+  }
+  
   const updateData = {};
-  const { name, description, menuId, userId, branchId, price, cost, preparationTimeMinutes, durationMinutes, quantity, isReusable, itemType, isSchedulable, minScheduleHours, availableFrom, availableTo, daysAvailable, ingredients, availability } = req.body;
+  const { name, description, menuId, userId, branchId, price, cost, preparationTimeMinutes, durationMinutes, quantity, isReusable, itemType, isSchedulable, minScheduleHours, availableFrom, availableTo, daysAvailable, ingredients, availability, categoryId } = req.body;
   
   if (name !== undefined) updateData.name = name;
   if (description !== undefined) updateData.description = description;
@@ -341,6 +413,7 @@ router.put('/:id', requireOwnership('items'), upload.single('itemImage'), handle
   if (daysAvailable !== undefined) updateData.daysAvailable = daysAvailable;
   if (ingredients !== undefined) updateData.ingredients = ingredients;
   if (availability !== undefined) updateData.availability = availability;
+  if (categoryId !== undefined) updateData.categoryId = categoryId || null; // Allow setting to null to remove category
   
   // Handle image upload - compress and upload to S3
   if (req.file && req.file.buffer) {

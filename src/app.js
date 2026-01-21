@@ -18,6 +18,7 @@ const businessRoutes = require('./routes/api/businesses');
 const branchRoutes = require('./routes/api/branches');
 const menuRoutes = require('./routes/api/menus');
 const itemRoutes = require('./routes/api/items');
+const categoryRoutes = require('./routes/api/categories');
 const policyRoutes = require('./routes/api/policies');
 const openingHoursRoutes = require('./routes/api/openingHours');
 const durationTiersRoutes = require('./routes/api/durationTiers');
@@ -145,6 +146,7 @@ app.use('/api/businesses', businessRoutes);
 app.use('/api/branches', branchRoutes);
 app.use('/api/menus', menuRoutes);
 app.use('/api/items', itemRoutes);
+app.use('/api/categories', categoryRoutes);
 app.use('/api/policies', policyRoutes);
 app.use('/api/opening-hours', openingHoursRoutes);
 app.use('/api', durationTiersRoutes); // Handles /api/items/:itemId/duration-tiers and /api/duration-tiers/:id

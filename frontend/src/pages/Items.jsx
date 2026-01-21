@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import { Plus, Edit, Trash2, Image as ImageIcon, X, Clock, Calendar, TrendingUp } from 'lucide-react'
+import { Plus, Edit, Trash2, Image as ImageIcon, X, Clock, Calendar, TrendingUp, Folder, FolderPlus, GripVertical } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { getTerminology } from '../utils/terminology'
 
@@ -12,9 +12,14 @@ export default function Items() {
   const { user } = useAuth()
   const terms = getTerminology(user?.business_type)
   const [items, setItems] = useState([])
+  const [categories, setCategories] = useState([])
+  const [groupedCategories, setGroupedCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
+  const [showCategoryModal, setShowCategoryModal] = useState(false)
+  const [editingCategory, setEditingCategory] = useState(null)
+  const [categoryFormData, setCategoryFormData] = useState({ name: '', sortOrder: 0 })
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -40,20 +45,39 @@ export default function Items() {
 
   useEffect(() => {
     fetchItems()
+    fetchCategories()
   }, [])
 
   const fetchItems = async () => {
     try {
       const token = localStorage.getItem('token')
-      const response = await axios.get(`${API_URL}/api/items`, {
+      const response = await axios.get(`${API_URL}/api/items?groupByCategory=true`, {
         headers: { Authorization: `Bearer ${token}` }
       })
-      setItems(response.data.data.items || [])
+      if (response.data.data.grouped) {
+        setGroupedCategories(response.data.data.categories || [])
+        setItems(response.data.data.items || [])
+      } else {
+        setItems(response.data.data.items || [])
+        setGroupedCategories([])
+      }
     } catch (error) {
       console.error('Error fetching items:', error)
       alert('Failed to fetch items')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchCategories = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await axios.get(`${API_URL}/api/categories`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setCategories(response.data.data.categories || [])
+    } catch (error) {
+      console.error('Error fetching categories:', error)
     }
   }
 
@@ -95,6 +119,10 @@ export default function Items() {
       }
       
       formDataToSend.append('availability', formData.availability)
+      
+      if (formData.categoryId) {
+        formDataToSend.append('categoryId', formData.categoryId)
+      }
       
       if (formData.itemImage) {
         formDataToSend.append('itemImage', formData.itemImage)
@@ -177,7 +205,8 @@ export default function Items() {
       })(),
       availability: item.availability || 'available',
       itemImage: null,
-      imagePreview: item.item_image_url || null
+      imagePreview: item.item_image_url || null,
+      categoryId: item.category_id || ''
     })
     setShowModal(true)
   }
@@ -201,7 +230,8 @@ export default function Items() {
       daysAvailable: [],
       availability: 'available',
       itemImage: null,
-      imagePreview: null
+      imagePreview: null,
+      categoryId: ''
     })
   }
 
@@ -240,20 +270,116 @@ export default function Items() {
           <h1 className="text-3xl font-bold text-gray-900">Items</h1>
           <p className="text-gray-600 mt-2">Manage your menu items</p>
         </div>
-        <button
-          onClick={() => {
-            resetForm()
-            setShowModal(true)
-          }}
-          className="btn btn-primary flex items-center gap-2"
-        >
-          <Plus size={20} />
-          <span>{terms.addItem}</span>
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setCategoryFormData({ name: '', sortOrder: categories.length })
+              setEditingCategory(null)
+              setShowCategoryModal(true)
+            }}
+            className="btn btn-secondary flex items-center gap-2"
+          >
+            <FolderPlus size={20} />
+            <span>Manage Categories</span>
+          </button>
+          <button
+            onClick={() => {
+              resetForm()
+              setShowModal(true)
+            }}
+            className="btn btn-primary flex items-center gap-2"
+          >
+            <Plus size={20} />
+            <span>{terms.addItem}</span>
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {items.map((item) => (
+      {/* Display items grouped by category */}
+      {groupedCategories.length > 0 ? (
+        <div className="space-y-8">
+          {groupedCategories.map((category) => (
+            <div key={category.id || 'uncategorized'} className="space-y-4">
+              <div className="flex items-center gap-2 border-b-2 border-primary-200 pb-2">
+                <Folder className="text-primary-600" size={24} />
+                <h2 className="text-2xl font-bold text-gray-900">{category.name}</h2>
+                <span className="text-sm text-gray-500">({category.items.length} {category.items.length === 1 ? 'item' : 'items'})</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {category.items.map((item) => (
+                  <div key={item.id} className="card">
+                    {item.item_image_url ? (
+                      <img
+                        src={item.item_image_url}
+                        alt={item.name}
+                        className="w-full h-40 object-cover rounded-lg mb-4"
+                      />
+                    ) : (
+                      <div className="w-full h-40 bg-gray-100 rounded-lg mb-4 flex items-center justify-center">
+                        <ImageIcon size={32} className="text-gray-400" />
+                      </div>
+                    )}
+                    <h3 className="font-semibold text-gray-900 mb-1">{item.name}</h3>
+                    {item.description && (
+                      <p className="text-sm text-gray-600 mb-2 line-clamp-2">{item.description}</p>
+                    )}
+                    <p className="text-2xl font-bold text-primary-600 mb-2">${item.price}</p>
+                    
+                    {/* Availability info */}
+                    {(item.available_from || item.available_to || item.days_available) && (
+                      <div className="text-xs text-gray-500 mb-2">
+                        {item.available_from && item.available_to && (
+                          <div className="flex items-center gap-1">
+                            <Clock size={12} />
+                            <span>{item.available_from} - {item.available_to}</span>
+                          </div>
+                        )}
+                        {item.days_available && (() => {
+                          let daysCount = 0;
+                          try {
+                            if (Array.isArray(item.days_available)) {
+                              daysCount = item.days_available.length;
+                            } else if (typeof item.days_available === 'string') {
+                              const parsed = JSON.parse(item.days_available || '[]');
+                              daysCount = Array.isArray(parsed) ? parsed.length : 0;
+                            }
+                          } catch (e) {
+                            daysCount = 0;
+                          }
+                          return daysCount > 0 ? (
+                            <div className="flex items-center gap-1 mt-1">
+                              <Calendar size={12} />
+                              <span>{daysCount} days</span>
+                            </div>
+                          ) : null;
+                        })()}
+                      </div>
+                    )}
+                    
+                    <div className="flex gap-2 pt-2 border-t border-gray-200">
+                      <button
+                        onClick={() => handleEdit(item)}
+                        className="flex-1 btn btn-secondary flex items-center justify-center gap-2"
+                      >
+                        <Edit size={16} />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        onClick={() => handleDelete(item.id)}
+                        className="btn btn-danger flex items-center justify-center gap-2"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {items.map((item) => (
           <div key={item.id} className="card">
             {item.item_image_url ? (
               <img
@@ -320,9 +446,10 @@ export default function Items() {
             </div>
           </div>
         ))}
-      </div>
+        </div>
+      )}
 
-      {items.length === 0 && (
+      {items.length === 0 && groupedCategories.length === 0 && (
         <div className="card text-center py-12">
           <p className="text-gray-500 mb-4">No {terms.items.toLowerCase()} yet</p>
           <button
@@ -362,6 +489,20 @@ export default function Items() {
               <div className="border-b border-gray-200 pb-4">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h3>
                 <div className="space-y-4">
+                  <div>
+                    <label className="label">Category</label>
+                    <select
+                      className="input"
+                      value={formData.categoryId}
+                      onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                    >
+                      <option value="">No Category</option>
+                      {categories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </select>
+                    <p className="text-sm text-gray-500 mt-1">Group this item into a category</p>
+                  </div>
                   <div>
                     <label className="label">Name *</label>
                     <input

@@ -80,7 +80,12 @@ async function find(filters = {}) {
     params.push(filters.categoryId);
   }
   
-  sql += ' ORDER BY name';
+  // Order by category sort_order, then by item name
+  sql += ` ORDER BY 
+    CASE WHEN category_id IS NULL THEN 9999 ELSE (
+      SELECT sort_order FROM service_categories WHERE id = items.category_id
+    ) END,
+    name ASC`;
   
   const items = await queryMySQL(sql, params);
   return sanitizeItems(items);
