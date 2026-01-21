@@ -65,8 +65,7 @@ router.get('/:id', [
  */
 router.post('/', [
   body('name').notEmpty().trim().withMessage('Category name is required'),
-  body('name').isLength({ max: 255 }).withMessage('Category name must be 255 characters or less'),
-  body('sortOrder').optional().isInt({ min: 0 }).withMessage('Sort order must be a non-negative integer')
+  body('name').isLength({ max: 255 }).withMessage('Category name must be 255 characters or less')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -76,7 +75,14 @@ router.post('/', [
     });
   }
   
-  const { name, sortOrder } = req.body;
+  const { name } = req.body;
+  
+  // Get current max sort_order and add 1 for new category
+  const existingCategories = await categoryRepository.findByBusiness(req.businessId);
+  const maxSortOrder = existingCategories.length > 0 
+    ? Math.max(...existingCategories.map(c => c.sort_order || 0))
+    : -1;
+  const sortOrder = maxSortOrder + 1;
   
   // Check if category with same name already exists
   const existingCategories = await categoryRepository.findByBusiness(req.businessId);
@@ -92,7 +98,7 @@ router.post('/', [
   const category = await categoryRepository.create({
     businessId: req.businessId,
     name: name.trim(),
-    sortOrder: sortOrder || 0,
+    sortOrder: sortOrder,
     isActive: true
   });
   
@@ -112,7 +118,6 @@ router.put('/:id', [
   param('id').isUUID().withMessage('Invalid category ID'),
   body('name').optional().trim().notEmpty().withMessage('Category name cannot be empty'),
   body('name').optional().isLength({ max: 255 }).withMessage('Category name must be 255 characters or less'),
-  body('sortOrder').optional().isInt({ min: 0 }).withMessage('Sort order must be a non-negative integer'),
   body('isActive').optional().isBoolean().withMessage('isActive must be a boolean')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
@@ -149,7 +154,6 @@ router.put('/:id', [
   
   const updateData = {};
   if (req.body.name !== undefined) updateData.name = req.body.name.trim();
-  if (req.body.sortOrder !== undefined) updateData.sortOrder = req.body.sortOrder;
   if (req.body.isActive !== undefined) updateData.isActive = req.body.isActive;
   
   const updatedCategory = await categoryRepository.update(req.params.id, req.businessId, updateData);

@@ -19,7 +19,8 @@ export default function Items() {
   const [editingItem, setEditingItem] = useState(null)
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [editingCategory, setEditingCategory] = useState(null)
-  const [categoryFormData, setCategoryFormData] = useState({ name: '', sortOrder: 0 })
+  const [categoryFormData, setCategoryFormData] = useState({ name: '' })
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState(null)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -44,14 +45,20 @@ export default function Items() {
   const businessType = user?.business_type || 'f & b'
 
   useEffect(() => {
-    fetchItems()
     fetchCategories()
+    fetchItems()
   }, [])
 
   const fetchItems = async () => {
     try {
       const token = localStorage.getItem('token')
-      const response = await axios.get(`${API_URL}/api/items?groupByCategory=true`, {
+      const params = new URLSearchParams()
+      params.append('groupByCategory', 'true')
+      if (selectedCategoryFilter) {
+        params.append('categoryId', selectedCategoryFilter)
+      }
+      
+      const response = await axios.get(`${API_URL}/api/items?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       if (response.data.data.grouped) {
@@ -68,6 +75,10 @@ export default function Items() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    fetchItems()
+  }, [selectedCategoryFilter])
 
   const fetchCategories = async () => {
     try {
@@ -273,7 +284,7 @@ export default function Items() {
         <div className="flex gap-2">
           <button
             onClick={() => {
-              setCategoryFormData({ name: '', sortOrder: categories.length })
+              setCategoryFormData({ name: '' })
               setEditingCategory(null)
               setShowCategoryModal(true)
             }}
@@ -781,7 +792,7 @@ export default function Items() {
                 onClick={() => {
                   setShowCategoryModal(false)
                   setEditingCategory(null)
-                  setCategoryFormData({ name: '', sortOrder: 0 })
+                  setCategoryFormData({ name: '' })
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -812,7 +823,7 @@ export default function Items() {
                     await fetchCategories()
                     await fetchItems()
                     setEditingCategory(null)
-                    setCategoryFormData({ name: '', sortOrder: categories.length })
+                    setCategoryFormData({ name: '' })
                     alert(editingCategory ? 'Category updated' : 'Category created')
                   } catch (error) {
                     console.error('Error saving category:', error)
@@ -831,17 +842,6 @@ export default function Items() {
                     required
                   />
                 </div>
-                <div>
-                  <label className="label">Sort Order</label>
-                  <input
-                    type="number"
-                    min="0"
-                    className="input"
-                    value={categoryFormData.sortOrder}
-                    onChange={(e) => setCategoryFormData({ ...categoryFormData, sortOrder: parseInt(e.target.value) || 0 })}
-                  />
-                  <p className="text-sm text-gray-500 mt-1">Lower numbers appear first</p>
-                </div>
                 <div className="flex gap-2">
                   <button type="submit" className="btn btn-primary">
                     {editingCategory ? 'Update' : 'Create'} Category
@@ -850,7 +850,7 @@ export default function Items() {
                     type="button"
                     onClick={() => {
                       setEditingCategory(null)
-                      setCategoryFormData({ name: '', sortOrder: categories.length })
+                      setCategoryFormData({ name: '' })
                     }}
                     className="btn btn-secondary"
                   >
@@ -868,7 +868,7 @@ export default function Items() {
                   <button
                     onClick={() => {
                       setEditingCategory(false)
-                      setCategoryFormData({ name: '', sortOrder: categories.length })
+                      setCategoryFormData({ name: '' })
                     }}
                     className="btn btn-primary flex items-center gap-2"
                   >
@@ -894,14 +894,13 @@ export default function Items() {
                         <GripVertical className="text-gray-400" size={20} />
                         <div>
                           <p className="font-medium text-gray-900">{category.name}</p>
-                          <p className="text-sm text-gray-500">Sort order: {category.sort_order}</p>
                         </div>
                       </div>
                       <div className="flex gap-2">
                         <button
                           onClick={() => {
                             setEditingCategory(category)
-                            setCategoryFormData({ name: category.name, sortOrder: category.sort_order })
+                            setCategoryFormData({ name: category.name })
                           }}
                           className="btn btn-secondary flex items-center gap-2"
                         >
