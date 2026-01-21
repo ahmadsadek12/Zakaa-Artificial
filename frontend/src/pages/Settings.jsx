@@ -6,7 +6,7 @@ import { Save, Building2, CreditCard, Phone, MapPin, Globe, MessageSquare, Key, 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 // Integration Setup Component
-function IntegrationSetup({ platform, user, onUpdate }) {
+function IntegrationSetup({ platform, user, onUpdate, isAdmin = false }) {
   const [integration, setIntegration] = useState(null)
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
@@ -101,27 +101,39 @@ function IntegrationSetup({ platform, user, onUpdate }) {
   if (integration) {
     return (
       <div className="space-y-4">
+        {!isAdmin && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <p className="text-sm text-yellow-800">
+              ⚠️ <strong>Read-Only:</strong> Only administrators can modify this configuration. Contact support for changes.
+            </p>
+          </div>
+        )}
         <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
           <div>
             <p className="font-medium text-green-900">Connected</p>
             <p className="text-sm text-green-700">Page ID: {integration.page_id}</p>
+            {integration.app_id && (
+              <p className="text-sm text-green-700">App ID: {integration.app_id}</p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleToggle}
-              disabled={loading}
+              disabled={loading || !isAdmin}
               className={`px-4 py-2 rounded-md text-sm font-medium ${
                 enabled
                   ? 'bg-green-100 text-green-800 hover:bg-green-200'
                   : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-              } disabled:opacity-50`}
+              } disabled:opacity-50 ${!isAdmin ? 'cursor-not-allowed' : ''}`}
+              title={!isAdmin ? 'Only admin can edit' : ''}
             >
               {enabled ? 'Enabled' : 'Disabled'}
             </button>
             <button
               onClick={handleDisconnect}
-              disabled={loading}
+              disabled={loading || !isAdmin}
               className="px-4 py-2 rounded-md text-sm font-medium bg-red-100 text-red-800 hover:bg-red-200 disabled:opacity-50"
+              title={!isAdmin ? 'Only admin can disconnect' : ''}
             >
               Disconnect
             </button>
@@ -132,56 +144,72 @@ function IntegrationSetup({ platform, user, onUpdate }) {
   }
 
   return (
-    <form onSubmit={handleConnect} className="space-y-4">
-      <div>
-        <label className="label">Page ID *</label>
-        <input
-          type="text"
-          className="input font-mono"
-          value={formData.page_id}
-          onChange={(e) => setFormData({ ...formData, page_id: e.target.value })}
-          placeholder="1234567890123456"
-          required
-        />
-        <p className="text-sm text-gray-500 mt-1">Your {platform} page ID from Meta Business Suite</p>
-      </div>
-      <div>
-        <label className="label">Access Token *</label>
-        <input
-          type="password"
-          className="input font-mono"
-          value={formData.access_token}
-          onChange={(e) => setFormData({ ...formData, access_token: e.target.value })}
-          placeholder="EAAxxxxxxxxxxxxx..."
-          required
-        />
-        <p className="text-sm text-gray-500 mt-1">Permanent access token from Meta Business Suite</p>
-      </div>
-      <div>
-        <label className="label">App ID (Optional)</label>
-        <input
-          type="text"
-          className="input font-mono"
-          value={formData.app_id}
-          onChange={(e) => setFormData({ ...formData, app_id: e.target.value })}
-          placeholder="1234567890123456"
-        />
-      </div>
-      <button
-        type="submit"
-        disabled={loading}
-        className="btn btn-primary flex items-center gap-2"
-      >
-        {loading ? (
-          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-        ) : (
-          <>
-            <Check size={18} />
-            Connect {platform.charAt(0).toUpperCase() + platform.slice(1)}
-          </>
-        )}
-      </button>
-    </form>
+    <div className="space-y-4">
+      {!isAdmin && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <p className="text-sm text-yellow-800">
+            ⚠️ <strong>Read-Only:</strong> Only administrators can configure this integration. Contact support to set up {platform === 'instagram' ? 'Instagram Messaging API' : platform.charAt(0).toUpperCase() + platform.slice(1)}.
+          </p>
+        </div>
+      )}
+      <form onSubmit={handleConnect} className="space-y-4">
+        <div>
+          <label className="label">Page ID *</label>
+          <input
+            type="text"
+            className={`input font-mono ${!isAdmin ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+            value={formData.page_id}
+            onChange={(e) => isAdmin && setFormData({ ...formData, page_id: e.target.value })}
+            placeholder="1234567890123456"
+            required
+            disabled={!isAdmin}
+            title={!isAdmin ? 'Only admin can edit' : ''}
+          />
+          <p className="text-sm text-gray-500 mt-1">Your {platform === 'instagram' ? 'Instagram' : platform} page ID from Meta Business Suite</p>
+        </div>
+        <div>
+          <label className="label">Access Token *</label>
+          <input
+            type="password"
+            className={`input font-mono ${!isAdmin ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+            value={formData.access_token}
+            onChange={(e) => isAdmin && setFormData({ ...formData, access_token: e.target.value })}
+            placeholder="EAAxxxxxxxxxxxxx..."
+            required
+            disabled={!isAdmin}
+            title={!isAdmin ? 'Only admin can edit' : ''}
+          />
+          <p className="text-sm text-gray-500 mt-1">Permanent access token from Meta Business Suite</p>
+        </div>
+        <div>
+          <label className="label">App ID (Optional)</label>
+          <input
+            type="text"
+            className={`input font-mono ${!isAdmin ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+            value={formData.app_id}
+            onChange={(e) => isAdmin && setFormData({ ...formData, app_id: e.target.value })}
+            placeholder="1234567890123456"
+            disabled={!isAdmin}
+            title={!isAdmin ? 'Only admin can edit' : ''}
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={loading || !isAdmin}
+          className="btn btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          title={!isAdmin ? 'Only admin can connect' : ''}
+        >
+          {loading ? (
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+          ) : (
+            <>
+              <Check size={18} />
+              Connect {platform === 'instagram' ? 'Instagram Messaging API' : platform.charAt(0).toUpperCase() + platform.slice(1)}
+            </>
+          )}
+        </button>
+      </form>
+    </div>
   )
 }
 
@@ -1087,12 +1115,13 @@ export default function Settings() {
             <div className="border-t border-gray-200 pt-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <MessageSquare size={24} />
-                Instagram Configuration
+                Instagram Messaging API Configuration
               </h2>
               <IntegrationSetup 
                 platform="instagram"
                 user={user}
                 onUpdate={fetchUser}
+                isAdmin={isAdmin}
               />
             </div>
 

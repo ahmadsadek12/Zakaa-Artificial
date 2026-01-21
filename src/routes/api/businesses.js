@@ -638,10 +638,10 @@ router.get('/me/integrations', asyncHandler(async (req, res) => {
 }));
 
 /**
- * Connect Instagram account
+ * Connect Instagram account (Admin only)
  * POST /api/businesses/me/integrations/instagram
  */
-router.post('/me/integrations/instagram', [
+router.post('/me/integrations/instagram', requireUserType(CONSTANTS.USER_TYPES.ADMIN), [
   body('page_id').notEmpty().withMessage('Instagram page ID required'),
   body('access_token').notEmpty().withMessage('Instagram access token required'),
   body('app_id').optional().isString()
@@ -839,10 +839,18 @@ router.put('/me/integrations/:platform', [
 /**
  * Disconnect integration
  * DELETE /api/businesses/me/integrations/:platform
+ * Note: Instagram requires admin access
  */
 router.delete('/me/integrations/:platform', [
   param('platform').isIn(['whatsapp', 'telegram', 'instagram', 'facebook']).withMessage('Invalid platform')
 ], asyncHandler(async (req, res) => {
+  // Instagram requires admin access
+  if (req.params.platform === 'instagram' && req.user.user_type !== CONSTANTS.USER_TYPES.ADMIN) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Only administrators can disconnect Instagram integration' }
+    });
+  }
   try {
     const botIntegrationRepository = require('../../repositories/botIntegrationRepository');
     
