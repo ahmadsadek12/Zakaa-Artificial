@@ -60,6 +60,54 @@ async function addSubscriptionsTable() {
 
     console.log('✅ Subscriptions table created successfully');
 
+    // Check if user_subscriptions table already exists
+    const [junctionTables] = await connection.query(`
+      SELECT TABLE_NAME 
+      FROM information_schema.TABLES 
+      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'user_subscriptions'
+    `, [MYSQL_DATABASE || 'zakaa_db']);
+
+    if (junctionTables.length > 0) {
+      console.log('⚠️  User subscriptions junction table already exists. Skipping creation.');
+    } else {
+      // Create user_subscriptions junction table (many-to-many)
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS user_subscriptions (
+          id CHAR(36) PRIMARY KEY,
+          user_id CHAR(36) NOT NULL,
+          subscription_id CHAR(36) NOT NULL,
+          
+          -- Subscription details
+          status ENUM('active', 'past_due', 'canceled', 'expired') NOT NULL DEFAULT 'active',
+          started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          ends_at TIMESTAMP NULL,
+          
+          -- Pricing (snapshot at time of purchase, in case subscription price changes)
+          price_paid DECIMAL(10,2) NOT NULL,
+          sale_applied DECIMAL(5,2) NULL DEFAULT 0.00,
+          
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          deleted_at TIMESTAMP NULL,
+          
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE RESTRICT,
+          
+          INDEX idx_user_id (user_id),
+          INDEX idx_subscription_id (subscription_id),
+          INDEX idx_status (status),
+          INDEX idx_started_at (started_at),
+          INDEX idx_ends_at (ends_at),
+          INDEX idx_deleted_at (deleted_at),
+          
+          -- Prevent duplicate active subscriptions for same user (only for non-deleted records)
+          UNIQUE KEY unique_active_user_subscription (user_id, subscription_id, status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+      `);
+
+      console.log('✅ User subscriptions junction table created successfully');
+    }
+
   } catch (error) {
     console.error('❌ Error creating subscriptions table:', error);
     throw error;
