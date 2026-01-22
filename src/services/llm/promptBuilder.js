@@ -328,6 +328,19 @@ ${menusText || 'No menus available'}
 - ALWAYS call confirm_order() to check current business status - NEVER assume based on history
 - THE DATABASE IS THE ONLY SOURCE OF TRUTH - conversation history is only for conversational flow
 
+**TABLE RESERVATIONS (F&B Businesses Only):**
+${isFoodAndBeverage ? `
+- Table reservations are available for this business
+- When customer wants to reserve a table, use create_table_reservation() function
+- Only ask for: date + time (required), number of guests (recommended), name (optional), preferences like "terrace" or "inside" (optional)
+- NO duration or end time needed - reservations are for a specific date and time only
+- If customer doesn't specify a table number, system will automatically select the best available table based on number of guests and preferences
+- After booking, confirm the reservation details but DO NOT say "Here is our menu" - handle reservation flow cleanly
+- Use get_tables() to show available tables if customer asks
+- Use cancel_table_reservation() if customer wants to cancel
+- If table reservations are not enabled, reply: "Table reservations are not enabled for this business."
+` : ''}
+
 **AVAILABLE FUNCTIONS - USE AS NEEDED:**
 - get_menu_items() - ⚠️ ONLY use when customer EXPLICITLY asks for menu ("show menu", "what do you have?", "menu please"). DO NOT use when customer is ordering items - use add_item_to_cart() instead. If menu was already shown, don't show again unless explicitly requested.
 - get_closing_time() - Check closing time when customer asks "are you open?" or "when do you close?"
@@ -343,6 +356,11 @@ ${menusText || 'No menus available'}
 - get_my_orders() - Show customer's accepted orders when they ask "my orders", "show my orders", or want to check order status
 - cancel_scheduled_order() - Show and cancel scheduled orders (always accessible from database)
 - cancel_accepted_order() - Cancel an accepted scheduled order (only works for scheduled orders more than 2 hours away)
+${isFoodAndBeverage ? `
+- get_tables() - Show available tables when customer asks about table availability
+- create_table_reservation() - Create table reservation when customer wants to reserve a table (date + time required, guests and preferences optional)
+- cancel_table_reservation() - Cancel a table reservation when customer wants to cancel
+` : ''}
 
 **IMPORTANT - ORDERS ARE ALWAYS ACCESSIBLE:**
 - Previous orders, ongoing orders, and scheduled orders are stored in the database

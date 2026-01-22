@@ -106,6 +106,30 @@ router.get('/stats', asyncHandler(async (req, res) => {
   const completedOrders = stats.completed || 0;
   stats.averageOrderValue = completedOrders > 0 ? stats.totalRevenue / completedOrders : 0;
   
+  // Get chatbot metrics (requests handled and average response time)
+  try {
+    const chatbotAnalytics = require('../../services/analytics/chatbotAnalytics');
+    
+    // Get requests handled
+    const requestsHandled = await chatbotAnalytics.getRequestsHandled(req.businessId, {
+      startDate: filters.startDate,
+      endDate: filters.endDate
+    });
+    stats.requestsHandled = requestsHandled.count || 0;
+    
+    // Get average response time
+    const avgResponseTime = await chatbotAnalytics.getAverageResponseTime(req.businessId, {
+      startDate: filters.startDate,
+      endDate: filters.endDate
+    });
+    // Convert milliseconds to seconds for display
+    stats.averageResponseTimeSeconds = avgResponseTime.overall_avg_ms ? Math.round(avgResponseTime.overall_avg_ms / 1000) : 0;
+  } catch (error) {
+    logger.warn('Could not fetch chatbot metrics:', error.message);
+    stats.requestsHandled = 0;
+    stats.averageResponseTimeSeconds = 0;
+  }
+  
   res.json({
     success: true,
     data: { stats }

@@ -6,14 +6,22 @@ const { generateUUID } = require('../utils/uuid');
 
 /**
  * Find table by ID
+ * @param {string} tableId - Table ID
+ * @param {string} ownerUserId - Optional owner user ID for validation
+ * @param {string} businessId - Optional business ID for validation
  */
-async function findById(tableId, userId = null) {
+async function findById(tableId, ownerUserId = null, businessId = null) {
   let sql = 'SELECT * FROM tables WHERE id = ?';
   const params = [tableId];
   
-  if (userId) {
-    sql += ' AND user_id = ?';
-    params.push(userId);
+  if (ownerUserId) {
+    sql += ' AND owner_user_id = ?';
+    params.push(ownerUserId);
+  }
+  
+  if (businessId) {
+    sql += ' AND business_id = ?';
+    params.push(businessId);
   }
   
   const tables = await queryMySQL(sql, params);
@@ -22,47 +30,224 @@ async function findById(tableId, userId = null) {
 
 /**
  * Find tables by business/user
+ * @param {string} ownerUserId - Owner user ID (branch user or business user)
+ * @param {string} businessId - Optional business ID for filtering
+ * @param {boolean} includeInactive - Include inactive tables
+ * @param {string} date - Optional date (YYYY-MM-DD) to include reservation status
  */
-async function findByBusiness(userId, includeReserved = true) {
-  let sql = 'SELECT * FROM tables WHERE user_id = ?';
-  const params = [userId];
+async function findByBusiness(ownerUserId, businessId = null, includeInactive = false, date = null) {
+  let sql = `
+    SELECT 
+      t.*,
+      CASE 
+        WHEN ? IS NOT NULL THEN (
+          SELECT COUNT(*) 
+          FROM reservations r 
+          WHERE r.table_id = t.id 
+          AND r.reservation_date = ?
+          AND r.status = 'confirmed'
+          AND r.reservation_type = 'table'
+        )
+        ELSE 0
+      END as reservation_count,
+      CASE 
+        WHEN ? IS NOT NULL THEN (
+          SELECT GROUP_CONCAT(
+            CONCAT(r.reservation_time, ':', r.id, ':', COALESCE(r.customer_name, ''), ':', COALESCE(r.number_of_guests, ''))
+            ORDER BY r.reservation_time
+            SEPARATOR '|'
+          )
+          FROM reservations r 
+          WHERE r.table_id = t.id 
+          AND r.reservation_date = ?
+          AND r.status = 'confirmed'
+          AND r.reservation_type = 'table'
+        )
+        ELSE NULL
+      END as reservations_data
+    FROM tables t
+    WHERE t.owner_user_id = ?
+  `;
+  const params = [date, date, date, date, ownerUserId];
   
-  if (!includeReserved) {
-    sql += ' AND reserved = false';
+  if (businessId) {
+    sql += ' AND t.business_id = ?';
+    params.push(businessId);
   }
   
-  sql += ' ORDER BY number ASC';
+  if (!includeInactive) {
+    sql += ' AND t.is_active = true';
+  }
+  
+  sql += ' ORDER BY t.table_number ASC';
+  
+  const tables = await queryMySQL(sql, params);
+  
+  // Parse reservations data into structured format
+  return tables.map(table => {
+    const result = { ...table };
+    
+    if (table.reservations_data) {
+      const reservations = table.reservations_data.split('|').map(resStr => {
+        const [time, id, customerName, numberOfGuests] = resStr.split(':');
+        return {
+          id,
+          time,
+          customerName: customerName || null,
+          numberOfGuests: numberOfGuests ? parseInt(numberOfGuests) : null
+        };
+      });
+      result.reservations = reservations;
+      result.isReserved = reservations.length > 0;
+    } else {
+      result.reservations = [];
+      result.isReserved = false;
+    }
+    
+    // Remove raw reservations_data field
+    delete result.reservations_data;
+    
+    return result;
+  });
+}
+
+/**
+ * Find available tables (active and not reserved at specific slot)
+ * @param {string} ownerUserId - Owner user ID
+ * @param {Date} date - Optional date to check availability
+ * @param {string} time - Optional time to check availability
+ */
+async function findAvailable(ownerUserId, date = null, time = null) {
+  let sql = `
+    SELECT t.* 
+    FROM tables t
+    WHERE t.owner_user_id = ? 
+    AND t.is_active = true
+  `;
+  const params = [ownerUserId];
+  
+  // If date and time provided, exclude tables with confirmed reservations at that slot
+  if (date && time) {
+    sql += `
+      AND t.id NOT IN (
+        SELECT r.table_id 
+        FROM reservations r 
+        WHERE r.table_id IS NOT NULL
+        AND r.reservation_date = ?
+        AND r.reservation_time = ?
+        AND r.status = 'confirmed'
+        AND r.reservation_type = 'table'
+      )
+    `;
+    params.push(date, time);
+  }
+  
+  sql += ' ORDER BY t.table_number ASC';
   
   return await queryMySQL(sql, params);
 }
 
 /**
- * Find available tables (not reserved)
+ * Find available tables for a specific slot (excludes tables with confirmed reservations)
+ * @param {string} ownerUserId - Owner user ID
+ * @param {string} date - Reservation date (YYYY-MM-DD)
+ * @param {string} time - Reservation time (HH:MM)
+ * @param {number} numberOfGuests - Optional number of guests (filters by min_seats <= guests <= max_seats)
+ * @param {string} positionPreference - Optional position preference (matches position_label)
  */
-async function findAvailable(userId) {
-  return await queryMySQL(
-    'SELECT * FROM tables WHERE user_id = ? AND reserved = false ORDER BY number ASC',
-    [userId]
-  );
+async function findAvailableForSlot(ownerUserId, date, time, numberOfGuests = null, positionPreference = null) {
+  let sql = `
+    SELECT t.* 
+    FROM tables t
+    WHERE t.owner_user_id = ? 
+    AND t.is_active = true
+    AND t.id NOT IN (
+      SELECT r.table_id 
+      FROM reservations r 
+      WHERE r.table_id IS NOT NULL
+      AND r.reservation_date = ?
+      AND r.reservation_time = ?
+      AND r.status = 'confirmed'
+      AND r.reservation_type = 'table'
+    )
+  `;
+  const params = [ownerUserId, date, time];
+  
+  // Filter by guest count if provided
+  if (numberOfGuests) {
+    sql += ' AND t.min_seats <= ? AND t.max_seats >= ?';
+    params.push(numberOfGuests, numberOfGuests);
+  }
+  
+  // Filter by position preference if provided
+  if (positionPreference) {
+    sql += ' AND LOWER(t.position_label) LIKE ?';
+    params.push(`%${positionPreference.toLowerCase()}%`);
+  }
+  
+  sql += ' ORDER BY t.table_number ASC';
+  
+  return await queryMySQL(sql, params);
 }
 
 /**
  * Create table
+ * @param {Object} tableData - Table data
+ * @param {string} tableData.businessId - Business ID
+ * @param {string} tableData.ownerUserId - Owner user ID (branch or business user)
+ * @param {string} tableData.tableNumber - Table number
+ * @param {number} tableData.minSeats - Minimum seats
+ * @param {number} tableData.maxSeats - Maximum seats
+ * @param {string} tableData.positionLabel - Optional position label
+ * @param {string} tableData.positionNotes - Optional position notes
+ * @param {boolean} tableData.isActive - Active status (default: true)
  */
 async function create(tableData) {
   const tableId = generateUUID();
   
+  // Support both old and new field names for backward compatibility
+  const businessId = tableData.businessId || tableData.business_id;
+  const ownerUserId = tableData.ownerUserId || tableData.owner_user_id || tableData.userId;
+  const tableNumber = tableData.tableNumber || tableData.table_number || tableData.number;
+  const minSeats = tableData.minSeats || tableData.min_seats || tableData.seats || 1;
+  const maxSeats = tableData.maxSeats || tableData.max_seats || tableData.seats || 1;
+  const positionLabel = tableData.positionLabel || tableData.position_label || tableData.label || null;
+  const positionNotes = tableData.positionNotes || tableData.position_notes || null;
+  const isActive = tableData.isActive !== undefined ? tableData.isActive : (tableData.is_active !== undefined ? tableData.is_active : true);
+  
+  // Get business_id from owner_user_id if not provided
+  let finalBusinessId = businessId;
+  if (!finalBusinessId && ownerUserId) {
+    const [users] = await queryMySQL(
+      'SELECT COALESCE(parent_user_id, id) as business_id FROM users WHERE id = ?',
+      [ownerUserId]
+    );
+    if (users && users.length > 0) {
+      finalBusinessId = users[0].business_id;
+    }
+  }
+  
   await queryMySQL(`
-    INSERT INTO tables (id, user_id, seats, number, reserved, is_active, label)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO tables (
+      id, business_id, owner_user_id, table_number, 
+      min_seats, max_seats, position_label, position_notes, 
+      is_active, user_id, seats, number, label
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     tableId,
-    tableData.userId,
-    tableData.seats,
-    tableData.number,
-    tableData.reserved !== undefined ? tableData.reserved : false,
-    tableData.isActive !== undefined ? tableData.isActive : true,
-    tableData.label || null
+    finalBusinessId,
+    ownerUserId,
+    tableNumber,
+    minSeats,
+    maxSeats,
+    positionLabel,
+    positionNotes,
+    isActive,
+    ownerUserId, // Keep user_id for backward compatibility
+    maxSeats, // Keep seats for backward compatibility (use max_seats)
+    tableNumber, // Keep number for backward compatibility
+    positionLabel // Keep label for backward compatibility
   ]);
   
   return await findById(tableId);
@@ -70,14 +255,27 @@ async function create(tableData) {
 
 /**
  * Update table
+ * @param {string} tableId - Table ID
+ * @param {string} ownerUserId - Owner user ID for validation
+ * @param {Object} updateData - Update data
  */
-async function update(tableId, userId, updateData) {
+async function update(tableId, ownerUserId, updateData) {
   const fieldMap = {
-    seats: 'seats',
-    number: 'number',
-    reserved: 'reserved',
+    tableNumber: 'table_number',
+    table_number: 'table_number',
+    number: 'table_number', // Backward compatibility
+    minSeats: 'min_seats',
+    min_seats: 'min_seats',
+    maxSeats: 'max_seats',
+    max_seats: 'max_seats',
+    seats: 'max_seats', // Backward compatibility - update max_seats
+    positionLabel: 'position_label',
+    position_label: 'position_label',
+    label: 'position_label', // Backward compatibility
+    positionNotes: 'position_notes',
+    position_notes: 'position_notes',
     isActive: 'is_active',
-    label: 'label'
+    is_active: 'is_active'
   };
   
   const updates = [];
@@ -91,46 +289,73 @@ async function update(tableId, userId, updateData) {
     }
   }
   
-  if (updates.length === 0) {
-    return await findById(tableId, userId);
+  // If updating seats (old field), also update max_seats
+  if (updateData.seats !== undefined && !updateData.maxSeats && !updateData.max_seats) {
+    updates.push('max_seats = ?');
+    values.push(updateData.seats);
+    // Also update min_seats if not explicitly set
+    if (!updateData.minSeats && !updateData.min_seats) {
+      updates.push('min_seats = ?');
+      values.push(updateData.seats);
+    }
   }
   
-  values.push(tableId, userId);
+  // If updating number (old field), also update table_number
+  if (updateData.number !== undefined && !updateData.tableNumber && !updateData.table_number) {
+    updates.push('table_number = ?');
+    values.push(updateData.number);
+  }
+  
+  // If updating label (old field), also update position_label
+  if (updateData.label !== undefined && !updateData.positionLabel && !updateData.position_label) {
+    updates.push('position_label = ?');
+    values.push(updateData.label);
+  }
+  
+  if (updates.length === 0) {
+    return await findById(tableId, ownerUserId);
+  }
+  
+  values.push(tableId, ownerUserId);
   
   await queryMySQL(
-    `UPDATE tables SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`,
+    `UPDATE tables SET ${updates.join(', ')} WHERE id = ? AND owner_user_id = ?`,
     values
   );
   
-  return await findById(tableId, userId);
+  return await findById(tableId, ownerUserId);
 }
 
 /**
- * Update reserved status
+ * Update reserved status (DEPRECATED - use reservation-based logic)
+ * Kept for backward compatibility but does nothing
  */
 async function updateReservedStatus(tableId, userId, reserved) {
-  await queryMySQL(
-    'UPDATE tables SET reserved = ? WHERE id = ? AND user_id = ?',
-    [reserved, tableId, userId]
-  );
-  
+  // Deprecated - reserved status is now derived from reservations
+  // Keep method for backward compatibility but it's a no-op
   return await findById(tableId, userId);
 }
 
 /**
- * Delete table
+ * Delete table (soft delete by setting is_active = false)
+ * @param {string} tableId - Table ID
+ * @param {string} ownerUserId - Owner user ID for validation
  */
-async function deleteTable(tableId, userId) {
+async function deleteTable(tableId, ownerUserId) {
+  // Soft delete by setting is_active = false
   await queryMySQL(
-    'DELETE FROM tables WHERE id = ? AND user_id = ?',
-    [tableId, userId]
+    'UPDATE tables SET is_active = false WHERE id = ? AND owner_user_id = ?',
+    [tableId, ownerUserId]
   );
+  
+  return await findById(tableId, ownerUserId);
 }
 
 module.exports = {
   findById,
   findByBusiness,
   findAvailable,
+  findAvailableForSlot,
   create,
   update,
   updateReservedStatus,

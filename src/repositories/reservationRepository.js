@@ -27,6 +27,11 @@ async function findByBusiness(businessUserId, filters = {}) {
   let sql = 'SELECT * FROM reservations WHERE business_user_id = ?';
   const params = [businessUserId];
   
+  if (filters.ownerUserId) {
+    sql += ' AND owner_user_id = ?';
+    params.push(filters.ownerUserId);
+  }
+  
   if (filters.status) {
     sql += ' AND status = ?';
     params.push(filters.status);
@@ -55,6 +60,16 @@ async function findByBusiness(businessUserId, filters = {}) {
   if (filters.reservationKind) {
     sql += ' AND reservation_kind = ?';
     params.push(filters.reservationKind);
+  }
+  
+  if (filters.reservationType) {
+    sql += ' AND reservation_type = ?';
+    params.push(filters.reservationType);
+  }
+  
+  if (filters.type) {
+    sql += ' AND reservation_type = ?';
+    params.push(filters.type);
   }
   
   if (filters.from) {
@@ -106,7 +121,37 @@ async function findByTable(tableId, date = null) {
 }
 
 /**
+ * Find reservation by table, date, and time (for double-booking check)
+ * @param {string} tableId - Table ID
+ * @param {string} date - Reservation date (YYYY-MM-DD)
+ * @param {string} time - Reservation time (HH:MM)
+ * @param {string} excludeReservationId - Optional reservation ID to exclude from check
+ */
+async function findByTableAndDateTime(tableId, date, time, excludeReservationId = null) {
+  let sql = `
+    SELECT * FROM reservations 
+    WHERE table_id = ? 
+    AND reservation_date = ? 
+    AND reservation_time = ?
+    AND status = 'confirmed'
+    AND reservation_type = 'table'
+  `;
+  const params = [tableId, date, time];
+  
+  if (excludeReservationId) {
+    sql += ' AND id != ?';
+    params.push(excludeReservationId);
+  }
+  
+  sql += ' LIMIT 1';
+  
+  const reservations = await queryMySQL(sql, params);
+  return reservations[0] || null;
+}
+
+/**
  * Create reservation
+ * @param {Object} reservationData - Reservation data
  */
 async function create(reservationData) {
   const reservationId = generateUUID();
@@ -117,17 +162,58 @@ async function create(reservationData) {
     startAt = `${reservationData.reservationDate} ${reservationData.reservationTime}`;
   }
   
+  // Determine owner_user_id
+  const ownerUserId = reservationData.ownerUserId || reservationData.userId || reservationData.businessUserId;
+  
+  // Determine reservation_type
+  const reservationType = reservationData.reservationType || 
+                          (reservationData.reservationKind === 'appointment' ? 'appointment' : 
+                           reservationData.reservationKind === 'table' ? 'table' : 'table');
+  
+  // Determine platform from source
+  const platform = reservationData.platform || reservationData.source || 'whatsapp';
+  
+  // Snapshot table details if table_id is provided
+  let minSeatsSnapshot = reservationData.minSeatsSnapshot || reservationData.min_seats_snapshot || null;
+  let maxSeatsSnapshot = reservationData.maxSeatsSnapshot || reservationData.max_seats_snapshot || null;
+  let positionSnapshot = reservationData.positionSnapshot || reservationData.position_snapshot || null;
+  
+  if (reservationData.tableId && (!minSeatsSnapshot || !maxSeatsSnapshot)) {
+    const tableRepo = require('./tableRepository');
+    const table = await tableRepo.findById(reservationData.tableId);
+    if (table) {
+      minSeatsSnapshot = minSeatsSnapshot || table.min_seats || table.seats;
+      maxSeatsSnapshot = maxSeatsSnapshot || table.max_seats || table.seats;
+      positionSnapshot = positionSnapshot || table.position_label || table.label;
+    }
+  }
+  
+  // Prevent double-booking: check for existing confirmed reservation at same table/date/time
+  if (reservationData.tableId && reservationData.reservationDate && reservationData.reservationTime) {
+    const existing = await findByTableAndDateTime(
+      reservationData.tableId,
+      reservationData.reservationDate,
+      reservationData.reservationTime
+    );
+    
+    if (existing) {
+      throw new Error('Table is already reserved at this date and time');
+    }
+  }
+  
   await queryMySQL(`
     INSERT INTO reservations (
-      id, user_id, business_user_id, table_id, item_id,
+      id, user_id, business_user_id, owner_user_id, table_id, item_id,
       customer_phone_number, customer_name,
       reservation_date, reservation_time, number_of_guests, notes, status,
-      reservation_kind, start_at, source
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      reservation_kind, reservation_type, start_at, source, platform,
+      min_seats_snapshot, max_seats_snapshot, position_snapshot
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     reservationId,
     reservationData.userId || null,
     reservationData.businessUserId,
+    ownerUserId,
     reservationData.tableId || null,
     reservationData.itemId || null,
     reservationData.customerPhoneNumber,
@@ -138,15 +224,14 @@ async function create(reservationData) {
     reservationData.notes || null,
     reservationData.status || 'confirmed',
     reservationData.reservationKind || 'table',
+    reservationType,
     startAt || null,
-    reservationData.source || 'whatsapp'
+    reservationData.source || 'whatsapp',
+    platform,
+    minSeatsSnapshot,
+    maxSeatsSnapshot,
+    positionSnapshot
   ]);
-  
-  // If table is assigned, mark it as reserved
-  if (reservationData.tableId) {
-    const tableRepo = require('./tableRepository');
-    await tableRepo.updateReservedStatus(reservationData.tableId, reservationData.businessUserId, true);
-  }
   
   return await findById(reservationId);
 }
@@ -166,8 +251,11 @@ async function update(reservationId, businessUserId, updateData) {
     notes: 'notes',
     status: 'status',
     reservationKind: 'reservation_kind',
+    reservationType: 'reservation_type',
     startAt: 'start_at',
-    source: 'source'
+    source: 'source',
+    platform: 'platform',
+    ownerUserId: 'owner_user_id'
   };
   
   const connection = await getMySQLConnection();
@@ -179,6 +267,21 @@ async function update(reservationId, businessUserId, updateData) {
     const current = await findById(reservationId, businessUserId);
     if (!current) {
       throw new Error('Reservation not found');
+    }
+    
+    // Prevent double-booking if updating table/date/time
+    if ((updateData.tableId || updateData.reservationDate || updateData.reservationTime) && 
+        reservationId && current.reservation_type === 'table') {
+      const checkTableId = updateData.tableId || current.table_id;
+      const checkDate = updateData.reservationDate || current.reservation_date;
+      const checkTime = updateData.reservationTime || current.reservation_time;
+      
+      if (checkTableId && checkDate && checkTime) {
+        const existing = await findByTableAndDateTime(checkTableId, checkDate, checkTime, reservationId);
+        if (existing) {
+          throw new Error('Table is already reserved at this date and time');
+        }
+      }
     }
     
     const updates = [];
@@ -207,6 +310,15 @@ async function update(reservationId, businessUserId, updateData) {
       }
     }
     
+    // Handle status changes - set timestamps
+    if (updateData.status === 'completed' && current.status !== 'completed') {
+      updates.push('completed_at = NOW()');
+    }
+    
+    if (updateData.status === 'cancelled' && current.status !== 'cancelled') {
+      updates.push('cancelled_at = NOW()');
+    }
+    
     if (updates.length > 0) {
       values.push(reservationId, businessUserId);
       
@@ -214,29 +326,6 @@ async function update(reservationId, businessUserId, updateData) {
         `UPDATE reservations SET ${updates.join(', ')} WHERE id = ? AND business_user_id = ?`,
         values
       );
-    }
-    
-    // Handle table reservation status
-    if (updateData.tableId !== undefined) {
-      const tableRepo = require('./tableRepository');
-      
-      // Release old table if changed
-      if (current.table_id && current.table_id !== updateData.tableId) {
-        await tableRepo.updateReservedStatus(current.table_id, businessUserId, false);
-      }
-      
-      // Reserve new table if assigned
-      if (updateData.tableId && updateData.tableId !== current.table_id) {
-        await tableRepo.updateReservedStatus(updateData.tableId, businessUserId, true);
-      }
-    }
-    
-    // Handle status changes
-    if (updateData.status === 'cancelled' || updateData.status === 'completed') {
-      if (current.table_id) {
-        const tableRepo = require('./tableRepository');
-        await tableRepo.updateReservedStatus(current.table_id, businessUserId, false);
-      }
     }
     
     await connection.commit();
@@ -252,9 +341,21 @@ async function update(reservationId, businessUserId, updateData) {
 
 /**
  * Update reservation status
+ * @param {string} reservationId - Reservation ID
+ * @param {string} businessUserId - Business user ID
+ * @param {string} status - New status ('confirmed', 'cancelled', 'completed', 'no_show')
  */
 async function updateStatus(reservationId, businessUserId, status) {
-  return await update(reservationId, businessUserId, { status });
+  const updateData = { status };
+  
+  // Set appropriate timestamps based on status
+  if (status === 'completed') {
+    updateData.completed_at = new Date();
+  } else if (status === 'cancelled') {
+    updateData.cancelled_at = new Date();
+  }
+  
+  return await update(reservationId, businessUserId, updateData);
 }
 
 /**
@@ -293,6 +394,7 @@ module.exports = {
   findByBusiness,
   findByDate,
   findByTable,
+  findByTableAndDateTime,
   create,
   update,
   updateStatus,

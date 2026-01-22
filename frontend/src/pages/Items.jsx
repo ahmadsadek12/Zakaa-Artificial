@@ -41,8 +41,15 @@ export default function Items() {
     imagePreview: null
   })
   const [submitting, setSubmitting] = useState(false)
+  const [activeTab, setActiveTab] = useState('good') // For non-F&B businesses: 'good' or 'service'
 
   const businessType = user?.business_type || 'f & b'
+  const isFoodAndBeverage = businessType === 'f & b' || 
+                            businessType === 'food and beverage' || 
+                            businessType === 'f&b' ||
+                            businessType?.toLowerCase() === 'food and beverage' ||
+                            businessType?.toLowerCase() === 'f & b' ||
+                            businessType?.toLowerCase() === 'f&b'
 
   useEffect(() => {
     fetchCategories()
@@ -103,22 +110,39 @@ export default function Items() {
       const formDataToSend = new FormData()
       formDataToSend.append('name', formData.name)
       if (formData.description) formDataToSend.append('description', formData.description)
-      if (formData.ingredients) formDataToSend.append('ingredients', formData.ingredients)
+      
+      // For F&B: ingredients is required
+      // For others: ingredients not sent
+      if (isFoodAndBeverage) {
+        formDataToSend.append('ingredients', formData.ingredients || '')
+      }
+      
       formDataToSend.append('price', formData.price)
       if (formData.cost) formDataToSend.append('cost', formData.cost)
       
-      // Reservation Time Limit (for all business types)
-      if (formData.durationMinutes) {
+      // Determine itemType and isReusable based on business type and active tab
+      let finalItemType = formData.itemType
+      let finalIsReusable = formData.isReusable
+      
+      if (!isFoodAndBeverage) {
+        // For non-F&B, use activeTab to determine itemType
+        finalItemType = activeTab
+        // Goods: never reusable, Services: always reusable
+        finalIsReusable = activeTab === 'service'
+      }
+      
+      formDataToSend.append('itemType', finalItemType)
+      formDataToSend.append('isReusable', finalIsReusable ? 'true' : 'false')
+      
+      // Reservation Time Limit (only for services in non-F&B businesses)
+      if (!isFoodAndBeverage && activeTab === 'service' && formData.durationMinutes) {
         formDataToSend.append('durationMinutes', formData.durationMinutes)
       }
       
-      // Quantity field (for all business types) - always send it to allow clearing (empty = unlimited)
+      // Quantity field - always send it to allow clearing (empty = unlimited)
       formDataToSend.append('quantity', formData.quantity || '')
-      // FormData converts boolean to string, so we explicitly convert to string
-      formDataToSend.append('isReusable', formData.isReusable ? 'true' : 'false')
       
-      // Scheduling fields (for all businesses)
-      formDataToSend.append('itemType', formData.itemType)
+      // Scheduling fields
       formDataToSend.append('isSchedulable', formData.isSchedulable ? 'true' : 'false')
       formDataToSend.append('minScheduleHours', formData.minScheduleHours.toString())
       
@@ -189,6 +213,13 @@ export default function Items() {
 
   const handleEdit = (item) => {
     setEditingItem(item)
+    const itemType = item.item_type || 'good'
+    
+    // Set active tab based on item type for non-F&B businesses
+    if (!isFoodAndBeverage) {
+      setActiveTab(itemType === 'service' ? 'service' : 'good')
+    }
+    
     setFormData({
       name: item.name || '',
       description: item.description || '',
@@ -197,8 +228,8 @@ export default function Items() {
       cost: item.cost || '',
       durationMinutes: item.duration_minutes || '',
       quantity: item.quantity || '',
-      isReusable: item.is_reusable !== undefined ? item.is_reusable : true,
-      itemType: item.item_type || 'good',
+      isReusable: item.is_reusable !== undefined ? item.is_reusable : (itemType === 'service' ? true : false),
+      itemType: itemType,
       isSchedulable: item.is_schedulable !== undefined ? item.is_schedulable : false,
       minScheduleHours: item.min_schedule_hours !== undefined ? item.min_schedule_hours : 0,
       availableFrom: item.available_from || '',
@@ -224,6 +255,7 @@ export default function Items() {
 
   const resetForm = () => {
     setEditingItem(null)
+    setActiveTab('good') // Reset to good tab for non-F&B businesses
     setFormData({
       name: '',
       description: '',
@@ -496,7 +528,43 @@ export default function Items() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Basic Info */}
+              {/* Tabs for non-F&B businesses */}
+              {!isFoodAndBeverage && (
+                <div className="border-b border-gray-200 mb-4">
+                  <div className="flex gap-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('good')
+                        setFormData({ ...formData, itemType: 'good', isReusable: false })
+                      }}
+                      className={`px-4 py-2 font-medium transition-colors ${
+                        activeTab === 'good'
+                          ? 'border-b-2 border-primary-600 text-primary-600'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Good
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('service')
+                        setFormData({ ...formData, itemType: 'service', isReusable: true })
+                      }}
+                      className={`px-4 py-2 font-medium transition-colors ${
+                        activeTab === 'service'
+                          ? 'border-b-2 border-primary-600 text-primary-600'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Service
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Basic Information */}
               <div className="border-b border-gray-200 pb-4">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h3>
                 <div className="space-y-4">
@@ -533,16 +601,22 @@ export default function Items() {
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     />
                   </div>
-                  <div>
-                    <label className="label">Ingredients</label>
-                    <textarea
-                      className="input"
-                      rows={2}
-                      value={formData.ingredients}
-                      onChange={(e) => setFormData({ ...formData, ingredients: e.target.value })}
-                      placeholder="Comma-separated or one per line"
-                    />
-                  </div>
+                  
+                  {/* Ingredients - Only for F&B */}
+                  {isFoodAndBeverage && (
+                    <div>
+                      <label className="label">Ingredients *</label>
+                      <textarea
+                        className="input"
+                        rows={2}
+                        value={formData.ingredients}
+                        onChange={(e) => setFormData({ ...formData, ingredients: e.target.value })}
+                        placeholder="Comma-separated or one per line"
+                        required
+                      />
+                    </div>
+                  )}
+                  
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="label">Price *</label>
@@ -571,75 +645,53 @@ export default function Items() {
                 </div>
               </div>
 
-              {/* Reservation Time Limit */}
-              <div className="border-b border-gray-200 pb-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Reservation Settings</h3>
-                <div>
-                  <label className="label">Reservation Time Limit (minutes)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    className="input"
-                    value={formData.durationMinutes}
-                    onChange={(e) => setFormData({ ...formData, durationMinutes: e.target.value })}
-                    placeholder="e.g., 60 (how long the reservation lasts)"
-                  />
-                  <p className="text-sm text-gray-500 mt-1">
-                    Maximum duration for this reservation (e.g., 60 = 1 hour, 90 = 1.5 hours)
-                  </p>
-                </div>
-              </div>
-
-              {/* Quantity (for all business types) */}
-              <div className="border-b border-gray-200 pb-4">
-                <div className="space-y-4">
+              {/* Reservation Time Limit - Only for Services in non-F&B */}
+              {!isFoodAndBeverage && activeTab === 'service' && (
+                <div className="border-b border-gray-200 pb-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Reservation Settings</h3>
                   <div>
-                    <label className="label">Quantity (Optional)</label>
+                    <label className="label">Reservation Time Limit (minutes)</label>
                     <input
                       type="number"
                       min="1"
                       className="input"
-                      placeholder="Leave empty for unlimited"
+                      value={formData.durationMinutes}
+                      onChange={(e) => setFormData({ ...formData, durationMinutes: e.target.value })}
+                      placeholder="e.g., 60 (how long the reservation lasts)"
+                    />
+                    <p className="text-sm text-gray-500 mt-1">
+                      Maximum duration for this reservation (e.g., 60 = 1 hour, 90 = 1.5 hours)
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Quantity - For Goods (non-F&B) and Services (non-F&B) */}
+              {!isFoodAndBeverage && (
+                <div className="border-b border-gray-200 pb-4">
+                  <div>
+                    <label className="label">Quantity {activeTab === 'good' ? '(Optional)' : '(Max Simultaneous Bookings)'}</label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="input"
+                      placeholder={activeTab === 'good' ? 'Leave empty for unlimited' : 'e.g., 4 (max 4 bookings at same time)'}
                       value={formData.quantity}
                       onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
                     />
                     <p className="text-sm text-gray-500 mt-1">
-                      1 = single instance, &gt;1 = multiple instances, empty = unlimited
+                      {activeTab === 'good' 
+                        ? '1 = single instance, >1 = multiple instances, empty = unlimited. Quantity decreases when orders are completed.'
+                        : 'Maximum number of simultaneous bookings. If all slots are in use, new bookings will be blocked until one completes.'}
                     </p>
                   </div>
-                  <div>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.isReusable}
-                        onChange={(e) => setFormData({ ...formData, isReusable: e.target.checked })}
-                        className="rounded"
-                      />
-                      <span className="text-sm">Is Reusable</span>
-                    </label>
-                    <p className="text-sm text-gray-500 mt-1">
-                        Reusable items (like football fields) become available again after reservation ends. Consumable items (like toys) are permanently used.
-                      </p>
-                    </div>
-                  </div>
                 </div>
+              )}
 
-              {/* Item Type & Scheduling */}
+              {/* Only Scheduled - For all business types */}
               <div className="border-b border-gray-200 pb-4">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Scheduling Options</h3>
                 <div className="space-y-4">
-                  <div>
-                    <label className="label">Item Type</label>
-                    <select
-                      className="input"
-                      value={formData.itemType}
-                      onChange={(e) => setFormData({ ...formData, itemType: e.target.value })}
-                    >
-                      <option value="good">Good (Physical Product)</option>
-                      <option value="service">Service</option>
-                    </select>
-                  </div>
-                  
                   <div>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
@@ -741,7 +793,7 @@ export default function Items() {
 
               {/* Availability Status */}
               <div className="pb-4">
-                <label className="label">Availability Status</label>
+                <label className="label">Item Status</label>
                 <select
                   className="input"
                   value={formData.availability}

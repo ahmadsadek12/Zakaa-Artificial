@@ -10,6 +10,7 @@ const { startArchiveJob } = require('./src/jobs/archiveJob');
 const { startCartCleanupJob } = require('./src/jobs/cartCleanupJob');
 const cartTimeoutJob = require('./src/jobs/cartTimeoutJob');
 const { startScheduledRequestCompletionJob } = require('./src/jobs/scheduledRequestCompletionJob');
+const { startReservationAutoCompleteJob } = require('./src/jobs/reservationAutoCompleteJob');
 
 const PORT = CONSTANTS.PORT;
 
@@ -48,6 +49,10 @@ async function startServer() {
       // Start scheduled request completion job
       startScheduledRequestCompletionJob();
       logger.info('Scheduled request completion job started');
+      
+      // Start reservation auto-complete job
+      startReservationAutoCompleteJob();
+      logger.info('Reservation auto-complete job started');
     });
   } catch (error) {
     logger.error('Failed to start server:', error);

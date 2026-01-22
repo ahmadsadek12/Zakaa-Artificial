@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import { ShoppingCart, Store, Package, TrendingUp, Clock, CheckCircle, X, User, Phone, Calendar, MapPin, CreditCard, FileText } from 'lucide-react'
+import { ShoppingCart, Store, Package, TrendingUp, Clock, CheckCircle, X, User, Phone, Calendar, MapPin, CreditCard, FileText, MessageSquare, Zap } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import { useAuth } from '../contexts/AuthContext'
@@ -16,6 +16,8 @@ export default function Dashboard() {
     branches: 0,
     items: 0,
     revenue: 0,
+    requestsHandled: 0,
+    averageResponseTimeSeconds: 0,
   })
   const [upcomingOrders, setUpcomingOrders] = useState([])
   const [loading, setLoading] = useState(true)
@@ -67,6 +69,8 @@ export default function Dashboard() {
         branches: branches.length,
         items: items.length,
         revenue: orders.totalRevenue || 0,
+        requestsHandled: orders.requestsHandled || 0,
+        averageResponseTimeSeconds: orders.averageResponseTimeSeconds || 0,
       })
       setUpcomingOrders(upcoming)
     } catch (error) {
@@ -114,6 +118,22 @@ export default function Dashboard() {
       icon: Package,
       color: 'text-indigo-600 bg-indigo-50',
       link: '/items',
+    },
+    {
+      title: 'Requests Handled',
+      value: stats.requestsHandled.toLocaleString(),
+      icon: MessageSquare,
+      color: 'text-cyan-600 bg-cyan-50',
+      link: null, // No link for this card
+    },
+    {
+      title: 'Avg Response Time',
+      value: stats.averageResponseTimeSeconds > 0 
+        ? `${stats.averageResponseTimeSeconds}s` 
+        : 'N/A',
+      icon: Zap,
+      color: 'text-orange-600 bg-orange-50',
+      link: null, // No link for this card
     },
   ]
 
@@ -183,11 +203,14 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {statCards.map((stat) => {
           const Icon = stat.icon
+          const CardWrapper = stat.link ? Link : 'div'
+          const cardProps = stat.link ? { to: stat.link } : {}
+          
           return (
-            <Link
+            <CardWrapper
               key={stat.title}
-              to={stat.link}
-              className="card hover:shadow-md transition-shadow cursor-pointer p-4"
+              {...cardProps}
+              className={`card ${stat.link ? 'hover:shadow-md transition-shadow cursor-pointer' : ''} p-4`}
             >
               <div className="flex flex-col items-center text-center space-y-2">
                 <div className={`p-3 rounded-lg ${stat.color}`}>
@@ -198,7 +221,7 @@ export default function Dashboard() {
                   <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
                 </div>
               </div>
-            </Link>
+            </CardWrapper>
           )
         })}
       </div>

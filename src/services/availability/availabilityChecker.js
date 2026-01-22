@@ -16,7 +16,7 @@ async function checkAvailability(itemId, bookingDate, startTime, durationMinutes
   try {
     // Get item details
     const items = await queryMySQL(
-      'SELECT quantity, track_quantity, is_rental, business_id, user_id FROM items WHERE id = ? AND deleted_at IS NULL',
+      'SELECT quantity, track_quantity, is_rental, item_type, is_reusable, business_id, user_id FROM items WHERE id = ? AND deleted_at IS NULL',
       [itemId]
     );
     
@@ -28,6 +28,40 @@ async function checkAvailability(itemId, bookingDate, startTime, durationMinutes
     }
     
     const item = items[0];
+    
+    // For services with quantity limits, check active bookings
+    if (item.item_type === 'service' && item.is_reusable && item.quantity !== null && item.quantity !== undefined) {
+      // Count active bookings (accepted or ongoing) for the same item at the same date/time
+      // For services, we check bookings at the exact same scheduled time
+      const [activeBookings] = await queryMySQL(`
+        SELECT COUNT(*) as active_count
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+        WHERE oi.item_id = ?
+        AND o.status IN ('accepted', 'ongoing')
+        AND o.scheduled_for IS NOT NULL
+        AND DATE(o.scheduled_for) = ?
+        AND TIME(o.scheduled_for) = ?
+      `, [itemId, bookingDate, startTime]);
+      
+      const activeCount = activeBookings[0]?.active_count || 0;
+      
+      if (activeCount >= item.quantity) {
+        return {
+          available: false,
+          reason: `All ${item.quantity} service slot(s) are currently in use. Please choose a different time.`,
+          conflictingBookings: activeCount,
+          totalQuantity: item.quantity
+        };
+      }
+      
+      return {
+        available: true,
+        reason: `${item.quantity - activeCount} of ${item.quantity} service slot(s) available`,
+        availableQuantity: item.quantity - activeCount,
+        totalQuantity: item.quantity
+      };
+    }
     
     // If not a rental item, always available
     if (!item.is_rental) {

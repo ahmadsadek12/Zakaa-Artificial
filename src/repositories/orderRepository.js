@@ -286,6 +286,28 @@ async function updateStatus(orderId, businessId, status, changedBy = 'system', a
           UPDATE items SET times_delivered = times_delivered + ? WHERE id = ?
         `, [orderItem.quantity, orderItem.item_id]);
       }
+      
+      // Decrement quantity for goods (non-reusable items) when order completes
+      const [goodsItems] = await connection.query(`
+        SELECT oi.item_id, oi.quantity, i.item_type, i.is_reusable, i.quantity as item_quantity
+        FROM order_items oi
+        INNER JOIN items i ON oi.item_id = i.id
+        WHERE oi.order_id = ? 
+        AND i.item_type = 'good' 
+        AND (i.is_reusable = false OR i.is_reusable = 0)
+        AND i.quantity IS NOT NULL
+      `, [orderId]);
+      
+      for (const goodItem of goodsItems) {
+        const newQuantity = Math.max(0, (goodItem.item_quantity || 0) - goodItem.quantity);
+        await connection.query(`
+          UPDATE items 
+          SET quantity = ?, 
+              availability = CASE WHEN ? <= 0 THEN 'out_of_stock' ELSE availability END,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `, [newQuantity, newQuantity, goodItem.item_id]);
+      }
     }
     
     if (status === 'cancelled') {

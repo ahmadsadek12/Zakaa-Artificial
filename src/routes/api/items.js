@@ -199,6 +199,32 @@ router.post('/', upload.single('itemImage'), handleMulterError, [
   body('daysAvailable.*').optional().isIn(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']).withMessage('Invalid day name'),
   body('ingredients').optional().isString().withMessage('Ingredients must be a string')
 ], asyncHandler(async (req, res) => {
+  // Get business type for conditional validation
+  const { queryMySQL } = require('../../config/database');
+  const [businessUsers] = await queryMySQL(
+    'SELECT business_type FROM users WHERE id = ? AND user_type = ?',
+    [req.businessId, 'business']
+  );
+  const businessType = businessUsers && businessUsers.length > 0 
+    ? businessUsers[0].business_type?.toLowerCase() 
+    : null;
+  const isFoodAndBeverage = businessType === 'food and beverage' || 
+                            businessType === 'f & b' || 
+                            businessType === 'f&b';
+  
+  // Conditional validation: ingredients required for F&B businesses
+  if (isFoodAndBeverage && (!req.body.ingredients || req.body.ingredients.trim() === '')) {
+    return res.status(400).json({
+      success: false,
+      error: { 
+        message: 'Validation failed', 
+        errors: [{ 
+          path: 'ingredients', 
+          msg: 'Ingredients are required for Food & Beverage businesses' 
+        }] 
+      }
+    });
+  }
   // Parse daysAvailable from JSON string if it's a string (FormData sends it as JSON string)
   if (req.body.daysAvailable && typeof req.body.daysAvailable === 'string') {
     try {
@@ -294,7 +320,7 @@ router.post('/', upload.single('itemImage'), handleMulterError, [
     preparationTimeMinutes: preparationTimeMinutes ? parseInt(preparationTimeMinutes) : null,
     durationMinutes: durationMinutes ? parseInt(durationMinutes) : null,
     quantity: quantity && quantity !== '' ? parseInt(quantity, 10) : null,
-    isReusable: isReusable !== undefined ? (isReusable === true || isReusable === 'true') : true,
+    isReusable: finalIsReusable !== undefined ? (finalIsReusable === true || finalIsReusable === 'true') : (itemType === 'service' ? true : false),
     availableFrom: availableFrom || null,
     availableTo: availableTo || null,
     daysAvailable: daysAvailable || null,
@@ -352,6 +378,19 @@ router.put('/:id', requireOwnership('items'), upload.single('itemImage'), handle
   body('ingredients').optional().isString().withMessage('Ingredients must be a string'),
   body('categoryId').optional().isUUID().withMessage('categoryId must be a valid UUID')
 ], asyncHandler(async (req, res) => {
+  // Get business type for conditional validation
+  const { queryMySQL } = require('../../config/database');
+  const [businessUsers] = await queryMySQL(
+    'SELECT business_type FROM users WHERE id = ? AND user_type = ?',
+    [req.businessId, 'business']
+  );
+  const businessType = businessUsers && businessUsers.length > 0 
+    ? businessUsers[0].business_type?.toLowerCase() 
+    : null;
+  const isFoodAndBeverage = businessType === 'food and beverage' || 
+                            businessType === 'f & b' || 
+                            businessType === 'f&b';
+  
   // Parse daysAvailable from JSON string if it's a string (FormData sends it as JSON string)
   if (req.body.daysAvailable && typeof req.body.daysAvailable === 'string') {
     try {
@@ -370,6 +409,20 @@ router.put('/:id', requireOwnership('items'), upload.single('itemImage'), handle
   // Parse isSchedulable from string to boolean if it's a string
   if (req.body.isSchedulable !== undefined && typeof req.body.isSchedulable === 'string') {
     req.body.isSchedulable = req.body.isSchedulable === 'true';
+  }
+  
+  // Conditional validation: ingredients required for F&B businesses
+  if (isFoodAndBeverage && req.body.ingredients !== undefined && (!req.body.ingredients || req.body.ingredients.trim() === '')) {
+    return res.status(400).json({
+      success: false,
+      error: { 
+        message: 'Validation failed', 
+        errors: [{ 
+          path: 'ingredients', 
+          msg: 'Ingredients are required for Food & Beverage businesses' 
+        }] 
+      }
+    });
   }
   
   const errors = validationResult(req);
@@ -404,8 +457,21 @@ router.put('/:id', requireOwnership('items'), upload.single('itemImage'), handle
     if (preparationTimeMinutes !== undefined) updateData.preparationTimeMinutes = preparationTimeMinutes ? parseInt(preparationTimeMinutes) : null;
     if (durationMinutes !== undefined) updateData.durationMinutes = durationMinutes ? parseInt(durationMinutes) : null;
     if (quantity !== undefined) updateData.quantity = quantity && quantity !== '' ? parseInt(quantity, 10) : null;
-    if (isReusable !== undefined) updateData.isReusable = isReusable === true || isReusable === 'true';
-    if (itemType !== undefined) updateData.itemType = itemType;
+    
+    // Auto-set isReusable based on itemType (override user-provided value)
+    if (itemType !== undefined) {
+      updateData.itemType = itemType;
+      // Auto-set isReusable: goods=false, services=true
+      if (itemType === 'good') {
+        updateData.isReusable = false;
+      } else if (itemType === 'service') {
+        updateData.isReusable = true;
+      } else if (isReusable !== undefined) {
+        updateData.isReusable = isReusable === true || isReusable === 'true';
+      }
+    } else if (isReusable !== undefined) {
+      updateData.isReusable = isReusable === true || isReusable === 'true';
+    }
     if (isSchedulable !== undefined) updateData.isSchedulable = isSchedulable === true || isSchedulable === 'true';
     if (minScheduleHours !== undefined) updateData.minScheduleHours = minScheduleHours ? parseInt(minScheduleHours, 10) : 0;
     if (availableFrom !== undefined) updateData.availableFrom = availableFrom;

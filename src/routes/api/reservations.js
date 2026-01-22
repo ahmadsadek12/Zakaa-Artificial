@@ -5,9 +5,11 @@ const express = require('express');
 const router = express.Router();
 const { body, param, query, validationResult } = require('express-validator');
 const reservationRepository = require('../../repositories/reservationRepository');
+const tableRepository = require('../../repositories/tableRepository');
 const { tenantIsolation } = require('../../middleware/tenant');
 const { authenticate } = require('../../middleware/auth');
 const { addonGuard } = require('../../middleware/addonGuard');
+const { queryMySQL } = require('../../config/database');
 
 /**
  * GET /api/reservations - List reservations
@@ -15,8 +17,10 @@ const { addonGuard } = require('../../middleware/addonGuard');
 router.get('/',
   authenticate,
   tenantIsolation,
-  addonGuard('reservations'),
-  query('status').optional().isIn(['confirmed', 'cancelled', 'completed']),
+  addonGuard('table_reservations'),
+  query('status').optional().isIn(['confirmed', 'cancelled', 'completed', 'no_show']),
+  query('type').optional().isIn(['table', 'appointment', 'other']),
+  query('ownerUserId').optional().isUUID(),
   query('reservationDate').optional().matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('reservationDate must be in YYYY-MM-DD format'),
   query('tableId').optional().isUUID(),
   query('startDate').optional().matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('startDate must be in YYYY-MM-DD format'),
@@ -30,6 +34,7 @@ router.get('/',
       }
       
       const businessUserId = req.isBranchUser ? req.userId : req.businessId;
+      const ownerUserId = req.query.ownerUserId || (req.isBranchUser ? req.userId : null);
       
       if (!businessUserId) {
         return res.status(400).json({ 
@@ -40,6 +45,9 @@ router.get('/',
       
       const filters = {
         status: req.query.status,
+        type: req.query.type,
+        reservationType: req.query.type,
+        ownerUserId: ownerUserId,
         reservationDate: req.query.reservationDate || undefined,
         tableId: req.query.tableId,
         startDate: req.query.startDate || undefined,
@@ -74,7 +82,7 @@ router.get('/',
 router.get('/by-date/:date',
   authenticate,
   tenantIsolation,
-  addonGuard('reservations'),
+  addonGuard('table_reservations'),
   param('date').matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('Date must be in YYYY-MM-DD format'),
   async (req, res) => {
     try {
@@ -108,18 +116,21 @@ router.get('/by-date/:date',
 router.post('/',
   authenticate,
   tenantIsolation,
-  addonGuard('reservations'),
+  addonGuard('table_reservations'),
   body('customerPhoneNumber').notEmpty().withMessage('Customer phone number is required'),
   body('customerName').notEmpty().withMessage('Customer name is required'),
   body('reservationDate').matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('Valid reservation date is required (YYYY-MM-DD format)'),
   body('reservationTime').matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Valid reservation time is required (HH:MM)'),
   body('numberOfGuests').optional().isInt({ min: 1 }),
   body('tableId').optional().isUUID(),
+  body('ownerUserId').optional().isUUID(),
   body('itemId').optional().isUUID(),
   body('status').optional().isIn(['confirmed', 'cancelled', 'completed']),
   body('reservation_kind').optional().isIn(['table', 'appointment']),
+  body('reservation_type').optional().isIn(['table', 'appointment', 'other']),
   body('start_at').optional().isISO8601().withMessage('start_at must be a valid ISO 8601 date'),
   body('source').optional().isIn(['whatsapp', 'telegram', 'instagram', 'facebook', 'dashboard']),
+  body('platform').optional().isIn(['whatsapp', 'telegram', 'instagram', 'facebook', 'dashboard']),
   async (req, res) => {
     try {
       const errors = validationResult(req);
@@ -128,9 +139,32 @@ router.post('/',
       }
       
       const businessUserId = req.isBranchUser ? req.userId : req.businessId;
+      const ownerUserId = req.body.ownerUserId || (req.isBranchUser ? req.userId : req.businessId);
+      const reservationType = req.body.reservation_type || req.body.reservation_kind || 'table';
+      
+      // Validate table exists and belongs to same owner_user_id and business_id if tableId provided
+      if (req.body.tableId) {
+        const table = await tableRepository.findById(req.body.tableId, ownerUserId, req.businessId);
+        if (!table) {
+          return res.status(404).json({
+            success: false,
+            error: { message: 'Table not found or does not belong to this business/branch' }
+          });
+        }
+        
+        if (!table.is_active) {
+          return res.status(400).json({
+            success: false,
+            error: { message: 'Table is not active' }
+          });
+        }
+      }
+      
+      // Double-booking prevention is handled in repository.create()
       
       const reservation = await reservationRepository.create({
         businessUserId,
+        ownerUserId,
         userId: req.body.userId || null,
         tableId: req.body.tableId || null,
         itemId: req.body.itemId || null,
@@ -142,8 +176,10 @@ router.post('/',
         notes: req.body.notes || null,
         status: req.body.status || 'confirmed',
         reservationKind: req.body.reservation_kind || 'table',
+        reservationType: reservationType,
         startAt: req.body.start_at || null,
-        source: req.body.source || 'dashboard'
+        source: req.body.source || 'dashboard',
+        platform: req.body.platform || req.body.source || 'dashboard'
       });
       
       res.status(201).json({
@@ -152,6 +188,15 @@ router.post('/',
       });
     } catch (error) {
       console.error('Error creating reservation:', error);
+      
+      // Handle double-booking error
+      if (error.message.includes('already reserved')) {
+        return res.status(409).json({
+          success: false,
+          error: { message: error.message }
+        });
+      }
+      
       res.status(500).json({
         success: false,
         error: { message: 'Failed to create reservation', details: error.message }
@@ -166,7 +211,7 @@ router.post('/',
 router.get('/:id',
   authenticate,
   tenantIsolation,
-  addonGuard('reservations'),
+  addonGuard('table_reservations'),
   param('id').isUUID().withMessage('Invalid reservation ID'),
   async (req, res) => {
     try {
@@ -205,7 +250,7 @@ router.get('/:id',
 router.put('/:id',
   authenticate,
   tenantIsolation,
-  addonGuard('reservations'),
+  addonGuard('table_reservations'),
   param('id').isUUID().withMessage('Invalid reservation ID'),
   body('customerPhoneNumber').optional().notEmpty(),
   body('customerName').optional().notEmpty(),
@@ -269,9 +314,9 @@ router.put('/:id',
 router.put('/:id/status',
   authenticate,
   tenantIsolation,
-  addonGuard('reservations'),
+  addonGuard('table_reservations'),
   param('id').isUUID().withMessage('Invalid reservation ID'),
-  body('status').isIn(['confirmed', 'cancelled', 'completed']).withMessage('Valid status is required'),
+  body('status').isIn(['confirmed', 'cancelled', 'completed', 'no_show']).withMessage('Valid status is required'),
   async (req, res) => {
     try {
       const errors = validationResult(req);
@@ -310,7 +355,7 @@ router.put('/:id/status',
 router.delete('/:id',
   authenticate,
   tenantIsolation,
-  addonGuard('reservations'),
+  addonGuard('table_reservations'),
   param('id').isUUID().withMessage('Invalid reservation ID'),
   async (req, res) => {
     try {
