@@ -24,12 +24,39 @@ async function findById(reservationId, businessUserId = null) {
  * Find reservations by business
  */
 async function findByBusiness(businessUserId, filters = {}) {
+  // Check which columns exist in reservations table
+  let hasOwnerUserId = false;
+  let hasStartAt = false;
+  let hasReservationType = false;
+  
+  try {
+    const tableColumns = await queryMySQL(`
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'reservations'
+      AND COLUMN_NAME IN ('owner_user_id', 'start_at', 'reservation_type')
+    `);
+    const columnNames = tableColumns.map(c => c.COLUMN_NAME);
+    hasOwnerUserId = columnNames.includes('owner_user_id');
+    hasStartAt = columnNames.includes('start_at');
+    hasReservationType = columnNames.includes('reservation_type');
+  } catch (err) {
+    console.warn('Could not check reservations columns:', err.message);
+  }
+
   let sql = 'SELECT * FROM reservations WHERE business_user_id = ?';
   const params = [businessUserId];
   
   if (filters.ownerUserId) {
-    sql += ' AND owner_user_id = ?';
-    params.push(filters.ownerUserId);
+    if (hasOwnerUserId) {
+      sql += ' AND owner_user_id = ?';
+      params.push(filters.ownerUserId);
+    } else {
+      // Fallback to user_id if owner_user_id doesn't exist
+      sql += ' AND user_id = ?';
+      params.push(filters.ownerUserId);
+    }
   }
   
   if (filters.status) {
@@ -48,13 +75,23 @@ async function findByBusiness(businessUserId, filters = {}) {
   }
   
   if (filters.startDate) {
-    sql += ' AND (reservation_date >= ? OR (start_at IS NOT NULL AND start_at >= ?))';
-    params.push(filters.startDate, filters.startDate);
+    if (hasStartAt) {
+      sql += ' AND (reservation_date >= ? OR (start_at IS NOT NULL AND start_at >= ?))';
+      params.push(filters.startDate, filters.startDate);
+    } else {
+      sql += ' AND reservation_date >= ?';
+      params.push(filters.startDate);
+    }
   }
   
   if (filters.endDate) {
-    sql += ' AND (reservation_date <= ? OR (start_at IS NOT NULL AND start_at <= ?))';
-    params.push(filters.endDate, filters.endDate);
+    if (hasStartAt) {
+      sql += ' AND (reservation_date <= ? OR (start_at IS NOT NULL AND start_at <= ?))';
+      params.push(filters.endDate, filters.endDate);
+    } else {
+      sql += ' AND reservation_date <= ?';
+      params.push(filters.endDate);
+    }
   }
   
   if (filters.reservationKind) {
@@ -62,55 +99,33 @@ async function findByBusiness(businessUserId, filters = {}) {
     params.push(filters.reservationKind);
   }
   
-  // Check if reservation_type column exists (cache result)
-  let hasReservationTypeColumn = null;
-  const checkReservationTypeColumn = async () => {
-    if (hasReservationTypeColumn !== null) return hasReservationTypeColumn;
-    try {
-      const columns = await queryMySQL(`
-        SELECT COLUMN_NAME 
-        FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_SCHEMA = DATABASE() 
-        AND TABLE_NAME = 'reservations' 
-        AND COLUMN_NAME = 'reservation_type'
-      `);
-      hasReservationTypeColumn = columns && columns.length > 0;
-      return hasReservationTypeColumn;
-    } catch (err) {
-      console.warn('Could not check for reservation_type column:', err.message);
-      hasReservationTypeColumn = false;
-      return false;
-    }
-  };
-
   // Only filter by reservation_type if the column exists and filter is provided
-  if (filters.reservationType) {
-    const hasColumn = await checkReservationTypeColumn();
-    if (hasColumn) {
-      sql += ' AND reservation_type = ?';
-      params.push(filters.reservationType);
-    }
+  if (filters.reservationType && hasReservationType) {
+    sql += ' AND reservation_type = ?';
+    params.push(filters.reservationType);
   }
   
-  if (filters.type && filters.type !== filters.reservationType) {
-    const hasColumn = await checkReservationTypeColumn();
-    if (hasColumn) {
-      sql += ' AND reservation_type = ?';
-      params.push(filters.type);
-    }
+  if (filters.type && filters.type !== filters.reservationType && hasReservationType) {
+    sql += ' AND reservation_type = ?';
+    params.push(filters.type);
   }
   
-  if (filters.from) {
+  if (filters.from && hasStartAt) {
     sql += ' AND start_at >= ?';
     params.push(filters.from);
   }
   
-  if (filters.to) {
+  if (filters.to && hasStartAt) {
     sql += ' AND start_at <= ?';
     params.push(filters.to);
   }
   
-  sql += ' ORDER BY COALESCE(start_at, CONCAT(reservation_date, " ", reservation_time)) ASC';
+  // Order by clause - use start_at if available, otherwise use reservation_date + reservation_time
+  if (hasStartAt) {
+    sql += ' ORDER BY COALESCE(start_at, CONCAT(reservation_date, " ", reservation_time)) ASC';
+  } else {
+    sql += ' ORDER BY reservation_date ASC, reservation_time ASC';
+  }
   
   // LIMIT cannot be a parameter in prepared statements, must use string interpolation
   if (filters.limit) {
