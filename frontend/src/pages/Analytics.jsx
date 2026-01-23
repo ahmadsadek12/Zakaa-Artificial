@@ -13,6 +13,11 @@ export default function Analytics() {
   const { user } = useAuth()
   const navTerms = getNavTerminology()
   const [overview, setOverview] = useState(null)
+  
+  // Debug: log overview state changes
+  useEffect(() => {
+    console.log('Overview state changed:', overview)
+  }, [overview])
   const [revenue, setRevenue] = useState([])
   const [topCustomers, setTopCustomers] = useState([])
   const [recurringCustomers, setRecurringCustomers] = useState([])
