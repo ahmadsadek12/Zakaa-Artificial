@@ -369,7 +369,7 @@ export default function Analytics() {
               />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="times_ordered" fill="#0ea5e9">
+              <Bar dataKey="timesOrdered" fill="#0ea5e9">
                 {popularItems.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
