@@ -391,8 +391,8 @@ export default function Analytics() {
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={deliveredItems.map(item => ({
               ...item,
-              completionRate: item.times_ordered > 0 
-                ? ((item.times_delivered / item.times_ordered) * 100).toFixed(1)
+              completionRate: item.timesOrdered > 0 
+                ? ((item.timesDelivered / item.timesOrdered) * 100).toFixed(1)
                 : 0
             }))}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -405,7 +405,7 @@ export default function Analytics() {
               <YAxis />
               <Tooltip 
                 formatter={(value, name) => {
-                  if (name === 'times_delivered') return [value, 'Times Delivered']
+                  if (name === 'timesDelivered') return [value, 'Times Delivered']
                   if (name === 'completionRate') return [`${value}%`, 'Completion Rate']
                   return value
                 }}
