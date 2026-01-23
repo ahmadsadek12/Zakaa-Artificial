@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
-import { BarChart3, TrendingUp, DollarSign, ShoppingCart, Users, Package, Clock, Menu, X, Award, Star, Calendar, PieChart, MapPin, RefreshCw } from 'lucide-react'
+import { BarChart3, TrendingUp, DollarSign, ShoppingCart, Users, Package, Clock, Menu, X, Award, Star, Calendar, PieChart, MapPin, RefreshCw, MessageSquare } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts'
 import { getNavTerminology } from '../utils/terminology'
 
@@ -9,11 +9,22 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1']
 
+// Helper function to get default date range (first day of current month to today)
+const getDefaultDateRange = () => {
+  const now = new Date()
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  return {
+    startDate: firstDayOfMonth.toISOString().split('T')[0],
+    endDate: now.toISOString().split('T')[0]
+  }
+}
+
 export default function Analytics() {
   const { user } = useAuth()
   const navTerms = getNavTerminology()
   const [overview, setOverview] = useState(null)
   const [burgerMenuOpen, setBurgerMenuOpen] = useState(false)
+  const [selectedAnalyticsType, setSelectedAnalyticsType] = useState('order') // Default: Order/Sales Analytics
   
   // Debug: log overview state changes
   useEffect(() => {
@@ -34,10 +45,7 @@ export default function Analytics() {
   const [deliveryTypeSplit, setDeliveryTypeSplit] = useState([])
   const [newVsReturning, setNewVsReturning] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [dateRange, setDateRange] = useState({
-    startDate: '',
-    endDate: ''
-  })
+  const [dateRange, setDateRange] = useState(getDefaultDateRange())
 
   useEffect(() => {
     fetchAnalytics()
@@ -204,31 +212,43 @@ export default function Analytics() {
     )
   }
 
-  const scrollToSection = (sectionId) => {
-    const element = document.getElementById(sectionId)
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      setBurgerMenuOpen(false)
-    }
+  // Mapping of section IDs to analytics types
+  const sectionTypeMap = {
+    'overview': 'order',
+    'revenue': 'order',
+    'top-customers': 'customer',
+    'recurring-customers': 'customer',
+    'popular-items': 'service',
+    'delivered-items': 'service',
+    'lifetime-value': 'customer',
+    'loyal-customer': 'customer',
+    'most-ordered': 'service',
+    'most-rewarding': 'service',
+    'time-breakdown': 'order',
+    'order-status': 'order',
+    'peak-hours': 'order',
+    'delivery-split': 'order',
+    'new-vs-returning': 'customer'
   }
 
-  const insightsSections = [
-    { id: 'overview', label: 'Overview', icon: BarChart3 },
-    { id: 'revenue', label: 'Revenue Trend', icon: TrendingUp },
-    { id: 'top-customers', label: 'Top Customers', icon: Users },
-    { id: 'recurring-customers', label: 'Recurring Customers', icon: TrendingUp },
-    { id: 'popular-items', label: 'Popular Items', icon: Package },
-    { id: 'delivered-items', label: 'Delivered Items', icon: Clock },
-    { id: 'lifetime-value', label: 'Customer Lifetime Value', icon: DollarSign },
-    { id: 'loyal-customer', label: 'Loyal Customer', icon: Award },
-    { id: 'most-ordered', label: 'Most Ordered Service', icon: Star },
-    { id: 'most-rewarding', label: 'Most Rewarding Service', icon: Star },
-    { id: 'time-breakdown', label: 'Time Breakdown', icon: Calendar },
-    { id: 'order-status', label: 'Order Status Breakdown', icon: PieChart },
-    { id: 'peak-hours', label: 'Peak Ordering Hours', icon: Clock },
-    { id: 'delivery-split', label: 'Delivery Type Split', icon: MapPin },
-    { id: 'new-vs-returning', label: 'New vs Returning Customers', icon: RefreshCw },
+  // Analytics types for burger menu
+  const analyticsTypes = [
+    { id: 'customer', label: 'Customer Analytics', icon: Users },
+    { id: 'service', label: 'Service Analytics', icon: Package },
+    { id: 'order', label: 'Order/Sales Analytics', icon: ShoppingCart },
+    { id: 'financial', label: 'Financial Analytics', icon: DollarSign },
+    { id: 'chatbot', label: 'Chatbot/Ops Analytics', icon: MessageSquare },
+    { id: 'delivery', label: 'Delivery/Logistics Analytics', icon: MapPin },
+    { id: 'reservations', label: 'Reservations Analytics', icon: Calendar },
+    { id: 'legacy', label: 'Legacy/General Analytics', icon: BarChart3 }
   ]
+
+  const handleTypeSelect = (typeId) => {
+    setSelectedAnalyticsType(typeId)
+    setBurgerMenuOpen(false)
+    // Scroll to top when switching types
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   return (
     <div className="space-y-6">
@@ -257,16 +277,20 @@ export default function Analytics() {
               />
               <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-96 overflow-y-auto">
                 <div className="py-2">
-                  {insightsSections.map((section) => {
-                    const Icon = section.icon
+                  {analyticsTypes.map((type) => {
+                    const Icon = type.icon
                     return (
                       <button
-                        key={section.id}
-                        onClick={() => scrollToSection(section.id)}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors flex items-center gap-2"
+                        key={type.id}
+                        onClick={() => handleTypeSelect(type.id)}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
+                          selectedAnalyticsType === type.id
+                            ? 'bg-blue-50 text-blue-700 font-medium'
+                            : 'text-gray-700 hover:bg-gray-100'
+                        }`}
                       >
                         <Icon className="w-4 h-4" />
-                        <span>{section.label}</span>
+                        <span>{type.label}</span>
                       </button>
                     )
                   })}
@@ -277,8 +301,9 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* Overview Cards */}
-      <div id="overview" className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {/* Overview Cards - Order/Sales Analytics */}
+      {selectedAnalyticsType === 'order' && (
+        <div id="overview" className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="card">
           <div className="flex items-center justify-between">
             <div>
@@ -330,8 +355,9 @@ export default function Analytics() {
           </div>
         </div>
       </div>
+      )}
 
-      {!overview && (
+      {selectedAnalyticsType === 'order' && !overview && (
         <div className="card bg-yellow-50 border-yellow-200">
           <p className="text-yellow-800">
             Loading analytics data...
@@ -339,7 +365,7 @@ export default function Analytics() {
         </div>
       )}
       
-      {overview && overview.totalOrders === 0 && dateRange.startDate && dateRange.endDate && (
+      {selectedAnalyticsType === 'order' && overview && overview.totalOrders === 0 && dateRange.startDate && dateRange.endDate && (
         <div className="card bg-blue-50 border-blue-200">
           <p className="text-blue-800">
             No orders found for the selected date range. Try adjusting the date filter or check if you have completed orders.
@@ -380,8 +406,9 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* Revenue Chart */}
-      <div id="revenue" className="card">
+      {/* Revenue Chart - Order/Sales Analytics */}
+      {selectedAnalyticsType === 'order' && (
+        <div id="revenue" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6">Revenue Trend</h2>
         {revenue.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
@@ -397,9 +424,11 @@ export default function Analytics() {
           <div className="text-center py-12 text-gray-500">No revenue data available</div>
         )}
       </div>
+      )}
 
-      {/* Top Customers */}
-      <div id="top-customers" className="card">
+      {/* Top Customers - Customer Analytics */}
+      {selectedAnalyticsType === 'customer' && (
+        <div id="top-customers" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <Users size={24} />
           Top Customers
@@ -435,9 +464,11 @@ export default function Analytics() {
           <div className="text-center py-12 text-gray-500">No customer data available</div>
         )}
       </div>
+      )}
 
-      {/* Most Recurring Customers */}
-      <div id="recurring-customers" className="card">
+      {/* Most Recurring Customers - Customer Analytics */}
+      {selectedAnalyticsType === 'customer' && (
+        <div id="recurring-customers" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <TrendingUp size={24} />
           Most Recurring Customers
@@ -473,9 +504,11 @@ export default function Analytics() {
           <div className="text-center py-12 text-gray-500">No recurring customer data available</div>
         )}
       </div>
+      )}
 
-      {/* Popular Items Chart */}
-      <div id="popular-items" className="card">
+      {/* Popular Items Chart - Service Analytics */}
+      {selectedAnalyticsType === 'service' && (
+        <div id="popular-items" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <Package size={24} />
           Most Popular Items (by orders)
@@ -503,9 +536,11 @@ export default function Analytics() {
           <div className="text-center py-12 text-gray-500">No popular items data available</div>
         )}
       </div>
+      )}
 
-      {/* Most Delivered Items Chart */}
-      <div id="delivered-items" className="card">
+      {/* Most Delivered Items Chart - Service Analytics */}
+      {selectedAnalyticsType === 'service' && (
+        <div id="delivered-items" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <Clock size={24} />
           Most Delivered Items (completion rate)
@@ -544,9 +579,11 @@ export default function Analytics() {
           <div className="text-center py-12 text-gray-500">No delivered items data available</div>
         )}
       </div>
+      )}
 
-      {/* Customer Lifetime Value */}
-      <div id="lifetime-value" className="card">
+      {/* Customer Lifetime Value - Customer Analytics */}
+      {selectedAnalyticsType === 'customer' && (
+        <div id="lifetime-value" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <DollarSign size={24} />
           Customer Lifetime Value
@@ -608,9 +645,11 @@ export default function Analytics() {
           </>
         )}
       </div>
+      )}
 
-      {/* Loyal Customer */}
-      <div id="loyal-customer" className="card">
+      {/* Loyal Customer - Customer Analytics */}
+      {selectedAnalyticsType === 'customer' && (
+        <div id="loyal-customer" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <Award size={24} />
           Loyal Customer
@@ -636,9 +675,11 @@ export default function Analytics() {
           <div className="text-center py-12 text-gray-500">No loyal customer data available</div>
         )}
       </div>
+      )}
 
-      {/* Most Ordered Service */}
-      <div id="most-ordered" className="card">
+      {/* Most Ordered Service - Service Analytics */}
+      {selectedAnalyticsType === 'service' && (
+        <div id="most-ordered" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <Star size={24} />
           Most Ordered Service
@@ -668,9 +709,11 @@ export default function Analytics() {
           <div className="text-center py-12 text-gray-500">No most ordered service data available</div>
         )}
       </div>
+      )}
 
-      {/* Most Rewarding Service */}
-      <div id="most-rewarding" className="card">
+      {/* Most Rewarding Service - Service Analytics */}
+      {selectedAnalyticsType === 'service' && (
+        <div id="most-rewarding" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <Star size={24} />
           Most Rewarding Service
@@ -700,9 +743,11 @@ export default function Analytics() {
           <div className="text-center py-12 text-gray-500">No most rewarding service data available</div>
         )}
       </div>
+      )}
 
-      {/* Time Breakdown */}
-      <div id="time-breakdown" className="card">
+      {/* Time Breakdown - Order/Sales Analytics */}
+      {selectedAnalyticsType === 'order' && (
+        <div id="time-breakdown" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <Calendar size={24} />
           Time Breakdown
@@ -725,9 +770,11 @@ export default function Analytics() {
           <div className="text-center py-12 text-gray-500">No time breakdown data available</div>
         )}
       </div>
+      )}
 
-      {/* Order Status Breakdown */}
-      <div id="order-status" className="card">
+      {/* Order Status Breakdown - Order/Sales Analytics */}
+      {selectedAnalyticsType === 'order' && (
+        <div id="order-status" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <PieChart size={24} />
           Order Status Breakdown
@@ -750,9 +797,11 @@ export default function Analytics() {
           <div className="text-center py-12 text-gray-500">No order status breakdown data available</div>
         )}
       </div>
+      )}
 
-      {/* Peak Ordering Hours */}
-      <div id="peak-hours" className="card">
+      {/* Peak Ordering Hours - Order/Sales Analytics */}
+      {selectedAnalyticsType === 'order' && (
+        <div id="peak-hours" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <Clock size={24} />
           Peak Ordering Hours
@@ -775,9 +824,11 @@ export default function Analytics() {
           <div className="text-center py-12 text-gray-500">No peak ordering hours data available</div>
         )}
       </div>
+      )}
 
-      {/* Delivery Type Split */}
-      <div id="delivery-split" className="card">
+      {/* Delivery Type Split - Order/Sales Analytics */}
+      {selectedAnalyticsType === 'order' && (
+        <div id="delivery-split" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <MapPin size={24} />
           Delivery Type Split
@@ -800,9 +851,11 @@ export default function Analytics() {
           <div className="text-center py-12 text-gray-500">No delivery type split data available</div>
         )}
       </div>
+      )}
 
-      {/* New vs Returning Customers */}
-      <div id="new-vs-returning" className="card">
+      {/* New vs Returning Customers - Customer Analytics */}
+      {selectedAnalyticsType === 'customer' && (
+        <div id="new-vs-returning" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <RefreshCw size={24} />
           New vs Returning Customers
@@ -832,6 +885,43 @@ export default function Analytics() {
           <div className="text-center py-12 text-gray-500">No new vs returning customer data available</div>
         )}
       </div>
+      )}
+
+      {/* Placeholder sections for other analytics types */}
+      {selectedAnalyticsType === 'financial' && (
+        <div className="card">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">Financial Analytics</h2>
+          <div className="text-center py-12 text-gray-500">Financial analytics coming soon</div>
+        </div>
+      )}
+
+      {selectedAnalyticsType === 'chatbot' && (
+        <div className="card">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">Chatbot/Ops Analytics</h2>
+          <div className="text-center py-12 text-gray-500">Chatbot analytics coming soon</div>
+        </div>
+      )}
+
+      {selectedAnalyticsType === 'delivery' && (
+        <div className="card">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">Delivery/Logistics Analytics</h2>
+          <div className="text-center py-12 text-gray-500">Delivery analytics coming soon</div>
+        </div>
+      )}
+
+      {selectedAnalyticsType === 'reservations' && (
+        <div className="card">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">Reservations Analytics</h2>
+          <div className="text-center py-12 text-gray-500">Reservations analytics coming soon</div>
+        </div>
+      )}
+
+      {selectedAnalyticsType === 'legacy' && (
+        <div className="card">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">Legacy/General Analytics</h2>
+          <div className="text-center py-12 text-gray-500">Legacy analytics coming soon</div>
+        </div>
+      )}
     </div>
   )
 }
