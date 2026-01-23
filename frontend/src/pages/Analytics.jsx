@@ -46,7 +46,10 @@ export default function Analytics() {
       const freeMetricsRes = await axios.get(`${API_URL}/api/analytics/free`, { headers, params }).catch(() => ({ data: { data: { freeMetrics: null } } }))
       
       // Try to fetch basic overview (no premium required)
-      const basicOverviewRes = await axios.get(`${API_URL}/api/analytics/basic-overview`, { headers, params }).catch(() => ({ data: { data: { overview: null } } }))
+      const basicOverviewRes = await axios.get(`${API_URL}/api/analytics/basic-overview`, { headers, params }).catch((err) => {
+        console.error('Error fetching basic overview:', err)
+        return { data: { data: { overview: null } } }
+      })
       
       // Try to fetch premium metrics (will fail gracefully if not premium or 403)
       const [
@@ -89,18 +92,35 @@ export default function Analytics() {
       ])
       
       // Use premium overview if available, otherwise use basic overview
-      const premiumOverview = overviewRes.status === 'fulfilled' ? overviewRes.value.data.data.overview : null
-      const basicOverview = basicOverviewRes.data?.data?.overview
+      const premiumOverview = overviewRes.status === 'fulfilled' ? overviewRes.value.data?.data?.overview : null
+      
+      // Extract basic overview - handle different possible response structures
+      let basicOverview = null
+      if (basicOverviewRes?.data) {
+        // Try different possible structures
+        basicOverview = basicOverviewRes.data?.data?.overview || 
+                       basicOverviewRes.data?.overview || 
+                       basicOverviewRes.data?.data ||
+                       null
+      }
       
       // Log for debugging
-      console.log('Basic Overview Response:', basicOverviewRes.data)
-      console.log('Basic Overview:', basicOverview)
+      console.log('Basic Overview Response (full):', basicOverviewRes)
+      console.log('Basic Overview Response (data):', basicOverviewRes?.data)
+      console.log('Basic Overview (extracted):', basicOverview)
       console.log('Premium Overview:', premiumOverview)
       
       // Set overview - use premium if available, otherwise use basic
       const finalOverview = premiumOverview || basicOverview
-      console.log('Setting overview to:', finalOverview)
-      setOverview(finalOverview)
+      console.log('Final Overview (setting state):', finalOverview)
+      
+      if (finalOverview) {
+        setOverview(finalOverview)
+        console.log('State set successfully')
+      } else {
+        console.warn('No overview data available - both premium and basic are null')
+        setOverview(null)
+      }
       
       setRevenue(revenueRes.status === 'fulfilled' ? revenueRes.value.data.data.revenue || [] : [])
       setTopCustomers(topCustomersRes.status === 'fulfilled' ? topCustomersRes.value.data.data.customers || [] : [])
