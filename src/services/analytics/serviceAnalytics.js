@@ -65,7 +65,7 @@ async function getTopItems(businessId, limit = 10, startDate, endDate) {
 async function getPopularItems(businessId, limit = 10) {
   try {
     // Check if times_ordered column exists
-    const [columnCheck] = await queryMySQL(`
+    const columnCheck = await queryMySQL(`
       SELECT COLUMN_NAME 
       FROM information_schema.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
@@ -108,7 +108,7 @@ async function getPopularItems(businessId, limit = 10) {
 async function getMostDeliveredItems(businessId, limit = 10) {
   try {
     // Check if times_delivered column exists
-    const [columnCheck] = await queryMySQL(`
+    const columnCheck = await queryMySQL(`
       SELECT COLUMN_NAME 
       FROM information_schema.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
