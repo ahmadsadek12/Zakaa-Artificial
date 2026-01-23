@@ -64,22 +64,7 @@ async function getTopItems(businessId, limit = 10, startDate, endDate) {
  */
 async function getPopularItems(businessId, limit = 10) {
   try {
-    // Check if times_ordered column exists
-    const columnCheck = await queryMySQL(`
-      SELECT COLUMN_NAME 
-      FROM information_schema.COLUMNS 
-      WHERE TABLE_SCHEMA = DATABASE() 
-        AND TABLE_NAME = 'items' 
-        AND COLUMN_NAME = 'times_ordered'
-    `);
-    
-    // If column doesn't exist, return empty array
-    if (!columnCheck || columnCheck.length === 0) {
-      logger.warn('times_ordered column not found - returning empty popular items list');
-      return [];
-    }
-    
-    // Query MySQL items table using times_ordered
+    // Try to query with times_ordered - if column doesn't exist, return empty array
     const items = await queryMySQL(`
       SELECT id, name, description, price, times_ordered, times_delivered
       FROM items
@@ -97,6 +82,11 @@ async function getPopularItems(businessId, limit = 10) {
       timesDelivered: item.times_delivered || 0
     }));
   } catch (error) {
+    // If error is about unknown column, return empty array
+    if (error.message && error.message.includes('Unknown column')) {
+      logger.warn('times_ordered column not found - returning empty popular items list');
+      return [];
+    }
     logger.error('Error getting popular items:', error);
     throw error;
   }
@@ -107,22 +97,7 @@ async function getPopularItems(businessId, limit = 10) {
  */
 async function getMostDeliveredItems(businessId, limit = 10) {
   try {
-    // Check if times_delivered column exists
-    const columnCheck = await queryMySQL(`
-      SELECT COLUMN_NAME 
-      FROM information_schema.COLUMNS 
-      WHERE TABLE_SCHEMA = DATABASE() 
-        AND TABLE_NAME = 'items' 
-        AND COLUMN_NAME = 'times_delivered'
-    `);
-    
-    // If column doesn't exist, return empty array
-    if (!columnCheck || columnCheck.length === 0) {
-      logger.warn('times_delivered column not found - returning empty delivered items list');
-      return [];
-    }
-    
-    // Query MySQL items table using times_delivered
+    // Try to query with times_delivered - if column doesn't exist, return empty array
     const items = await queryMySQL(`
       SELECT id, name, description, price, times_ordered, times_delivered
       FROM items
@@ -143,6 +118,11 @@ async function getMostDeliveredItems(businessId, limit = 10) {
         : 0
     }));
   } catch (error) {
+    // If error is about unknown column, return empty array
+    if (error.message && error.message.includes('Unknown column')) {
+      logger.warn('times_delivered column not found - returning empty delivered items list');
+      return [];
+    }
     logger.error('Error getting most delivered items:', error);
     throw error;
   }
