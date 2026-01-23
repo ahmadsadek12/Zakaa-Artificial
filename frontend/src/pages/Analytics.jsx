@@ -178,7 +178,15 @@ export default function Analytics() {
       {!overview && (
         <div className="card bg-yellow-50 border-yellow-200">
           <p className="text-yellow-800">
-            Premium analytics require a premium subscription. Some free metrics may be available.
+            Loading analytics data...
+          </p>
+        </div>
+      )}
+      
+      {overview && overview.totalOrders === 0 && (
+        <div className="card bg-blue-50 border-blue-200">
+          <p className="text-blue-800">
+            No orders found for the selected date range. Try adjusting the date filter or check if you have completed orders.
           </p>
         </div>
       )}
