@@ -86,6 +86,11 @@ export default function Analytics() {
       // Use premium overview if available, otherwise use basic overview
       const premiumOverview = overviewRes.status === 'fulfilled' ? overviewRes.value.data.data.overview : null
       const basicOverview = basicOverviewRes.data?.data?.overview
+      
+      // Log for debugging
+      console.log('Basic Overview:', basicOverview)
+      console.log('Premium Overview:', premiumOverview)
+      
       setOverview(premiumOverview || basicOverview || null)
       
       setRevenue(revenueRes.status === 'fulfilled' ? revenueRes.value.data.data.revenue || [] : [])

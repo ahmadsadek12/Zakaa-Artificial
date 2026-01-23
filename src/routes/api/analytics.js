@@ -79,19 +79,19 @@ router.get('/basic-overview', [
   }
   
   // Get basic stats from orders table
-  const [stats] = await queryMySQL(`
+  const stats = await queryMySQL(`
     SELECT 
       COUNT(*) as totalOrders,
       SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completedOrders,
       SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelledOrders,
-      SUM(CASE WHEN status = 'completed' THEN total ELSE 0 END) as totalRevenue,
-      AVG(CASE WHEN status = 'completed' THEN total ELSE NULL END) as averageOrderValue
+      COALESCE(SUM(CASE WHEN status = 'completed' THEN total ELSE 0 END), 0) as totalRevenue,
+      COALESCE(AVG(CASE WHEN status = 'completed' THEN total ELSE NULL END), 0) as averageOrderValue
     FROM orders
     WHERE business_id = ? ${dateFilter}
   `, params);
   
   const overview = {
-    totalOrders: parseInt(stats[0]?.totalOrders || 0),
+    totalOrders: parseInt(stats[0]?.totalOrders || stats[0]?.totalOrders || 0),
     completedOrders: parseInt(stats[0]?.completedOrders || 0),
     cancelledOrders: parseInt(stats[0]?.cancelledOrders || 0),
     totalRevenue: parseFloat(stats[0]?.totalRevenue || 0),
