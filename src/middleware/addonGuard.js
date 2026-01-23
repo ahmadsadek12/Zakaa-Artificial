@@ -52,6 +52,17 @@ function addonGuard(addonKey, options = {}) {
         const businessType = (business && business[0] && business[0].business_type) 
           ? business[0].business_type.toLowerCase() 
           : null;
+        
+        if (!businessType) {
+          return res.status(403).json({
+            success: false,
+            error: {
+              message: 'Business type not found',
+              code: 'ERROR_BUSINESS_TYPE_NOT_FOUND'
+            }
+          });
+        }
+        
         if (businessType !== 'food and beverage' && businessType !== 'f & b' && businessType !== 'f&b') {
           logger.warn('Addon guard blocked access - not F&B business', {
             businessId,
