@@ -871,7 +871,7 @@ export default function Calendar() {
                             </span>
                             <span className="font-mono text-sm text-gray-600">{item.time}</span>
                             <span className="font-semibold text-gray-900">{item.customer_name || item.customer_phone_number}</span>
-                            {item.income !== null && (
+                            {item.income !== null && item.income !== undefined && typeof item.income === 'number' && (
                               <span className="font-medium text-green-600">${item.income.toFixed(2)}</span>
                             )}
                           </div>
@@ -950,7 +950,9 @@ export default function Calendar() {
                             </span>
                             <span className="font-mono text-sm text-gray-600">{item.time}</span>
                             <span className="font-semibold text-gray-900">{item.customer_name || item.customer_phone_number}</span>
-                            <span className="font-medium text-green-600">${item.income.toFixed(2)}</span>
+                            {item.income !== null && item.income !== undefined && typeof item.income === 'number' ? (
+                              <span className="font-medium text-green-600">${item.income.toFixed(2)}</span>
+                            ) : null}
                           </div>
                           <div className="flex items-center gap-4 text-sm text-gray-600">
                             <span className="font-mono">{item.customer_phone_number}</span>
