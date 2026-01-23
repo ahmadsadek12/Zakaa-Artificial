@@ -75,7 +75,7 @@ async function findByBusiness(ownerUserId, businessId = null, includeInactive = 
       AND TABLE_NAME = 'reservations' 
       AND COLUMN_NAME = 'reservation_type'
     `);
-    if (columns && columns.length > 0) {
+    if (Array.isArray(columns) && columns.length > 0) {
       reservationTypeFilter = "AND r.reservation_type = 'table'";
     }
   } catch (err) {
