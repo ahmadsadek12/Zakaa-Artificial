@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
-import { BarChart3, TrendingUp, DollarSign, ShoppingCart, Users, Package, Clock } from 'lucide-react'
+import { BarChart3, TrendingUp, DollarSign, ShoppingCart, Users, Package, Clock, Menu, X } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts'
 import { getNavTerminology } from '../utils/terminology'
 
@@ -13,6 +13,7 @@ export default function Analytics() {
   const { user } = useAuth()
   const navTerms = getNavTerminology()
   const [overview, setOverview] = useState(null)
+  const [burgerMenuOpen, setBurgerMenuOpen] = useState(false)
   
   // Debug: log overview state changes
   useEffect(() => {
@@ -147,15 +148,73 @@ export default function Analytics() {
     )
   }
 
+  const scrollToSection = (sectionId) => {
+    const element = document.getElementById(sectionId)
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      setBurgerMenuOpen(false)
+    }
+  }
+
+  const insightsSections = [
+    { id: 'overview', label: 'Overview', icon: BarChart3 },
+    { id: 'revenue', label: 'Revenue Trend', icon: TrendingUp },
+    { id: 'top-customers', label: 'Top Customers', icon: Users },
+    { id: 'recurring-customers', label: 'Recurring Customers', icon: TrendingUp },
+    { id: 'popular-items', label: 'Popular Items', icon: Package },
+    { id: 'delivered-items', label: 'Delivered Items', icon: Clock },
+    { id: 'lifetime-value', label: 'Customer Lifetime Value', icon: DollarSign },
+  ]
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">{navTerms.analytics}</h1>
-        <p className="text-gray-600 mt-2">Insights into your business performance</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Insights</h1>
+          <p className="text-gray-600 mt-2">Insights into your business performance</p>
+        </div>
+        
+        {/* Burger Menu Button */}
+        <div className="relative">
+          <button
+            onClick={() => setBurgerMenuOpen(!burgerMenuOpen)}
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            aria-label="Menu"
+          >
+            <Menu className="w-6 h-6 text-gray-700" />
+          </button>
+
+          {/* Burger Menu Dropdown */}
+          {burgerMenuOpen && (
+            <>
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setBurgerMenuOpen(false)}
+              />
+              <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-96 overflow-y-auto">
+                <div className="py-2">
+                  {insightsSections.map((section) => {
+                    const Icon = section.icon
+                    return (
+                      <button
+                        key={section.id}
+                        onClick={() => scrollToSection(section.id)}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors flex items-center gap-2"
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span>{section.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div id="overview" className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="card">
           <div className="flex items-center justify-between">
             <div>
@@ -258,7 +317,7 @@ export default function Analytics() {
       </div>
 
       {/* Revenue Chart */}
-      <div className="card">
+      <div id="revenue" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6">Revenue Trend</h2>
         {revenue.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
@@ -276,7 +335,7 @@ export default function Analytics() {
       </div>
 
       {/* Top Customers */}
-      <div className="card">
+      <div id="top-customers" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <Users size={24} />
           Top Customers
@@ -314,7 +373,7 @@ export default function Analytics() {
       </div>
 
       {/* Most Recurring Customers */}
-      <div className="card">
+      <div id="recurring-customers" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <TrendingUp size={24} />
           Most Recurring Customers
@@ -352,7 +411,7 @@ export default function Analytics() {
       </div>
 
       {/* Popular Items Chart */}
-      <div className="card">
+      <div id="popular-items" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <Package size={24} />
           Most Popular Items (by orders)
@@ -382,7 +441,7 @@ export default function Analytics() {
       </div>
 
       {/* Most Delivered Items Chart */}
-      <div className="card">
+      <div id="delivered-items" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <Clock size={24} />
           Most Delivered Items (completion rate)
@@ -423,7 +482,7 @@ export default function Analytics() {
       </div>
 
       {/* Customer Lifetime Value */}
-      <div className="card">
+      <div id="lifetime-value" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <DollarSign size={24} />
           Customer Lifetime Value

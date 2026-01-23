@@ -53,7 +53,7 @@ export default function Layout({ children }) {
     { path: '/menus', icon: UtensilsCrossed, label: terms.menus },
     { path: '/items', icon: Package, label: terms.items },
     { path: '/calendar', icon: Calendar, label: 'Calendar' },
-    { path: '/analytics', icon: BarChart3, label: navTerms.analytics },
+    { path: '/analytics', icon: BarChart3, label: 'Insights' },
     { path: '/table-reservations', icon: Table, label: 'Table Reservations' },
     { path: '/settings', icon: Settings, label: 'Settings' },
   ]
