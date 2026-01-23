@@ -42,10 +42,14 @@ async function getRevenue(businessId, period = 'daily', startDate, endDate) {
       
       for (const order of orders) {
         let key;
-        const orderDate = order.order_date instanceof Date ? order.order_date : new Date(order.order_date);
+        // MySQL DATE() returns a string in format 'YYYY-MM-DD'
+        const orderDateStr = order.order_date instanceof Date 
+          ? order.order_date.toISOString().split('T')[0]
+          : String(order.order_date).split('T')[0];
+        const orderDate = new Date(orderDateStr);
         
         if (period === 'daily') {
-          key = orderDate.toISOString().split('T')[0];
+          key = orderDateStr;
         } else if (period === 'weekly') {
           const week = getWeekNumber(orderDate);
           key = `${orderDate.getFullYear()}-W${week}`;
