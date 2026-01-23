@@ -137,10 +137,29 @@ async function findByBusiness(ownerUserId, businessId = null, includeInactive = 
   
   const tables = await queryMySQL(sql, params);
   
-  // Parse reservations data into structured format
+  // Parse reservations data into structured format and normalize column names
   return tables.map(table => {
     const result = { ...table };
     
+    // Normalize column names for backward compatibility
+    if (!result.owner_user_id && result.user_id) {
+      result.owner_user_id = result.user_id;
+    }
+    if (!result.table_number && result.number) {
+      result.table_number = result.number;
+    }
+    if (!result.min_seats && result.seats) {
+      result.min_seats = result.seats;
+      result.max_seats = result.seats;
+    }
+    if (!result.business_id && result.owner_user_id) {
+      result.business_id = result.owner_user_id;
+    }
+    if (result.is_active === undefined && result.reserved !== undefined) {
+      result.is_active = !result.reserved;
+    }
+    
+    // Add reservation_status for frontend compatibility
     if (table.reservations_data) {
       const reservations = table.reservations_data.split('|').map(resStr => {
         const [time, id, customerName, numberOfGuests] = resStr.split(':');
@@ -153,9 +172,11 @@ async function findByBusiness(ownerUserId, businessId = null, includeInactive = 
       });
       result.reservations = reservations;
       result.isReserved = reservations.length > 0;
+      result.reservation_status = reservations.length > 0 ? 'reserved' : 'available';
     } else {
       result.reservations = [];
       result.isReserved = false;
+      result.reservation_status = 'available';
     }
     
     // Remove raw reservations_data field
