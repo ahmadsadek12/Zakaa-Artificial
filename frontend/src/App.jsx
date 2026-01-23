@@ -13,6 +13,7 @@ import Calendar from './pages/Calendar'
 import Settings from './pages/Settings'
 import Analytics from './pages/Analytics'
 import Addons from './pages/Addons'
+import AddonsManagement from './pages/AddonsManagement'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminBusinesses from './pages/admin/AdminBusinesses'
 import AdminBusinessDetail from './pages/admin/AdminBusinessDetail'
@@ -37,6 +38,7 @@ function App() {
           <Route path="/calendar" element={<PrivateRoute><Calendar /></PrivateRoute>} />
           <Route path="/analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
           <Route path="/addons" element={<PrivateRoute><Addons /></PrivateRoute>} />
+          <Route path="/addons-management" element={<PrivateRoute><AddonsManagement /></PrivateRoute>} />
           <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
           
           {/* Admin Routes */}

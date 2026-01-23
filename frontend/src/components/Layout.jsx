@@ -14,7 +14,8 @@ import {
   Menu,
   X,
   Shield,
-  Building2
+  Building2,
+  Settings2
 } from 'lucide-react'
 import { useState } from 'react'
 import { getTerminology, getNavTerminology } from '../utils/terminology'
@@ -53,6 +54,7 @@ export default function Layout({ children }) {
     { path: '/calendar', icon: Calendar, label: 'Calendar' },
     { path: '/analytics', icon: BarChart3, label: navTerms.analytics },
     { path: '/addons', icon: Package, label: 'Add-ons' },
+    { path: '/addons-management', icon: Settings2, label: 'Add-ons Management' },
     { path: '/settings', icon: Settings, label: 'Settings' },
   ]
 
