@@ -36,7 +36,34 @@ async function findById(tableId, ownerUserId = null, businessId = null) {
  * @param {string} date - Optional date (YYYY-MM-DD) to include reservation status
  */
 async function findByBusiness(ownerUserId, businessId = null, includeInactive = false, date = null) {
-  // First check if reservation_type column exists
+  // Check which columns exist in tables table
+  let hasOwnerUserId = false;
+  let hasTableNumber = false;
+  let hasBusinessId = false;
+  let hasIsActive = false;
+  
+  try {
+    const tableColumns = await queryMySQL(`
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'tables'
+    `);
+    const columnNames = tableColumns.map(c => c.COLUMN_NAME);
+    hasOwnerUserId = columnNames.includes('owner_user_id');
+    hasTableNumber = columnNames.includes('table_number');
+    hasBusinessId = columnNames.includes('business_id');
+    hasIsActive = columnNames.includes('is_active');
+  } catch (err) {
+    console.warn('Could not check tables columns:', err.message);
+    // Fallback: assume old schema
+    hasOwnerUserId = false;
+    hasTableNumber = false;
+    hasBusinessId = false;
+    hasIsActive = false;
+  }
+
+  // Check if reservation_type column exists
   let reservationTypeFilter = '';
   try {
     const columns = await queryMySQL(`
@@ -52,6 +79,12 @@ async function findByBusiness(ownerUserId, businessId = null, includeInactive = 
   } catch (err) {
     console.warn('Could not check for reservation_type column:', err.message);
   }
+
+  // Use appropriate column names based on what exists
+  const ownerColumn = hasOwnerUserId ? 't.owner_user_id' : 't.user_id';
+  const tableNumberColumn = hasTableNumber ? 't.table_number' : 't.number';
+  const businessColumn = hasBusinessId ? 't.business_id' : null;
+  const activeColumn = hasIsActive ? 't.is_active' : 't.reserved';
 
   let sql = `
     SELECT 
@@ -83,20 +116,24 @@ async function findByBusiness(ownerUserId, businessId = null, includeInactive = 
         ELSE NULL
       END as reservations_data
     FROM tables t
-    WHERE t.owner_user_id = ?
+    WHERE ${ownerColumn} = ?
   `;
   const params = [date, date, date, date, ownerUserId];
   
-  if (businessId) {
-    sql += ' AND t.business_id = ?';
+  if (businessId && businessColumn) {
+    sql += ` AND ${businessColumn} = ?`;
     params.push(businessId);
   }
   
   if (!includeInactive) {
-    sql += ' AND t.is_active = true';
+    if (hasIsActive) {
+      sql += ' AND t.is_active = true';
+    } else {
+      sql += ' AND t.reserved = false';
+    }
   }
   
-  sql += ' ORDER BY t.table_number ASC';
+  sql += ` ORDER BY ${tableNumberColumn} ASC`;
   
   const tables = await queryMySQL(sql, params);
   
