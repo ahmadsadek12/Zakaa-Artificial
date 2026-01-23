@@ -34,12 +34,12 @@ function addonGuard(addonKey, options = {}) {
       
       // Check business type if required (for table_reservations addon)
       if (options.requireFoodAndBeverage || addonKey === 'table_reservations') {
-        const [business] = await queryMySQL(
+        const business = await queryMySQL(
           `SELECT business_type FROM users WHERE id = ? AND user_type = 'business'`,
           [businessId]
         );
         
-        if (!business || business.length === 0) {
+        if (!business || !Array.isArray(business) || business.length === 0) {
           return res.status(403).json({
             success: false,
             error: {
@@ -49,7 +49,9 @@ function addonGuard(addonKey, options = {}) {
           });
         }
         
-        const businessType = business[0].business_type?.toLowerCase();
+        const businessType = (business && business[0] && business[0].business_type) 
+          ? business[0].business_type.toLowerCase() 
+          : null;
         if (businessType !== 'food and beverage' && businessType !== 'f & b' && businessType !== 'f&b') {
           logger.warn('Addon guard blocked access - not F&B business', {
             businessId,
