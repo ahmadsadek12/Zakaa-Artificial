@@ -13,6 +13,12 @@ async function getRevenue(businessId, period = 'daily', startDate, endDate) {
   try {
     const orderLogs = await getMongoCollection('order_logs');
     
+    // If MongoDB is unavailable, return empty array
+    if (!orderLogs) {
+      logger.warn('MongoDB unavailable - returning empty revenue data');
+      return [];
+    }
+    
     const query = {
       business_id: businessId,
       final_status: 'completed'

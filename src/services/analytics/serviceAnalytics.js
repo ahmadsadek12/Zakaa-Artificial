@@ -12,6 +12,12 @@ async function getTopItems(businessId, limit = 10, startDate, endDate) {
   try {
     const orderLogs = await getMongoCollection('order_logs');
     
+    // If MongoDB is unavailable, return empty array
+    if (!orderLogs) {
+      logger.warn('MongoDB unavailable - returning empty top items list');
+      return [];
+    }
+    
     const query = {
       business_id: businessId,
       final_status: 'completed'
@@ -58,6 +64,21 @@ async function getTopItems(businessId, limit = 10, startDate, endDate) {
  */
 async function getPopularItems(businessId, limit = 10) {
   try {
+    // Check if times_ordered column exists
+    const [columnCheck] = await queryMySQL(`
+      SELECT COLUMN_NAME 
+      FROM information_schema.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'items' 
+        AND COLUMN_NAME = 'times_ordered'
+    `);
+    
+    // If column doesn't exist, return empty array
+    if (!columnCheck || columnCheck.length === 0) {
+      logger.warn('times_ordered column not found - returning empty popular items list');
+      return [];
+    }
+    
     // Query MySQL items table using times_ordered
     const items = await queryMySQL(`
       SELECT id, name, description, price, times_ordered, times_delivered
@@ -86,6 +107,21 @@ async function getPopularItems(businessId, limit = 10) {
  */
 async function getMostDeliveredItems(businessId, limit = 10) {
   try {
+    // Check if times_delivered column exists
+    const [columnCheck] = await queryMySQL(`
+      SELECT COLUMN_NAME 
+      FROM information_schema.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'items' 
+        AND COLUMN_NAME = 'times_delivered'
+    `);
+    
+    // If column doesn't exist, return empty array
+    if (!columnCheck || columnCheck.length === 0) {
+      logger.warn('times_delivered column not found - returning empty delivered items list');
+      return [];
+    }
+    
     // Query MySQL items table using times_delivered
     const items = await queryMySQL(`
       SELECT id, name, description, price, times_ordered, times_delivered

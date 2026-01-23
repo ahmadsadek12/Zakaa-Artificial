@@ -56,6 +56,12 @@ async function getTopCustomers(businessId, limit = 10, startDate, endDate) {
   try {
     const orderLogs = await getMongoCollection('order_logs');
     
+    // If MongoDB is unavailable, return empty array
+    if (!orderLogs) {
+      logger.warn('MongoDB unavailable - returning empty top customers list');
+      return [];
+    }
+    
     const query = {
       business_id: businessId,
       final_status: 'completed'
@@ -110,6 +116,12 @@ async function getRecurringCustomers(businessId, limit = 10, startDate, endDate)
   try {
     const orderLogs = await getMongoCollection('order_logs');
     
+    // If MongoDB is unavailable, return empty array
+    if (!orderLogs) {
+      logger.warn('MongoDB unavailable - returning empty recurring customers list');
+      return [];
+    }
+    
     const query = {
       business_id: businessId,
       final_status: 'completed'
@@ -163,6 +175,17 @@ async function getRecurringCustomers(businessId, limit = 10, startDate, endDate)
 async function getCustomerLifetimeValue(businessId, startDate, endDate) {
   try {
     const orderLogs = await getMongoCollection('order_logs');
+    
+    // If MongoDB is unavailable, return empty result
+    if (!orderLogs) {
+      logger.warn('MongoDB unavailable - returning empty lifetime value data');
+      return {
+        totalCustomers: 0,
+        totalRevenue: 0,
+        averageLifetimeValue: 0,
+        customers: []
+      };
+    }
     
     const query = {
       business_id: businessId,

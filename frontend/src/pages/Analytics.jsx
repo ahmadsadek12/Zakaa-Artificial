@@ -214,7 +214,7 @@ export default function Analytics() {
         </div>
       )}
       
-      {overview && overview.totalOrders === 0 && (
+      {overview && overview.totalOrders === 0 && dateRange.startDate && dateRange.endDate && (
         <div className="card bg-blue-50 border-blue-200">
           <p className="text-blue-800">
             No orders found for the selected date range. Try adjusting the date filter or check if you have completed orders.
