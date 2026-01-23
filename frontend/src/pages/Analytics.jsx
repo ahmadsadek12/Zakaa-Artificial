@@ -88,10 +88,14 @@ export default function Analytics() {
       const basicOverview = basicOverviewRes.data?.data?.overview
       
       // Log for debugging
+      console.log('Basic Overview Response:', basicOverviewRes.data)
       console.log('Basic Overview:', basicOverview)
       console.log('Premium Overview:', premiumOverview)
       
-      setOverview(premiumOverview || basicOverview || null)
+      // Set overview - use premium if available, otherwise use basic
+      const finalOverview = premiumOverview || basicOverview
+      console.log('Setting overview to:', finalOverview)
+      setOverview(finalOverview)
       
       setRevenue(revenueRes.status === 'fulfilled' ? revenueRes.value.data.data.revenue || [] : [])
       setTopCustomers(topCustomersRes.status === 'fulfilled' ? topCustomersRes.value.data.data.customers || [] : [])
@@ -165,7 +169,9 @@ export default function Analytics() {
             <div>
               <p className="text-sm text-gray-600 mb-1">Avg Order Value</p>
               <p className="text-3xl font-bold text-gray-900">
-                ${overview?.averageOrderValue ? typeof overview.averageOrderValue === 'number' ? overview.averageOrderValue.toFixed(2) : parseFloat(overview.averageOrderValue || 0).toFixed(2) : '0.00'}
+                {overview?.averageOrderValue !== undefined && overview?.averageOrderValue !== null
+                  ? `$${typeof overview.averageOrderValue === 'number' ? overview.averageOrderValue.toFixed(2) : parseFloat(overview.averageOrderValue || 0).toFixed(2)}`
+                  : '$0.00'}
               </p>
             </div>
             <div className="p-3 rounded-lg bg-orange-50 text-orange-600">
