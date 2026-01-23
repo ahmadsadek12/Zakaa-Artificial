@@ -62,15 +62,42 @@ async function findByBusiness(businessUserId, filters = {}) {
     params.push(filters.reservationKind);
   }
   
-  // Only filter by reservation_type if the column exists (check first)
+  // Only filter by reservation_type if the column exists and filter is provided
   if (filters.reservationType) {
-    sql += ' AND reservation_type = ?';
-    params.push(filters.reservationType);
+    try {
+      // Check if column exists before using it
+      const [columns] = await queryMySQL(`
+        SELECT COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'reservations' 
+        AND COLUMN_NAME = 'reservation_type'
+      `);
+      if (columns && columns.length > 0) {
+        sql += ' AND reservation_type = ?';
+        params.push(filters.reservationType);
+      }
+    } catch (err) {
+      console.warn('Could not check for reservation_type column:', err.message);
+    }
   }
   
   if (filters.type && filters.type !== filters.reservationType) {
-    sql += ' AND reservation_type = ?';
-    params.push(filters.type);
+    try {
+      const [columns] = await queryMySQL(`
+        SELECT COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'reservations' 
+        AND COLUMN_NAME = 'reservation_type'
+      `);
+      if (columns && columns.length > 0) {
+        sql += ' AND reservation_type = ?';
+        params.push(filters.type);
+      }
+    } catch (err) {
+      console.warn('Could not check for reservation_type column:', err.message);
+    }
   }
   
   if (filters.from) {

@@ -40,7 +40,7 @@ export default function Analytics() {
       // Fetch free metrics first
       const freeMetricsRes = await axios.get(`${API_URL}/api/analytics/free`, { headers, params }).catch(() => ({ data: { data: { freeMetrics: null } } }))
       
-      // Try to fetch premium metrics (will fail gracefully if not premium)
+      // Try to fetch premium metrics (will fail gracefully if not premium or 403)
       const [
         overviewRes,
         revenueRes,
@@ -50,13 +50,34 @@ export default function Analytics() {
         deliveredItemsRes,
         lifetimeValueRes
       ] = await Promise.allSettled([
-        axios.get(`${API_URL}/api/analytics/overview`, { headers, params }),
-        axios.get(`${API_URL}/api/analytics/revenue?period=daily`, { headers, params }),
-        axios.get(`${API_URL}/api/analytics/customers/top?limit=10`, { headers, params }),
-        axios.get(`${API_URL}/api/analytics/customers/recurring?limit=10`, { headers, params }),
-        axios.get(`${API_URL}/api/analytics/items/popular?limit=10`, { headers, params }),
-        axios.get(`${API_URL}/api/analytics/items/delivered?limit=10`, { headers, params }),
-        axios.get(`${API_URL}/api/analytics/customers/lifetime-value`, { headers, params })
+        axios.get(`${API_URL}/api/analytics/overview`, { headers, params }).catch(err => {
+          if (err.response?.status === 403) return { data: { data: { overview: null } } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/revenue?period=daily`, { headers, params }).catch(err => {
+          if (err.response?.status === 403) return { data: { data: { revenue: [] } } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/customers/top?limit=10`, { headers, params }).catch(err => {
+          if (err.response?.status === 403) return { data: { data: { customers: [] } } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/customers/recurring?limit=10`, { headers, params }).catch(err => {
+          if (err.response?.status === 403) return { data: { data: { customers: [] } } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/items/popular?limit=10`, { headers, params }).catch(err => {
+          if (err.response?.status === 403) return { data: { data: { items: [] } } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/items/delivered?limit=10`, { headers, params }).catch(err => {
+          if (err.response?.status === 403) return { data: { data: { items: [] } } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/customers/lifetime-value`, { headers, params }).catch(err => {
+          if (err.response?.status === 403) return { data: { data: {} } }
+          throw err
+        })
       ])
       
       // Extract data from settled promises

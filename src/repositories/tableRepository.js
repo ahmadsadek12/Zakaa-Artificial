@@ -36,6 +36,23 @@ async function findById(tableId, ownerUserId = null, businessId = null) {
  * @param {string} date - Optional date (YYYY-MM-DD) to include reservation status
  */
 async function findByBusiness(ownerUserId, businessId = null, includeInactive = false, date = null) {
+  // First check if reservation_type column exists
+  let reservationTypeFilter = '';
+  try {
+    const [columns] = await queryMySQL(`
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'reservations' 
+      AND COLUMN_NAME = 'reservation_type'
+    `);
+    if (columns && columns.length > 0) {
+      reservationTypeFilter = "AND r.reservation_type = 'table'";
+    }
+  } catch (err) {
+    console.warn('Could not check for reservation_type column:', err.message);
+  }
+
   let sql = `
     SELECT 
       t.*,
@@ -46,7 +63,7 @@ async function findByBusiness(ownerUserId, businessId = null, includeInactive = 
           WHERE r.table_id = t.id 
           AND r.reservation_date = ?
           AND r.status = 'confirmed'
-          AND r.reservation_type = 'table'
+          ${reservationTypeFilter}
         )
         ELSE 0
       END as reservation_count,
@@ -61,7 +78,7 @@ async function findByBusiness(ownerUserId, businessId = null, includeInactive = 
           WHERE r.table_id = t.id 
           AND r.reservation_date = ?
           AND r.status = 'confirmed'
-          AND r.reservation_type = 'table'
+          ${reservationTypeFilter}
         )
         ELSE NULL
       END as reservations_data
