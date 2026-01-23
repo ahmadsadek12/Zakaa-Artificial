@@ -80,10 +80,12 @@ export default function Addons() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl">
           {subscriptions.map((subscription) => {
             const userHasIt = userSubscriptionIds.has(subscription.id)
-            const saleAmount = subscription.sale > 0 
-              ? (subscription.price * subscription.sale / 100) 
+            const price = typeof subscription.price === 'number' ? subscription.price : parseFloat(subscription.price || 0)
+            const sale = typeof subscription.sale === 'number' ? subscription.sale : parseFloat(subscription.sale || 0)
+            const saleAmount = sale > 0 
+              ? (price * sale / 100) 
               : 0
-            const finalPrice = subscription.price - saleAmount
+            const finalPrice = price - saleAmount
 
             return (
               <div
@@ -121,7 +123,7 @@ export default function Addons() {
                             ${finalPrice.toFixed(2)}
                           </span>
                           <span className="text-sm text-gray-500 line-through">
-                            ${subscription.price.toFixed(2)}
+                            ${price.toFixed(2)}
                           </span>
                           <span className="text-xs font-medium text-red-600 bg-red-100 px-2 py-1 rounded">
                             {subscription.sale}% OFF
@@ -129,7 +131,7 @@ export default function Addons() {
                         </>
                       ) : (
                         <span className="text-lg font-bold text-gray-900">
-                          ${subscription.price.toFixed(2)}
+                          ${price.toFixed(2)}
                         </span>
                       )}
                     </div>
@@ -167,7 +169,7 @@ export default function Addons() {
               {selectedSubscription.description}
             </p>
             <div className="text-lg font-semibold text-gray-900 mb-6">
-              ${selectedSubscription.price.toFixed(2)}
+              ${(typeof selectedSubscription.price === 'number' ? selectedSubscription.price : parseFloat(selectedSubscription.price || 0)).toFixed(2)}
               {selectedSubscription.sale > 0 && (
                 <span className="text-sm text-red-600 ml-2">
                   ({selectedSubscription.sale}% OFF)
