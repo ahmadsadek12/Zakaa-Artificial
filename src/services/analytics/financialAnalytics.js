@@ -13,10 +13,59 @@ async function getRevenue(businessId, period = 'daily', startDate, endDate) {
   try {
     const orderLogs = await getMongoCollection('order_logs');
     
-    // If MongoDB is unavailable, return empty array
+    // If MongoDB is unavailable, fallback to MySQL
     if (!orderLogs) {
-      logger.warn('MongoDB unavailable - returning empty revenue data');
-      return [];
+      logger.warn('MongoDB unavailable - using MySQL for revenue data');
+      
+      let dateFilter = '';
+      const params = [businessId];
+      if (startDate) {
+        dateFilter += ' AND created_at >= ?';
+        params.push(startDate);
+      }
+      if (endDate) {
+        dateFilter += ' AND created_at <= ?';
+        params.push(endDate + ' 23:59:59');
+      }
+      
+      const orders = await queryMySQL(`
+        SELECT 
+          DATE(created_at) as order_date,
+          DATE_FORMAT(created_at, '%Y-%m') as order_month,
+          total
+        FROM orders
+        WHERE business_id = ? AND status = 'completed' ${dateFilter}
+        ORDER BY created_at ASC
+      `, params);
+      
+      const revenueMap = {};
+      
+      for (const order of orders) {
+        let key;
+        const orderDate = order.order_date instanceof Date ? order.order_date : new Date(order.order_date);
+        
+        if (period === 'daily') {
+          key = orderDate.toISOString().split('T')[0];
+        } else if (period === 'weekly') {
+          const week = getWeekNumber(orderDate);
+          key = `${orderDate.getFullYear()}-W${week}`;
+        } else if (period === 'monthly') {
+          key = order.order_month || `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
+        }
+        
+        if (!revenueMap[key]) {
+          revenueMap[key] = {
+            period: key,
+            revenue: 0,
+            orders: 0
+          };
+        }
+        
+        revenueMap[key].revenue += parseFloat(order.total || 0);
+        revenueMap[key].orders += 1;
+      }
+      
+      return Object.values(revenueMap).sort((a, b) => a.period.localeCompare(b.period));
     }
     
     const query = {

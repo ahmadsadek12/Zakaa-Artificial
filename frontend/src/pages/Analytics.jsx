@@ -295,13 +295,13 @@ export default function Analytics() {
               </thead>
               <tbody>
                 {topCustomers.map((customer, index) => (
-                  <tr key={customer._id || index} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={customer.customerPhoneNumber || customer._id || index} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-3 px-4 text-sm">{customer.customerName || 'N/A'}</td>
-                    <td className="py-3 px-4 text-sm font-mono">{customer._id}</td>
+                    <td className="py-3 px-4 text-sm font-mono">{customer.customerPhoneNumber || customer._id || 'N/A'}</td>
                     <td className="py-3 px-4 text-sm font-medium">${customer.totalSpent?.toFixed(2) || 0}</td>
                     <td className="py-3 px-4 text-sm">{customer.orderCount || 0}</td>
                     <td className="py-3 px-4 text-sm">
-                      ${customer.orderCount > 0 ? (customer.totalSpent / customer.orderCount).toFixed(2) : 0}
+                      ${customer.averageOrderValue?.toFixed(2) || (customer.orderCount > 0 ? (customer.totalSpent / customer.orderCount).toFixed(2) : 0)}
                     </td>
                   </tr>
                 ))}
@@ -333,9 +333,9 @@ export default function Analytics() {
               </thead>
               <tbody>
                 {recurringCustomers.map((customer, index) => (
-                  <tr key={customer._id || index} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={customer.customerPhoneNumber || customer._id || index} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-3 px-4 text-sm">{customer.customerName || 'N/A'}</td>
-                    <td className="py-3 px-4 text-sm font-mono">{customer._id}</td>
+                    <td className="py-3 px-4 text-sm font-mono">{customer.customerPhoneNumber || customer._id || 'N/A'}</td>
                     <td className="py-3 px-4 text-sm font-medium">{customer.orderCount || 0}</td>
                     <td className="py-3 px-4 text-sm">${customer.totalSpent?.toFixed(2) || 0}</td>
                     <td className="py-3 px-4 text-sm text-gray-600">

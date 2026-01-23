@@ -56,10 +56,45 @@ async function getTopCustomers(businessId, limit = 10, startDate, endDate) {
   try {
     const orderLogs = await getMongoCollection('order_logs');
     
-    // If MongoDB is unavailable, return empty array
+    // If MongoDB is unavailable, fallback to MySQL
     if (!orderLogs) {
-      logger.warn('MongoDB unavailable - returning empty top customers list');
-      return [];
+      logger.warn('MongoDB unavailable - using MySQL for top customers');
+      
+      let dateFilter = '';
+      const params = [businessId];
+      if (startDate) {
+        dateFilter += ' AND created_at >= ?';
+        params.push(startDate);
+      }
+      if (endDate) {
+        dateFilter += ' AND created_at <= ?';
+        params.push(endDate + ' 23:59:59');
+      }
+      
+      const safeLimit = parseInt(limit, 10) || 10;
+      
+      const customers = await queryMySQL(`
+        SELECT 
+          customer_phone_number,
+          customer_name,
+          SUM(total) as total_spent,
+          COUNT(*) as order_count
+        FROM orders
+        WHERE business_id = ? AND status = 'completed' ${dateFilter}
+        GROUP BY customer_phone_number, customer_name
+        ORDER BY total_spent DESC
+        LIMIT ${safeLimit}
+      `, params);
+      
+      return customers.map(customer => ({
+        customerPhoneNumber: customer.customer_phone_number,
+        customerName: customer.customer_name || 'Unknown',
+        totalSpent: parseFloat(customer.total_spent || 0),
+        orderCount: parseInt(customer.order_count || 0),
+        averageOrderValue: customer.order_count > 0 
+          ? parseFloat(customer.total_spent) / parseInt(customer.order_count)
+          : 0
+      }));
     }
     
     const query = {
@@ -116,10 +151,44 @@ async function getRecurringCustomers(businessId, limit = 10, startDate, endDate)
   try {
     const orderLogs = await getMongoCollection('order_logs');
     
-    // If MongoDB is unavailable, return empty array
+    // If MongoDB is unavailable, fallback to MySQL
     if (!orderLogs) {
-      logger.warn('MongoDB unavailable - returning empty recurring customers list');
-      return [];
+      logger.warn('MongoDB unavailable - using MySQL for recurring customers');
+      
+      let dateFilter = '';
+      const params = [businessId];
+      if (startDate) {
+        dateFilter += ' AND created_at >= ?';
+        params.push(startDate);
+      }
+      if (endDate) {
+        dateFilter += ' AND created_at <= ?';
+        params.push(endDate + ' 23:59:59');
+      }
+      
+      const safeLimit = parseInt(limit, 10) || 10;
+      
+      const customers = await queryMySQL(`
+        SELECT 
+          customer_phone_number,
+          customer_name,
+          COUNT(*) as order_count,
+          SUM(total) as total_spent,
+          MAX(created_at) as last_order_date
+        FROM orders
+        WHERE business_id = ? AND status = 'completed' ${dateFilter}
+        GROUP BY customer_phone_number, customer_name
+        ORDER BY order_count DESC
+        LIMIT ${safeLimit}
+      `, params);
+      
+      return customers.map(customer => ({
+        customerPhoneNumber: customer.customer_phone_number,
+        customerName: customer.customer_name || 'Unknown',
+        orderCount: parseInt(customer.order_count || 0),
+        totalSpent: parseFloat(customer.total_spent || 0),
+        lastOrderDate: customer.last_order_date ? new Date(customer.last_order_date) : null
+      }));
     }
     
     const query = {
