@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
-import { BarChart3, TrendingUp, DollarSign, ShoppingCart, Users, Package, Clock, Menu, X } from 'lucide-react'
+import { BarChart3, TrendingUp, DollarSign, ShoppingCart, Users, Package, Clock, Menu, X, Award, Star, Calendar, PieChart, MapPin, RefreshCw } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts'
 import { getNavTerminology } from '../utils/terminology'
 
@@ -25,6 +25,14 @@ export default function Analytics() {
   const [popularItems, setPopularItems] = useState([])
   const [deliveredItems, setDeliveredItems] = useState([])
   const [lifetimeValue, setLifetimeValue] = useState(null)
+  const [loyalCustomer, setLoyalCustomer] = useState(null)
+  const [mostOrdered, setMostOrdered] = useState([])
+  const [mostRewarding, setMostRewarding] = useState([])
+  const [timeBreakdown, setTimeBreakdown] = useState([])
+  const [orderStatusBreakdown, setOrderStatusBreakdown] = useState([])
+  const [peakOrderingHours, setPeakOrderingHours] = useState([])
+  const [deliveryTypeSplit, setDeliveryTypeSplit] = useState([])
+  const [newVsReturning, setNewVsReturning] = useState(null)
   const [loading, setLoading] = useState(true)
   const [dateRange, setDateRange] = useState({
     startDate: '',
@@ -60,7 +68,15 @@ export default function Analytics() {
         recurringCustomersRes,
         popularItemsRes,
         deliveredItemsRes,
-        lifetimeValueRes
+        lifetimeValueRes,
+        loyalCustomerRes,
+        mostOrderedRes,
+        mostRewardingRes,
+        timeBreakdownRes,
+        orderStatusBreakdownRes,
+        peakOrderingHoursRes,
+        deliveryTypeSplitRes,
+        newVsReturningRes
       ] = await Promise.allSettled([
         axios.get(`${API_URL}/api/analytics/overview`, { headers, params }).catch(err => {
           if (err.response?.status === 403) return { data: { data: { overview: null } } }
@@ -88,6 +104,38 @@ export default function Analytics() {
         }),
         axios.get(`${API_URL}/api/analytics/customers/lifetime-value`, { headers, params }).catch(err => {
           if (err.response?.status === 403) return { data: { data: {} } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/loyal-customer`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: { loyalCustomer: null } } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/most-ordered`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: { mostOrdered: [] } } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/most-rewarding`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: { mostRewarding: [] } } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/time-breakdown?period=day`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: { timeBreakdown: [] } } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/orders/status-breakdown`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: [] } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/orders/peak-hours`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: [] } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/orders/delivery-type-split`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: [] } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/customers/new-vs-returning`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: { newVsReturning: null } } }
           throw err
         })
       ])
@@ -131,6 +179,14 @@ export default function Analytics() {
       setPopularItems(popularItemsRes.status === 'fulfilled' ? popularItemsRes.value.data.data.items || [] : [])
       setDeliveredItems(deliveredItemsRes.status === 'fulfilled' ? deliveredItemsRes.value.data.data.items || [] : [])
       setLifetimeValue(lifetimeValueRes.status === 'fulfilled' ? lifetimeValueRes.value.data.data || {} : {})
+      setLoyalCustomer(loyalCustomerRes.status === 'fulfilled' ? loyalCustomerRes.value.data.data.loyalCustomer || null : null)
+      setMostOrdered(mostOrderedRes.status === 'fulfilled' ? mostOrderedRes.value.data.data.mostOrdered || [] : [])
+      setMostRewarding(mostRewardingRes.status === 'fulfilled' ? mostRewardingRes.value.data.data.mostRewarding || [] : [])
+      setTimeBreakdown(timeBreakdownRes.status === 'fulfilled' ? timeBreakdownRes.value.data.data.timeBreakdown || [] : [])
+      setOrderStatusBreakdown(orderStatusBreakdownRes.status === 'fulfilled' ? orderStatusBreakdownRes.value.data.data || [] : [])
+      setPeakOrderingHours(peakOrderingHoursRes.status === 'fulfilled' ? peakOrderingHoursRes.value.data.data || [] : [])
+      setDeliveryTypeSplit(deliveryTypeSplitRes.status === 'fulfilled' ? deliveryTypeSplitRes.value.data.data || [] : [])
+      setNewVsReturning(newVsReturningRes.status === 'fulfilled' ? newVsReturningRes.value.data.data || null : null)
     } catch (error) {
       console.error('Error fetching analytics:', error)
     } finally {
@@ -164,6 +220,14 @@ export default function Analytics() {
     { id: 'popular-items', label: 'Popular Items', icon: Package },
     { id: 'delivered-items', label: 'Delivered Items', icon: Clock },
     { id: 'lifetime-value', label: 'Customer Lifetime Value', icon: DollarSign },
+    { id: 'loyal-customer', label: 'Loyal Customer', icon: Award },
+    { id: 'most-ordered', label: 'Most Ordered Service', icon: Star },
+    { id: 'most-rewarding', label: 'Most Rewarding Service', icon: Star },
+    { id: 'time-breakdown', label: 'Time Breakdown', icon: Calendar },
+    { id: 'order-status', label: 'Order Status Breakdown', icon: PieChart },
+    { id: 'peak-hours', label: 'Peak Ordering Hours', icon: Clock },
+    { id: 'delivery-split', label: 'Delivery Type Split', icon: MapPin },
+    { id: 'new-vs-returning', label: 'New vs Returning Customers', icon: RefreshCw },
   ]
 
   return (
@@ -542,6 +606,230 @@ export default function Analytics() {
               </div>
             )}
           </>
+        )}
+      </div>
+
+      {/* Loyal Customer */}
+      <div id="loyal-customer" className="card">
+        <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+          <Award size={24} />
+          Loyal Customer
+        </h2>
+        {loyalCustomer ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-600 mb-1">Customer Name</p>
+                <p className="text-lg font-bold text-gray-900">{loyalCustomer.customerName || 'N/A'}</p>
+              </div>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-600 mb-1">Total Orders</p>
+                <p className="text-lg font-bold text-gray-900">{loyalCustomer.orderCount || 0}</p>
+              </div>
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-600 mb-1">Total Spent</p>
+                <p className="text-lg font-bold text-gray-900">${loyalCustomer.totalSpent?.toFixed(2) || 0}</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-12 text-gray-500">No loyal customer data available</div>
+        )}
+      </div>
+
+      {/* Most Ordered Service */}
+      <div id="most-ordered" className="card">
+        <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+          <Star size={24} />
+          Most Ordered Service
+        </h2>
+        {mostOrdered.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Service Name</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Total Quantity</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mostOrdered.map((item, index) => (
+                  <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-4 text-sm">{item.name || item.serviceName || 'N/A'}</td>
+                    <td className="py-3 px-4 text-sm font-medium">{item.totalQuantity || item.quantity || 0}</td>
+                    <td className="py-3 px-4 text-sm">${item.revenue?.toFixed(2) || 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-center py-12 text-gray-500">No most ordered service data available</div>
+        )}
+      </div>
+
+      {/* Most Rewarding Service */}
+      <div id="most-rewarding" className="card">
+        <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+          <Star size={24} />
+          Most Rewarding Service
+        </h2>
+        {mostRewarding.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Service Name</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Revenue</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Profit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mostRewarding.map((item, index) => (
+                  <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-4 text-sm">{item.name || item.serviceName || 'N/A'}</td>
+                    <td className="py-3 px-4 text-sm font-medium">${item.revenue?.toFixed(2) || 0}</td>
+                    <td className="py-3 px-4 text-sm">${item.profit?.toFixed(2) || 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-center py-12 text-gray-500">No most rewarding service data available</div>
+        )}
+      </div>
+
+      {/* Time Breakdown */}
+      <div id="time-breakdown" className="card">
+        <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+          <Calendar size={24} />
+          Time Breakdown
+        </h2>
+        {timeBreakdown.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={timeBreakdown}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="period" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="order_count" fill="#000000">
+                {timeBreakdown.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill="#000000" />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="text-center py-12 text-gray-500">No time breakdown data available</div>
+        )}
+      </div>
+
+      {/* Order Status Breakdown */}
+      <div id="order-status" className="card">
+        <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+          <PieChart size={24} />
+          Order Status Breakdown
+        </h2>
+        {orderStatusBreakdown.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={orderStatusBreakdown}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="status" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="count" fill="#000000">
+                {orderStatusBreakdown.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill="#000000" />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="text-center py-12 text-gray-500">No order status breakdown data available</div>
+        )}
+      </div>
+
+      {/* Peak Ordering Hours */}
+      <div id="peak-hours" className="card">
+        <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+          <Clock size={24} />
+          Peak Ordering Hours
+        </h2>
+        {peakOrderingHours.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={peakOrderingHours}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="hour" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="order_count" fill="#000000">
+                {peakOrderingHours.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill="#000000" />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="text-center py-12 text-gray-500">No peak ordering hours data available</div>
+        )}
+      </div>
+
+      {/* Delivery Type Split */}
+      <div id="delivery-split" className="card">
+        <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+          <MapPin size={24} />
+          Delivery Type Split
+        </h2>
+        {deliveryTypeSplit.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={deliveryTypeSplit}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="type" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="count" fill="#000000">
+                {deliveryTypeSplit.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill="#000000" />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="text-center py-12 text-gray-500">No delivery type split data available</div>
+        )}
+      </div>
+
+      {/* New vs Returning Customers */}
+      <div id="new-vs-returning" className="card">
+        <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+          <RefreshCw size={24} />
+          New vs Returning Customers
+        </h2>
+        {newVsReturning ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-blue-50 p-6 rounded-lg">
+              <p className="text-sm text-gray-600 mb-2">New Customers</p>
+              <p className="text-3xl font-bold text-gray-900">{newVsReturning.newCustomers || 0}</p>
+              <p className="text-sm text-gray-500 mt-2">
+                {newVsReturning.totalCustomers > 0 
+                  ? `${((newVsReturning.newCustomers / newVsReturning.totalCustomers) * 100).toFixed(1)}% of total`
+                  : '0% of total'}
+              </p>
+            </div>
+            <div className="bg-green-50 p-6 rounded-lg">
+              <p className="text-sm text-gray-600 mb-2">Returning Customers</p>
+              <p className="text-3xl font-bold text-gray-900">{newVsReturning.returningCustomers || 0}</p>
+              <p className="text-sm text-gray-500 mt-2">
+                {newVsReturning.totalCustomers > 0 
+                  ? `${((newVsReturning.returningCustomers / newVsReturning.totalCustomers) * 100).toFixed(1)}% of total`
+                  : '0% of total'}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-12 text-gray-500">No new vs returning customer data available</div>
         )}
       </div>
     </div>
