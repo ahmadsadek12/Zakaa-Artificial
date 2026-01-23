@@ -49,11 +49,13 @@ async function findByBusiness(ownerUserId, businessId = null, includeInactive = 
       WHERE TABLE_SCHEMA = DATABASE() 
       AND TABLE_NAME = 'tables'
     `);
-    const columnNames = tableColumns.map(c => c.COLUMN_NAME);
-    hasOwnerUserId = columnNames.includes('owner_user_id');
-    hasTableNumber = columnNames.includes('table_number');
-    hasBusinessId = columnNames.includes('business_id');
-    hasIsActive = columnNames.includes('is_active');
+    if (Array.isArray(tableColumns)) {
+      const columnNames = tableColumns.map(c => c.COLUMN_NAME || c.column_name);
+      hasOwnerUserId = columnNames.includes('owner_user_id');
+      hasTableNumber = columnNames.includes('table_number');
+      hasBusinessId = columnNames.includes('business_id');
+      hasIsActive = columnNames.includes('is_active');
+    }
   } catch (err) {
     console.warn('Could not check tables columns:', err.message);
     // Fallback: assume old schema

@@ -37,12 +37,15 @@ async function findByBusiness(businessUserId, filters = {}) {
       AND TABLE_NAME = 'reservations'
       AND COLUMN_NAME IN ('owner_user_id', 'start_at', 'reservation_type')
     `);
-    const columnNames = tableColumns.map(c => c.COLUMN_NAME);
-    hasOwnerUserId = columnNames.includes('owner_user_id');
-    hasStartAt = columnNames.includes('start_at');
-    hasReservationType = columnNames.includes('reservation_type');
+    if (Array.isArray(tableColumns)) {
+      const columnNames = tableColumns.map(c => c.COLUMN_NAME || c.column_name);
+      hasOwnerUserId = columnNames.includes('owner_user_id');
+      hasStartAt = columnNames.includes('start_at');
+      hasReservationType = columnNames.includes('reservation_type');
+    }
   } catch (err) {
     console.warn('Could not check reservations columns:', err.message);
+    // Default to false (columns don't exist) if check fails
   }
 
   let sql = 'SELECT * FROM reservations WHERE business_user_id = ?';
