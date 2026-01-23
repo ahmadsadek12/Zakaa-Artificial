@@ -73,7 +73,27 @@ async function testMySQL() {
 let mongoClient = null;
 let mongoDb = null;
 
-const MONGODB_URI = `mongodb://${process.env.MONGODB_HOST || process.env.MONGO_URI?.replace('mongodb://', '').split(':')[0] || '127.0.0.1'}:${process.env.MONGODB_PORT || process.env.MONGO_URI?.split(':')[2] || '27017'}`;
+// Support multiple connection string formats:
+// 1. Full connection string (MongoDB Atlas): mongodb+srv://user:pass@host/db?options
+// 2. Full connection string (standard): mongodb://user:pass@host:port/db?options
+// 3. Individual components: MONGODB_HOST, MONGODB_PORT, etc.
+let MONGODB_URI = null;
+if (process.env.MONGO_URI) {
+  // Use full connection string if provided (supports mongodb+srv:// for Atlas)
+  MONGODB_URI = process.env.MONGO_URI;
+} else if (process.env.MONGODB_HOST) {
+  // Build connection string from individual components
+  const host = process.env.MONGODB_HOST;
+  const port = process.env.MONGODB_PORT || '27017';
+  const user = process.env.MONGODB_USER;
+  const password = process.env.MONGODB_PASSWORD;
+  const auth = (user && password) ? `${user}:${password}@` : '';
+  MONGODB_URI = `mongodb://${auth}${host}:${port}`;
+} else {
+  // Default to localhost
+  MONGODB_URI = 'mongodb://127.0.0.1:27017';
+}
+
 const MONGODB_DB_NAME = process.env.MONGODB_DATABASE || process.env.MONGO_DB_NAME || 'zakaa_db';
 
 // Track if MongoDB is known to be unavailable to skip connection attempts
@@ -90,20 +110,41 @@ async function connectMongoDB() {
   }
   
   try {
-    // Reduce timeout to fail faster - 1 second instead of 5
+    // For MongoDB Atlas (mongodb+srv://), use longer timeout
+    const isAtlas = MONGODB_URI.startsWith('mongodb+srv://');
+    const timeout = isAtlas ? 10000 : 1000; // 10s for Atlas, 1s for local
+    
     mongoClient = new MongoClient(MONGODB_URI, {
-      serverSelectionTimeoutMS: 1000, // Reduced from 5000 to fail faster
-      connectTimeoutMS: 1000 // Reduced from 5000 to fail faster
+      serverSelectionTimeoutMS: timeout,
+      connectTimeoutMS: timeout,
+      // For Atlas, add TLS options
+      ...(isAtlas && {
+        tls: true,
+        tlsAllowInvalidCertificates: false
+      })
     });
     
     await mongoClient.connect();
-    mongoDb = mongoClient.db(MONGODB_DB_NAME);
+    
+    // Extract database name from connection string if provided, otherwise use env var
+    let dbName = MONGODB_DB_NAME;
+    if (MONGODB_URI.includes('/')) {
+      const uriParts = MONGODB_URI.split('/');
+      if (uriParts.length > 1) {
+        const dbPart = uriParts[uriParts.length - 1].split('?')[0];
+        if (dbPart && dbPart.length > 0) {
+          dbName = dbPart;
+        }
+      }
+    }
+    
+    mongoDb = mongoClient.db(dbName);
     mongoUnavailable = false; // Reset flag on successful connection
     
-    console.log('MongoDB connected successfully');
+    console.log(`MongoDB connected successfully to ${isAtlas ? 'Atlas' : 'local'} database: ${dbName}`);
     return { client: mongoClient, db: mongoDb };
   } catch (error) {
-    console.error('MongoDB connection error:', error);
+    console.error('MongoDB connection error:', error.message);
     mongoClient = null;
     mongoDb = null;
     mongoUnavailable = true; // Mark as unavailable to skip future attempts

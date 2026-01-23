@@ -52,15 +52,15 @@ async function executeFunction(functionName, args, context) {
     for (const handler of handlers) {
       const result = await handler(functionName, args, context);
       if (result !== null) {
-        return result;
+          return result;
       }
     }
     
     // If no handler found the function, return error
-    return {
-      success: false,
-      error: `Unknown function: ${functionName}`
-    };
+        return {
+          success: false,
+          error: `Unknown function: ${functionName}`
+        };
   } catch (error) {
     logger.error(`Error executing function ${functionName}:`, error);
     return {
