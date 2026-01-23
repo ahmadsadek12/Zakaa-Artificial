@@ -55,8 +55,6 @@ export default function Layout({ children }) {
     { path: '/calendar', icon: Calendar, label: 'Calendar' },
     { path: '/analytics', icon: BarChart3, label: navTerms.analytics },
     { path: '/table-reservations', icon: Table, label: 'Table Reservations' },
-    { path: '/addons', icon: Package, label: 'Add-ons' },
-    { path: '/addons-management', icon: Settings2, label: 'Add-ons Management' },
     { path: '/settings', icon: Settings, label: 'Settings' },
   ]
 
