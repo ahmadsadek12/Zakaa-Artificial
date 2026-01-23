@@ -39,7 +39,7 @@ async function findByBusiness(ownerUserId, businessId = null, includeInactive = 
   // First check if reservation_type column exists
   let reservationTypeFilter = '';
   try {
-    const [columns] = await queryMySQL(`
+    const columns = await queryMySQL(`
       SELECT COLUMN_NAME 
       FROM INFORMATION_SCHEMA.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
