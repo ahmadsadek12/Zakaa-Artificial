@@ -56,15 +56,15 @@ async function runMigration() {
     await connection.query('SET FOREIGN_KEY_CHECKS = 0');
     console.log('Foreign key checks disabled');
     
-    // Drop problematic foreign key if it exists
+    // Drop all problematic foreign keys
     for (const fk of fks) {
-      if (fk.CONSTRAINT_NAME === 'reservations_ibfk_1') {
-        console.log('Dropping problematic foreign key: reservations_ibfk_1');
+      if (fk.CONSTRAINT_NAME.startsWith('reservations_ibfk_')) {
+        console.log(`Dropping foreign key: ${fk.CONSTRAINT_NAME}`);
         try {
-          await connection.query(`ALTER TABLE reservations DROP FOREIGN KEY reservations_ibfk_1`);
-          console.log('Foreign key dropped successfully');
+          await connection.query(`ALTER TABLE reservations DROP FOREIGN KEY ${fk.CONSTRAINT_NAME}`);
+          console.log(`Foreign key ${fk.CONSTRAINT_NAME} dropped successfully`);
         } catch (err) {
-          console.log('Could not drop foreign key (may not exist):', err.message);
+          console.log(`Could not drop foreign key ${fk.CONSTRAINT_NAME}:`, err.message);
         }
       }
     }
@@ -137,8 +137,10 @@ async function runMigration() {
       }
     }
 
-    // Recreate the user_id foreign key if it was dropped
-    console.log('Recreating user_id foreign key constraint...');
+    // Recreate foreign keys with proper character set/collation
+    console.log('Recreating foreign key constraints...');
+    
+    // Recreate user_id foreign key
     try {
       await connection.query(`
         ALTER TABLE reservations 
@@ -148,22 +150,25 @@ async function runMigration() {
       console.log('Foreign key reservations_ibfk_1 recreated');
     } catch (err) {
       if (err.code === 'ER_DUP_KEY' || err.code === 'ER_DUP_KEYNAME') {
-        console.log('Foreign key already exists, skipping');
+        console.log('Foreign key reservations_ibfk_1 already exists, skipping');
       } else {
-        console.log('Could not recreate foreign key (checking data types):', err.message);
-        // Check if user_id column type matches users.id
-        const [userCols] = await connection.query(`
-          SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS 
-          WHERE TABLE_SCHEMA = DATABASE() 
-          AND TABLE_NAME = 'users' AND COLUMN_NAME = 'id'
-        `);
-        const [resCols] = await connection.query(`
-          SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS 
-          WHERE TABLE_SCHEMA = DATABASE() 
-          AND TABLE_NAME = 'reservations' AND COLUMN_NAME = 'user_id'
-        `);
-        console.log(`users.id type: ${userCols[0]?.COLUMN_TYPE}`);
-        console.log(`reservations.user_id type: ${resCols[0]?.COLUMN_TYPE}`);
+        console.log('Could not recreate reservations_ibfk_1:', err.message);
+      }
+    }
+    
+    // Recreate business_user_id foreign key
+    try {
+      await connection.query(`
+        ALTER TABLE reservations 
+        ADD CONSTRAINT reservations_ibfk_2 
+        FOREIGN KEY (business_user_id) REFERENCES users(id) ON DELETE CASCADE
+      `);
+      console.log('Foreign key reservations_ibfk_2 recreated');
+    } catch (err) {
+      if (err.code === 'ER_DUP_KEY' || err.code === 'ER_DUP_KEYNAME') {
+        console.log('Foreign key reservations_ibfk_2 already exists, skipping');
+      } else {
+        console.log('Could not recreate reservations_ibfk_2:', err.message);
       }
     }
 
