@@ -70,32 +70,38 @@ async function getPopularItems(businessId, limit = 10) {
       throw new Error('Limit must be between 1 and 100');
     }
     
-    // Try to query with times_ordered - if column doesn't exist, return empty array
+    // Calculate from order_items table instead of relying on times_ordered column
     // Note: LIMIT cannot be parameterized in some MySQL versions, so we use it directly (safe since we validated it)
     const items = await queryMySQL(`
-      SELECT id, name, description, price, times_ordered, times_delivered
-      FROM items
-      WHERE business_id = ? AND deleted_at IS NULL
+      SELECT 
+        i.id,
+        i.name,
+        i.description,
+        i.price,
+        COALESCE(SUM(oi.quantity), 0) as times_ordered,
+        COALESCE(SUM(CASE WHEN o.status = 'completed' THEN oi.quantity ELSE 0 END), 0) as times_delivered
+      FROM items i
+      LEFT JOIN order_items oi ON i.id = oi.item_id
+      LEFT JOIN orders o ON oi.order_id = o.id AND o.business_id = ?
+      WHERE i.business_id = ? AND i.deleted_at IS NULL
+      GROUP BY i.id, i.name, i.description, i.price
+      HAVING times_ordered > 0
       ORDER BY times_ordered DESC
       LIMIT ${safeLimit}
-    `, [businessId]);
+    `, [businessId, businessId]);
     
     return items.map(item => ({
       itemId: item.id,
       name: item.name,
       description: item.description,
       price: parseFloat(item.price || 0),
-      timesOrdered: item.times_ordered || 0,
-      timesDelivered: item.times_delivered || 0
+      timesOrdered: parseInt(item.times_ordered || 0),
+      timesDelivered: parseInt(item.times_delivered || 0)
     }));
   } catch (error) {
-    // If error is about unknown column, return empty array
-    if (error.message && error.message.includes('Unknown column')) {
-      logger.warn('times_ordered column not found - returning empty popular items list');
-      return [];
-    }
     logger.error('Error getting popular items:', error);
-    throw error;
+    // Return empty array on error instead of throwing
+    return [];
   }
 }
 
@@ -110,35 +116,45 @@ async function getMostDeliveredItems(businessId, limit = 10) {
       throw new Error('Limit must be between 1 and 100');
     }
     
-    // Try to query with times_delivered - if column doesn't exist, return empty array
+    // Calculate from order_items table instead of relying on times_delivered column
     // Note: LIMIT cannot be parameterized in some MySQL versions, so we use it directly (safe since we validated it)
     const items = await queryMySQL(`
-      SELECT id, name, description, price, times_ordered, times_delivered
-      FROM items
-      WHERE business_id = ? AND deleted_at IS NULL
+      SELECT 
+        i.id,
+        i.name,
+        i.description,
+        i.price,
+        COALESCE(SUM(oi.quantity), 0) as times_ordered,
+        COALESCE(SUM(CASE WHEN o.status = 'completed' THEN oi.quantity ELSE 0 END), 0) as times_delivered
+      FROM items i
+      LEFT JOIN order_items oi ON i.id = oi.item_id
+      LEFT JOIN orders o ON oi.order_id = o.id AND o.business_id = ?
+      WHERE i.business_id = ? AND i.deleted_at IS NULL
+      GROUP BY i.id, i.name, i.description, i.price
+      HAVING times_delivered > 0
       ORDER BY times_delivered DESC
       LIMIT ${safeLimit}
-    `, [businessId]);
+    `, [businessId, businessId]);
     
-    return items.map(item => ({
-      itemId: item.id,
-      name: item.name,
-      description: item.description,
-      price: parseFloat(item.price || 0),
-      timesOrdered: item.times_ordered || 0,
-      timesDelivered: item.times_delivered || 0,
-      completionRate: item.times_ordered > 0 
-        ? ((item.times_delivered || 0) / item.times_ordered) * 100 
-        : 0
-    }));
+    return items.map(item => {
+      const timesOrdered = parseInt(item.times_ordered || 0);
+      const timesDelivered = parseInt(item.times_delivered || 0);
+      return {
+        itemId: item.id,
+        name: item.name,
+        description: item.description,
+        price: parseFloat(item.price || 0),
+        timesOrdered: timesOrdered,
+        timesDelivered: timesDelivered,
+        completionRate: timesOrdered > 0 
+          ? (timesDelivered / timesOrdered) * 100 
+          : 0
+      };
+    });
   } catch (error) {
-    // If error is about unknown column, return empty array
-    if (error.message && error.message.includes('Unknown column')) {
-      logger.warn('times_delivered column not found - returning empty delivered items list');
-      return [];
-    }
     logger.error('Error getting most delivered items:', error);
-    throw error;
+    // Return empty array on error instead of throwing
+    return [];
   }
 }
 

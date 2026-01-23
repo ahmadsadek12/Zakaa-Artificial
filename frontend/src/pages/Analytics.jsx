@@ -410,7 +410,7 @@ export default function Analytics() {
                   return value
                 }}
               />
-              <Bar dataKey="times_delivered" fill="#10b981">
+              <Bar dataKey="timesDelivered" fill="#10b981">
                 {deliveredItems.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
@@ -466,12 +466,12 @@ export default function Analytics() {
                   </thead>
                   <tbody>
                     {lifetimeValue.customers.slice(0, 10).map((customer, index) => (
-                      <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-3 px-4 text-sm font-mono">{customer.phone || customer._id}</td>
+                      <tr key={customer.customerPhoneNumber || customer.phone || customer._id || index} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-sm font-mono">{customer.customerPhoneNumber || customer.phone || customer._id || 'N/A'}</td>
                         <td className="py-3 px-4 text-sm font-medium">${customer.totalSpent?.toFixed(2) || 0}</td>
                         <td className="py-3 px-4 text-sm">{customer.orderCount || 0}</td>
                         <td className="py-3 px-4 text-sm">
-                          ${customer.orderCount > 0 ? (customer.totalSpent / customer.orderCount).toFixed(2) : 0}
+                          ${customer.averageOrderValue?.toFixed(2) || (customer.orderCount > 0 ? (customer.totalSpent / customer.orderCount).toFixed(2) : 0)}
                         </td>
                         <td className="py-3 px-4 text-sm text-gray-600">
                           {customer.lastOrderDate ? new Date(customer.lastOrderDate).toLocaleDateString() : 'N/A'}

@@ -245,14 +245,75 @@ async function getCustomerLifetimeValue(businessId, startDate, endDate) {
   try {
     const orderLogs = await getMongoCollection('order_logs');
     
-    // If MongoDB is unavailable, return empty result
+    // If MongoDB is unavailable, fallback to MySQL
     if (!orderLogs) {
-      logger.warn('MongoDB unavailable - returning empty lifetime value data');
+      logger.warn('MongoDB unavailable - using MySQL for lifetime value data');
+      
+      let dateFilter = '';
+      const params = [businessId];
+      if (startDate) {
+        dateFilter += ' AND created_at >= ?';
+        params.push(startDate);
+      }
+      if (endDate) {
+        dateFilter += ' AND created_at <= ?';
+        params.push(endDate + ' 23:59:59');
+      }
+      
+      const customers = await queryMySQL(`
+        SELECT 
+          customer_phone_number,
+          customer_name,
+          COUNT(*) as order_count,
+          SUM(total) as total_spent,
+          MIN(created_at) as first_order_date,
+          MAX(created_at) as last_order_date
+        FROM orders
+        WHERE business_id = ? AND status = 'completed' ${dateFilter}
+        GROUP BY customer_phone_number, customer_name
+        ORDER BY total_spent DESC
+      `, params);
+      
+      const customerList = customers.map(customer => {
+        const totalSpent = parseFloat(customer.total_spent || 0);
+        const orderCount = parseInt(customer.order_count || 0);
+        const firstOrderDate = customer.first_order_date ? new Date(customer.first_order_date) : null;
+        const lastOrderDate = customer.last_order_date ? new Date(customer.last_order_date) : null;
+        
+        let customerLifespanDays = 0;
+        let ordersPerDay = 0;
+        if (firstOrderDate && lastOrderDate) {
+          customerLifespanDays = Math.ceil((lastOrderDate - firstOrderDate) / (1000 * 60 * 60 * 24));
+          ordersPerDay = customerLifespanDays > 0 ? orderCount / customerLifespanDays : orderCount;
+        }
+        
+        return {
+          customerPhoneNumber: customer.customer_phone_number,
+          customerName: customer.customer_name || 'Unknown',
+          totalSpent: totalSpent,
+          orderCount: orderCount,
+          averageOrderValue: orderCount > 0 ? totalSpent / orderCount : 0,
+          lifetimeValue: totalSpent,
+          firstOrderDate: firstOrderDate,
+          lastOrderDate: lastOrderDate,
+          customerLifespanDays: customerLifespanDays,
+          ordersPerDay: ordersPerDay
+        };
+      });
+      
+      const totalCustomers = customerList.length;
+      const totalRevenue = customerList.reduce((sum, c) => sum + c.totalSpent, 0);
+      const averageLifetimeValue = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
+      const averageOrdersPerCustomer = totalCustomers > 0 
+        ? customerList.reduce((sum, c) => sum + c.orderCount, 0) / totalCustomers 
+        : 0;
+      
       return {
-        totalCustomers: 0,
-        totalRevenue: 0,
-        averageLifetimeValue: 0,
-        customers: []
+        totalCustomers: totalCustomers,
+        totalRevenue: totalRevenue,
+        averageLifetimeValue: averageLifetimeValue,
+        averageOrdersPerCustomer: averageOrdersPerCustomer,
+        customers: customerList.sort((a, b) => b.lifetimeValue - a.lifetimeValue)
       };
     }
     
