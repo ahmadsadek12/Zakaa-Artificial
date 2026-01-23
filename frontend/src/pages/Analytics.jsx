@@ -110,8 +110,10 @@ export default function Analytics() {
       console.log('Basic Overview (extracted):', basicOverview)
       console.log('Premium Overview:', premiumOverview)
       
-      // Set overview - use premium if available, otherwise use basic
-      const finalOverview = premiumOverview || basicOverview
+      // Set overview - use premium if it has actual data (not all zeros), otherwise use basic
+      // Check if premium overview has meaningful data (totalOrders > 0)
+      const hasPremiumData = premiumOverview && premiumOverview.totalOrders > 0
+      const finalOverview = hasPremiumData ? premiumOverview : basicOverview
       console.log('Final Overview (setting state):', finalOverview)
       
       if (finalOverview) {

@@ -10,27 +10,39 @@ const logger = require('../../utils/logger');
 async function getOverview(businessId, startDate, endDate) {
   try {
     // Try to get MongoDB collection, but fallback to MySQL if MongoDB not available
-    let orderLogs;
-    try {
-      orderLogs = await getMongoCollection('order_logs');
-    } catch (mongoError) {
-      logger.warn('MongoDB not available, using MySQL for analytics:', mongoError.message);
+    const orderLogs = await getMongoCollection('order_logs');
+    
+    // If MongoDB is unavailable (returns null), fallback to MySQL
+    if (!orderLogs) {
+      logger.warn('MongoDB not available, using MySQL for analytics');
       // Fallback to MySQL orders table
+      let dateFilter = '';
+      const params = [businessId];
+      if (startDate) {
+        dateFilter += ' AND created_at >= ?';
+        params.push(startDate);
+      }
+      if (endDate) {
+        dateFilter += ' AND created_at <= ?';
+        params.push(endDate + ' 23:59:59');
+      }
+      
       const orders = await queryMySQL(
         `SELECT * FROM orders 
          WHERE business_id = ? AND status = 'completed' 
-         ${startDate ? 'AND created_at >= ?' : ''} 
-         ${endDate ? 'AND created_at <= ?' : ''}
+         ${dateFilter}
          ORDER BY created_at DESC`,
-        [businessId, startDate, endDate].filter(Boolean)
+        params
       );
+      
+      const totalRevenue = orders.reduce((sum, o) => sum + parseFloat(o.total || 0), 0);
       
       return {
         totalOrders: orders.length,
         completedOrders: orders.length,
         cancelledOrders: 0,
-        totalRevenue: orders.reduce((sum, o) => sum + parseFloat(o.total || 0), 0),
-        averageOrderValue: orders.length > 0 ? orders.reduce((sum, o) => sum + parseFloat(o.total || 0), 0) / orders.length : 0,
+        totalRevenue: totalRevenue,
+        averageOrderValue: orders.length > 0 ? totalRevenue / orders.length : 0,
         totalItemsSold: 0 // Would need to join order_items for accurate count
       };
     }
