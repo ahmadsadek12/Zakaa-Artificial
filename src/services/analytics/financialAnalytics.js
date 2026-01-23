@@ -27,6 +27,10 @@ async function getRevenue(businessId, period = 'daily', startDate, endDate) {
         dateFilter += ' AND created_at <= ?';
         params.push(endDate + ' 23:59:59');
       }
+      // If no endDate, include today's orders up to current time
+      if (!endDate) {
+        dateFilter += ' AND created_at <= NOW()';
+      }
       
       const orders = await queryMySQL(`
         SELECT 
