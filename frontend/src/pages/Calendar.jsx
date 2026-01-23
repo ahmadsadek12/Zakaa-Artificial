@@ -800,6 +800,7 @@ export default function Calendar() {
                     customer_name: r.customer_name,
                     customer_phone_number: r.customer_phone_number,
                     time: r.reservation_time,
+                    income: null, // Reservations don't have income
                     date: r.reservation_date,
                     number_of_guests: r.number_of_guests,
                     table_id: r.table_id,

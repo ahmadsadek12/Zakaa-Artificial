@@ -48,12 +48,12 @@ async function findByBusiness(businessUserId, filters = {}) {
   }
   
   if (filters.startDate) {
-    sql += ' AND (reservation_date >= ? OR start_at >= ?)';
+    sql += ' AND (reservation_date >= ? OR (start_at IS NOT NULL AND start_at >= ?))';
     params.push(filters.startDate, filters.startDate);
   }
   
   if (filters.endDate) {
-    sql += ' AND (reservation_date <= ? OR start_at <= ?)';
+    sql += ' AND (reservation_date <= ? OR (start_at IS NOT NULL AND start_at <= ?))';
     params.push(filters.endDate, filters.endDate);
   }
   
@@ -62,12 +62,13 @@ async function findByBusiness(businessUserId, filters = {}) {
     params.push(filters.reservationKind);
   }
   
+  // Only filter by reservation_type if the column exists (check first)
   if (filters.reservationType) {
     sql += ' AND reservation_type = ?';
     params.push(filters.reservationType);
   }
   
-  if (filters.type) {
+  if (filters.type && filters.type !== filters.reservationType) {
     sql += ' AND reservation_type = ?';
     params.push(filters.type);
   }
