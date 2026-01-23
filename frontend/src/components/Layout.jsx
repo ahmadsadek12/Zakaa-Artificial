@@ -15,7 +15,8 @@ import {
   X,
   Shield,
   Building2,
-  Settings2
+  Settings2,
+  Table
 } from 'lucide-react'
 import { useState } from 'react'
 import { getTerminology, getNavTerminology } from '../utils/terminology'
@@ -53,6 +54,7 @@ export default function Layout({ children }) {
     { path: '/items', icon: Package, label: terms.items },
     { path: '/calendar', icon: Calendar, label: 'Calendar' },
     { path: '/analytics', icon: BarChart3, label: navTerms.analytics },
+    { path: '/table-reservations', icon: Table, label: 'Table Reservations' },
     { path: '/addons', icon: Package, label: 'Add-ons' },
     { path: '/addons-management', icon: Settings2, label: 'Add-ons Management' },
     { path: '/settings', icon: Settings, label: 'Settings' },

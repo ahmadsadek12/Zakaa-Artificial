@@ -26,10 +26,8 @@ export default function Analytics() {
   })
 
   useEffect(() => {
-    if (user?.subscription_type === 'premium') {
-      fetchAnalytics()
-    }
-  }, [user, dateRange])
+    fetchAnalytics()
+  }, [dateRange])
 
   const fetchAnalytics = async () => {
     try {
@@ -39,6 +37,10 @@ export default function Analytics() {
       if (dateRange.startDate) params.startDate = dateRange.startDate
       if (dateRange.endDate) params.endDate = dateRange.endDate
 
+      // Fetch free metrics first
+      const freeMetricsRes = await axios.get(`${API_URL}/api/analytics/free`, { headers, params }).catch(() => ({ data: { data: { freeMetrics: null } } }))
+      
+      // Try to fetch premium metrics (will fail gracefully if not premium)
       const [
         overviewRes,
         revenueRes,
@@ -47,7 +49,7 @@ export default function Analytics() {
         popularItemsRes,
         deliveredItemsRes,
         lifetimeValueRes
-      ] = await Promise.all([
+      ] = await Promise.allSettled([
         axios.get(`${API_URL}/api/analytics/overview`, { headers, params }),
         axios.get(`${API_URL}/api/analytics/revenue?period=daily`, { headers, params }),
         axios.get(`${API_URL}/api/analytics/customers/top?limit=10`, { headers, params }),
@@ -57,13 +59,14 @@ export default function Analytics() {
         axios.get(`${API_URL}/api/analytics/customers/lifetime-value`, { headers, params })
       ])
       
-      setOverview(overviewRes.data.data.overview)
-      setRevenue(revenueRes.data.data.revenue || [])
-      setTopCustomers(topCustomersRes.data.data.customers || [])
-      setRecurringCustomers(recurringCustomersRes.data.data.customers || [])
-      setPopularItems(popularItemsRes.data.data.items || [])
-      setDeliveredItems(deliveredItemsRes.data.data.items || [])
-      setLifetimeValue(lifetimeValueRes.data.data || {})
+      // Extract data from settled promises
+      setOverview(overviewRes.status === 'fulfilled' ? overviewRes.value.data.data.overview : null)
+      setRevenue(revenueRes.status === 'fulfilled' ? revenueRes.value.data.data.revenue || [] : [])
+      setTopCustomers(topCustomersRes.status === 'fulfilled' ? topCustomersRes.value.data.data.customers || [] : [])
+      setRecurringCustomers(recurringCustomersRes.status === 'fulfilled' ? recurringCustomersRes.value.data.data.customers || [] : [])
+      setPopularItems(popularItemsRes.status === 'fulfilled' ? popularItemsRes.value.data.data.items || [] : [])
+      setDeliveredItems(deliveredItemsRes.status === 'fulfilled' ? deliveredItemsRes.value.data.data.items || [] : [])
+      setLifetimeValue(lifetimeValueRes.status === 'fulfilled' ? lifetimeValueRes.value.data.data || {} : {})
     } catch (error) {
       console.error('Error fetching analytics:', error)
     } finally {
@@ -71,16 +74,7 @@ export default function Analytics() {
     }
   }
 
-  if (user?.subscription_type !== 'premium') {
-    return (
-      <div className="card text-center py-12">
-        <BarChart3 size={64} className="mx-auto mb-4 text-gray-400" />
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Premium Feature</h2>
-        <p className="text-gray-600 mb-6">{navTerms.upgradeToPremium} to access advanced {navTerms.analytics.toLowerCase()}</p>
-        <button className="btn btn-primary">{navTerms.upgradeToPremium}</button>
-      </div>
-    )
-  }
+  // Show analytics regardless of subscription - some metrics are free
 
   if (loading) {
     return (
@@ -103,7 +97,9 @@ export default function Analytics() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
-              <p className="text-3xl font-bold text-gray-900">${overview?.totalRevenue || 0}</p>
+              <p className="text-3xl font-bold text-gray-900">
+                ${overview?.totalRevenue ? typeof overview.totalRevenue === 'number' ? overview.totalRevenue.toFixed(2) : parseFloat(overview.totalRevenue || 0).toFixed(2) : '0.00'}
+              </p>
             </div>
             <div className="p-3 rounded-lg bg-green-50 text-green-600">
               <DollarSign size={24} />
@@ -136,7 +132,9 @@ export default function Analytics() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 mb-1">Avg Order Value</p>
-              <p className="text-3xl font-bold text-gray-900">${overview?.averageOrderValue?.toFixed(2) || 0}</p>
+              <p className="text-3xl font-bold text-gray-900">
+                ${overview?.averageOrderValue ? typeof overview.averageOrderValue === 'number' ? overview.averageOrderValue.toFixed(2) : parseFloat(overview.averageOrderValue || 0).toFixed(2) : '0.00'}
+              </p>
             </div>
             <div className="p-3 rounded-lg bg-orange-50 text-orange-600">
               <BarChart3 size={24} />
@@ -144,6 +142,14 @@ export default function Analytics() {
           </div>
         </div>
       </div>
+
+      {!overview && (
+        <div className="card bg-yellow-50 border-yellow-200">
+          <p className="text-yellow-800">
+            Premium analytics require a premium subscription. Some free metrics may be available.
+          </p>
+        </div>
+      )}
 
       {/* Date Range Filter */}
       <div className="card">
