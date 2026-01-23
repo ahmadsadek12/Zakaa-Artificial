@@ -64,14 +64,21 @@ async function getTopItems(businessId, limit = 10, startDate, endDate) {
  */
 async function getPopularItems(businessId, limit = 10) {
   try {
+    // Ensure limit is a valid integer (safe to use in query string)
+    const safeLimit = parseInt(limit, 10) || 10;
+    if (safeLimit < 1 || safeLimit > 100) {
+      throw new Error('Limit must be between 1 and 100');
+    }
+    
     // Try to query with times_ordered - if column doesn't exist, return empty array
+    // Note: LIMIT cannot be parameterized in some MySQL versions, so we use it directly (safe since we validated it)
     const items = await queryMySQL(`
       SELECT id, name, description, price, times_ordered, times_delivered
       FROM items
       WHERE business_id = ? AND deleted_at IS NULL
       ORDER BY times_ordered DESC
-      LIMIT ?
-    `, [businessId, limit]);
+      LIMIT ${safeLimit}
+    `, [businessId]);
     
     return items.map(item => ({
       itemId: item.id,
@@ -97,14 +104,21 @@ async function getPopularItems(businessId, limit = 10) {
  */
 async function getMostDeliveredItems(businessId, limit = 10) {
   try {
+    // Ensure limit is a valid integer (safe to use in query string)
+    const safeLimit = parseInt(limit, 10) || 10;
+    if (safeLimit < 1 || safeLimit > 100) {
+      throw new Error('Limit must be between 1 and 100');
+    }
+    
     // Try to query with times_delivered - if column doesn't exist, return empty array
+    // Note: LIMIT cannot be parameterized in some MySQL versions, so we use it directly (safe since we validated it)
     const items = await queryMySQL(`
       SELECT id, name, description, price, times_ordered, times_delivered
       FROM items
       WHERE business_id = ? AND deleted_at IS NULL
       ORDER BY times_delivered DESC
-      LIMIT ?
-    `, [businessId, limit]);
+      LIMIT ${safeLimit}
+    `, [businessId]);
     
     return items.map(item => ({
       itemId: item.id,
