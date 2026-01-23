@@ -42,9 +42,32 @@ async function runMigration() {
 
     console.log('Connected to MySQL database');
 
+    // Check and fix existing foreign key constraints that might be causing issues
+    console.log('Checking existing foreign key constraints...');
+    const [fks] = await connection.query(`
+      SELECT CONSTRAINT_NAME 
+      FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'reservations' 
+      AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+    `);
+    
     // Disable foreign key checks temporarily to avoid constraint issues
     await connection.query('SET FOREIGN_KEY_CHECKS = 0');
     console.log('Foreign key checks disabled');
+    
+    // Drop problematic foreign key if it exists
+    for (const fk of fks) {
+      if (fk.CONSTRAINT_NAME === 'reservations_ibfk_1') {
+        console.log('Dropping problematic foreign key: reservations_ibfk_1');
+        try {
+          await connection.query(`ALTER TABLE reservations DROP FOREIGN KEY reservations_ibfk_1`);
+          console.log('Foreign key dropped successfully');
+        } catch (err) {
+          console.log('Could not drop foreign key (may not exist):', err.message);
+        }
+      }
+    }
 
     // Add columns to reservations table
     const columnsToAdd = [
@@ -114,6 +137,36 @@ async function runMigration() {
       }
     }
 
+    // Recreate the user_id foreign key if it was dropped
+    console.log('Recreating user_id foreign key constraint...');
+    try {
+      await connection.query(`
+        ALTER TABLE reservations 
+        ADD CONSTRAINT reservations_ibfk_1 
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+      `);
+      console.log('Foreign key reservations_ibfk_1 recreated');
+    } catch (err) {
+      if (err.code === 'ER_DUP_KEY' || err.code === 'ER_DUP_KEYNAME') {
+        console.log('Foreign key already exists, skipping');
+      } else {
+        console.log('Could not recreate foreign key (checking data types):', err.message);
+        // Check if user_id column type matches users.id
+        const [userCols] = await connection.query(`
+          SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS 
+          WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'users' AND COLUMN_NAME = 'id'
+        `);
+        const [resCols] = await connection.query(`
+          SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS 
+          WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'reservations' AND COLUMN_NAME = 'user_id'
+        `);
+        console.log(`users.id type: ${userCols[0]?.COLUMN_TYPE}`);
+        console.log(`reservations.user_id type: ${resCols[0]?.COLUMN_TYPE}`);
+      }
+    }
+
     // Re-enable foreign key checks
     await connection.query('SET FOREIGN_KEY_CHECKS = 1');
     console.log('Foreign key checks re-enabled');
@@ -143,7 +196,7 @@ async function runMigration() {
       WHERE reservation_type IS NULL OR owner_user_id IS NULL OR platform IS NULL
     `);
 
-    // Add indexes
+    // Add indexes (with foreign key checks still disabled)
     const indexes = [
       { name: 'idx_res_datetime', columns: '(reservation_date, reservation_time)' },
       { name: 'idx_res_table', columns: '(table_id)' },
@@ -156,9 +209,13 @@ async function runMigration() {
       const exists = await indexExists(connection, 'reservations', index.name);
       if (!exists) {
         console.log(`Adding index: ${index.name}`);
-        await connection.query(
-          `CREATE INDEX ${index.name} ON reservations ${index.columns}`
-        );
+        try {
+          await connection.query(
+            `CREATE INDEX ${index.name} ON reservations ${index.columns}`
+          );
+        } catch (err) {
+          console.log(`Warning: Could not create index ${index.name}:`, err.message);
+        }
       } else {
         console.log(`Index ${index.name} already exists, skipping`);
       }
