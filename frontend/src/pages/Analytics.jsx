@@ -40,6 +40,9 @@ export default function Analytics() {
       // Fetch free metrics first
       const freeMetricsRes = await axios.get(`${API_URL}/api/analytics/free`, { headers, params }).catch(() => ({ data: { data: { freeMetrics: null } } }))
       
+      // Try to fetch basic overview (no premium required)
+      const basicOverviewRes = await axios.get(`${API_URL}/api/analytics/basic-overview`, { headers, params }).catch(() => ({ data: { data: { overview: null } } }))
+      
       // Try to fetch premium metrics (will fail gracefully if not premium or 403)
       const [
         overviewRes,
@@ -80,8 +83,11 @@ export default function Analytics() {
         })
       ])
       
-      // Extract data from settled promises
-      setOverview(overviewRes.status === 'fulfilled' ? overviewRes.value.data.data.overview : null)
+      // Use premium overview if available, otherwise use basic overview
+      const premiumOverview = overviewRes.status === 'fulfilled' ? overviewRes.value.data.data.overview : null
+      const basicOverview = basicOverviewRes.data?.data?.overview
+      setOverview(premiumOverview || basicOverview || null)
+      
       setRevenue(revenueRes.status === 'fulfilled' ? revenueRes.value.data.data.revenue || [] : [])
       setTopCustomers(topCustomersRes.status === 'fulfilled' ? topCustomersRes.value.data.data.customers || [] : [])
       setRecurringCustomers(recurringCustomersRes.status === 'fulfilled' ? recurringCustomersRes.value.data.data.customers || [] : [])

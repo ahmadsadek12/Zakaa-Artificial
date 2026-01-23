@@ -48,6 +48,63 @@ router.get('/free', [
 }));
 
 /**
+ * Get basic overview (no premium required) - calculates from orders table
+ * GET /api/analytics/basic-overview?startDate=&endDate=
+ */
+router.get('/basic-overview', [
+  query('startDate').optional().isISO8601(),
+  query('endDate').optional().isISO8601()
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+  
+  const { startDate, endDate } = req.query;
+  const { queryMySQL } = require('../../config/database');
+  
+  // Build date filter
+  let dateFilter = '';
+  const params = [req.businessId];
+  if (startDate) {
+    dateFilter += ' AND created_at >= ?';
+    params.push(startDate);
+  }
+  if (endDate) {
+    dateFilter += ' AND created_at <= ?';
+    params.push(endDate + ' 23:59:59');
+  }
+  
+  // Get basic stats from orders table
+  const [stats] = await queryMySQL(`
+    SELECT 
+      COUNT(*) as totalOrders,
+      SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completedOrders,
+      SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelledOrders,
+      SUM(CASE WHEN status = 'completed' THEN total ELSE 0 END) as totalRevenue,
+      AVG(CASE WHEN status = 'completed' THEN total ELSE NULL END) as averageOrderValue
+    FROM orders
+    WHERE business_id = ? ${dateFilter}
+  `, params);
+  
+  const overview = {
+    totalOrders: parseInt(stats[0]?.totalOrders || 0),
+    completedOrders: parseInt(stats[0]?.completedOrders || 0),
+    cancelledOrders: parseInt(stats[0]?.cancelledOrders || 0),
+    totalRevenue: parseFloat(stats[0]?.totalRevenue || 0),
+    averageOrderValue: parseFloat(stats[0]?.averageOrderValue || 0)
+  };
+  
+  res.json({
+    success: true,
+    data: { overview }
+  });
+}));
+
+/**
  * Get overview analytics (premium required)
  * GET /api/analytics/overview?startDate=&endDate=
  */
