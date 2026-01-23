@@ -70,6 +70,39 @@ function addonGuard(addonKey, options = {}) {
       
       // Check if addon is active for this business
       try {
+        // First check if business_addons table exists
+        const [tableCheck] = await queryMySQL(
+          `SELECT COUNT(*) as count 
+           FROM INFORMATION_SCHEMA.TABLES 
+           WHERE TABLE_SCHEMA = DATABASE() 
+           AND TABLE_NAME = 'business_addons'`
+        );
+        
+        if (!tableCheck || tableCheck.length === 0 || tableCheck[0].count === 0) {
+          // Table doesn't exist, check if addons table exists and use alternative check
+          const [addonsTableCheck] = await queryMySQL(
+            `SELECT COUNT(*) as count 
+             FROM INFORMATION_SCHEMA.TABLES 
+             WHERE TABLE_SCHEMA = DATABASE() 
+             AND TABLE_NAME = 'addons'`
+          );
+          
+          if (!addonsTableCheck || addonsTableCheck.length === 0 || addonsTableCheck[0].count === 0) {
+            // No addons system, allow access (backward compatibility)
+            return next();
+          }
+          
+          // Addons table exists but business_addons doesn't - deny access
+          return res.status(403).json({
+            success: false,
+            error: {
+              message: 'Addon system not configured',
+              code: 'ADDON_SYSTEM_NOT_CONFIGURED',
+              addonKey
+            }
+          });
+        }
+        
         const [addons] = await queryMySQL(
           `SELECT ba.status, a.addon_key, a.name
            FROM business_addons ba

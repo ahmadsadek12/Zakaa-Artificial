@@ -134,7 +134,7 @@ async function getAverageResponseTime(businessId, filters = {}) {
     
     const [result] = await queryMySQL(`
       SELECT 
-        AVG(TIMESTAMPDIFF(MILLISECOND, o.created_at, o.first_response_at)) as avg_first_response_ms
+        AVG(TIMESTAMPDIFF(MICROSECOND, o.created_at, o.first_response_at) / 1000) as avg_first_response_ms
       FROM orders o
       WHERE ${conditions.join(' AND ')}
         AND o.first_response_at IS NOT NULL

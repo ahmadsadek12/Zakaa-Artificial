@@ -223,8 +223,9 @@ async function getFreeMetrics(businessId, startDate, endDate) {
     } catch (mongoError) {
       logger.warn('MongoDB not available for avg_response_time_ms metric:', mongoError.message);
       // Fallback: use first_response_at from orders
+      // MySQL doesn't support MILLISECOND in TIMESTAMPDIFF, use MICROSECOND and divide by 1000
       const [responseTimeResult] = await queryMySQL(`
-        SELECT AVG(TIMESTAMPDIFF(MILLISECOND, created_at, first_response_at)) as avg_ms
+        SELECT AVG(TIMESTAMPDIFF(MICROSECOND, created_at, first_response_at) / 1000) as avg_ms
         FROM orders
         WHERE business_id = ?
           AND first_response_at IS NOT NULL
