@@ -42,6 +42,10 @@ async function runMigration() {
 
     console.log('Connected to MySQL database');
 
+    // Disable foreign key checks temporarily to avoid constraint issues
+    await connection.query('SET FOREIGN_KEY_CHECKS = 0');
+    console.log('Foreign key checks disabled');
+
     // Add columns to reservations table
     const columnsToAdd = [
       {
@@ -90,13 +94,29 @@ async function runMigration() {
       const exists = await columnExists(connection, 'reservations', column.name);
       if (!exists) {
         console.log(`Adding column: ${column.name}`);
-        await connection.query(
-          `ALTER TABLE reservations ADD COLUMN ${column.name} ${column.definition} AFTER ${column.after}`
-        );
+        try {
+          await connection.query(
+            `ALTER TABLE reservations ADD COLUMN ${column.name} ${column.definition} AFTER ${column.after}`
+          );
+        } catch (err) {
+          // If column doesn't exist but we got an error, try without AFTER clause
+          if (err.code === 'ER_BAD_FIELD_ERROR') {
+            console.log(`  Column ${column.after} not found, adding ${column.name} at end`);
+            await connection.query(
+              `ALTER TABLE reservations ADD COLUMN ${column.name} ${column.definition}`
+            );
+          } else {
+            throw err;
+          }
+        }
       } else {
         console.log(`Column ${column.name} already exists, skipping`);
       }
     }
+
+    // Re-enable foreign key checks
+    await connection.query('SET FOREIGN_KEY_CHECKS = 1');
+    console.log('Foreign key checks re-enabled');
 
     // Migrate existing data
     console.log('Migrating existing data...');
