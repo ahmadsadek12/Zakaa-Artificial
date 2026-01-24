@@ -18,6 +18,10 @@ async function getRequestsHandled(businessId, filters = {}) {
       return { count: 0, period: filters.period || 'all' };
     }
     
+    if (!messageLogs) {
+      return { count: 0, period: filters.period || 'all' };
+    }
+    
     const query = {
       business_id: businessId,
       direction: 'inbound'
@@ -34,7 +38,8 @@ async function getRequestsHandled(businessId, filters = {}) {
     return { count, period: filters.period || 'all' };
   } catch (error) {
     logger.error('Error getting requests handled:', error);
-    throw error;
+    // Return default values instead of throwing
+    return { count: 0, period: filters.period || 'all' };
   }
 }
 
@@ -48,6 +53,10 @@ async function getConversationsCount(businessId, filters = {}) {
       messageLogs = await getMongoCollection('message_logs');
     } catch (mongoError) {
       logger.warn('MongoDB not available for conversations count:', mongoError.message);
+      return { count: 0, unique_customers: 0 };
+    }
+    
+    if (!messageLogs) {
       return { count: 0, unique_customers: 0 };
     }
     
@@ -71,7 +80,8 @@ async function getConversationsCount(businessId, filters = {}) {
     };
   } catch (error) {
     logger.error('Error getting conversations count:', error);
-    throw error;
+    // Return default values instead of throwing
+    return { count: 0, unique_customers: 0 };
   }
 }
 

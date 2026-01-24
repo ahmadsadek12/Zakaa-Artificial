@@ -1202,14 +1202,14 @@ export default function Analytics() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <p className="text-sm text-gray-600 mb-2">Revenue Growth</p>
-                  <p className={`text-3xl font-bold ${monthOverMonthGrowth.revenue_growth_percent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {monthOverMonthGrowth.revenue_growth_percent?.toFixed(1) || 0}%
+                  <p className={`text-3xl font-bold ${(monthOverMonthGrowth.revenue_growth_percent || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {typeof monthOverMonthGrowth.revenue_growth_percent === 'number' ? monthOverMonthGrowth.revenue_growth_percent.toFixed(1) : parseFloat(monthOverMonthGrowth.revenue_growth_percent || 0).toFixed(1)}%
                   </p>
                 </div>
                 <div className="bg-purple-50 p-4 rounded-lg">
                   <p className="text-sm text-gray-600 mb-2">Order Growth</p>
-                  <p className={`text-3xl font-bold ${monthOverMonthGrowth.order_growth_percent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {monthOverMonthGrowth.order_growth_percent?.toFixed(1) || 0}%
+                  <p className={`text-3xl font-bold ${(monthOverMonthGrowth.order_growth_percent || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {typeof monthOverMonthGrowth.order_growth_percent === 'number' ? monthOverMonthGrowth.order_growth_percent.toFixed(1) : parseFloat(monthOverMonthGrowth.order_growth_percent || 0).toFixed(1)}%
                   </p>
                 </div>
               </div>
