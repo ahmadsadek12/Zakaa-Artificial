@@ -291,7 +291,7 @@ async function getOrderStatusBreakdown(businessId, filters = {}) {
     const { conditions, params } = buildFilterConditions({ ...filters, businessId });
     // Remove status condition to get all statuses
     
-    const [result] = await queryMySQL(`
+    const result = await queryMySQL(`
       SELECT 
         o.status,
         COUNT(*) as count,
@@ -421,7 +421,7 @@ async function getDeliveryTypeSplit(businessId, filters = {}) {
     // Check if delivery_type column exists
     let hasDeliveryType = false;
     try {
-      const [columnCheck] = await queryMySQL(`
+      const columnCheck = await queryMySQL(`
         SELECT COLUMN_NAME 
         FROM information_schema.COLUMNS 
         WHERE TABLE_SCHEMA = DATABASE() 
@@ -441,7 +441,7 @@ async function getDeliveryTypeSplit(businessId, filters = {}) {
       return [];
     }
     
-    const [result] = await queryMySQL(`
+    const result = await queryMySQL(`
       SELECT 
         COALESCE(o.delivery_type, 'unknown') as type,
         COUNT(*) as count,
@@ -471,7 +471,7 @@ async function getPeakOrderingHours(businessId, filters = {}) {
     // Check if completed_at column exists, fallback to created_at
     let dateColumn = 'completed_at';
     try {
-      const [columnCheck] = await queryMySQL(`
+      const columnCheck = await queryMySQL(`
         SELECT COLUMN_NAME 
         FROM information_schema.COLUMNS 
         WHERE TABLE_SCHEMA = DATABASE() 
@@ -491,7 +491,7 @@ async function getPeakOrderingHours(businessId, filters = {}) {
       conditions.push("o.completed_at IS NOT NULL");
     }
     
-    const [result] = await queryMySQL(`
+    const result = await queryMySQL(`
       SELECT 
         HOUR(o.${dateColumn}) as hour,
         COUNT(*) as order_count,
