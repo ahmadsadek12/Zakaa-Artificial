@@ -118,7 +118,7 @@ async function getTotalOrders(businessId, period = 'day', filters = {}) {
         groupBy = 'DATE(o.completed_at)';
     }
     
-    const [result] = await queryMySQL(`
+    const result = await queryMySQL(`
       SELECT 
         ${groupBy} as period,
         COUNT(*) as order_count
@@ -162,7 +162,7 @@ async function getTotalRevenue(businessId, period = 'day', filters = {}) {
         groupBy = 'DATE(o.completed_at)';
     }
     
-    const [result] = await queryMySQL(`
+    const result = await queryMySQL(`
       SELECT 
         ${groupBy} as period,
         SUM(o.total) as total_revenue,

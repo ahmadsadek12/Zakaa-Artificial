@@ -226,6 +226,10 @@ async function getDropOffPoints(businessId, filters = {}) {
       return [];
     }
     
+    if (!messageLogs) {
+      return [];
+    }
+    
     const query = {
       business_id: businessId
     };
@@ -263,12 +267,13 @@ async function getDropOffPoints(businessId, filters = {}) {
     }
     
     return Object.entries(dropOffs).map(([type, count]) => ({
-      message_type: type,
-      drop_off_count: count
-    })).sort((a, b) => b.drop_off_count - a.drop_off_count);
+      point: type,
+      count: count
+    })).sort((a, b) => b.count - a.count);
   } catch (error) {
     logger.error('Error getting drop-off points:', error);
-    throw error;
+    // Return empty array instead of throwing
+    return [];
   }
 }
 
@@ -282,6 +287,10 @@ async function getMostAskedQuestions(businessId, limit = 20, filters = {}) {
       messageLogs = await getMongoCollection('message_logs');
     } catch (mongoError) {
       logger.warn('MongoDB not available for most asked questions:', mongoError.message);
+      return [];
+    }
+    
+    if (!messageLogs) {
       return [];
     }
     
