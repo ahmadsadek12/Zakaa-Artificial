@@ -163,37 +163,49 @@ async function getMostDeliveredItems(businessId, limit = 10) {
  */
 async function getMostOrdered(businessId, startDate, endDate) {
   try {
-    const [result] = await queryMySQL(`
+    const params = [businessId];
+    let dateFilter = '';
+    if (startDate) {
+      dateFilter += ' AND o.created_at >= ?';
+      params.push(startDate);
+    }
+    if (endDate) {
+      dateFilter += ' AND o.created_at <= ?';
+      params.push(endDate + ' 23:59:59');
+    }
+    
+    const result = await queryMySQL(`
       SELECT 
         oi.item_id,
         i.name,
         SUM(oi.quantity) as total_qty,
+        SUM(oi.price_at_time * oi.quantity) as revenue,
         COUNT(DISTINCT oi.order_id) as order_count
       FROM order_items oi
       INNER JOIN orders o ON oi.order_id = o.id
       LEFT JOIN items i ON oi.item_id = i.id
       WHERE o.business_id = ?
         AND o.status = 'completed'
-        ${startDate ? 'AND o.created_at >= ?' : ''}
-        ${endDate ? 'AND o.created_at <= ?' : ''}
+        ${dateFilter}
       GROUP BY oi.item_id, i.name
       ORDER BY total_qty DESC
-      LIMIT 1
-    `, [businessId, startDate, endDate].filter(Boolean));
+      LIMIT 10
+    `, params);
     
     if (result && result.length > 0) {
-      return {
-        item_id: result[0].item_id,
-        name: result[0].name,
-        total_quantity: result[0].total_qty,
-        order_count: result[0].order_count
-      };
+      return result.map(row => ({
+        name: row.name || 'Unknown',
+        totalQuantity: row.total_qty || 0,
+        revenue: parseFloat(row.revenue || 0),
+        orderCount: row.order_count || 0
+      }));
     }
     
-    return null;
+    return [];
   } catch (error) {
     logger.error('Error getting most ordered:', error);
-    throw error;
+    // Return empty array instead of throwing
+    return [];
   }
 }
 
