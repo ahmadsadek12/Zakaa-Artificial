@@ -13,18 +13,20 @@ async function getTimeBreakdown(businessId, period, startDate, endDate) {
     // Check if completed_at column exists, fallback to created_at
     let dateColumn = 'completed_at';
     try {
-      const [columnCheck] = await queryMySQL(`
+      const columnCheck = await queryMySQL(`
         SELECT COLUMN_NAME 
         FROM information_schema.COLUMNS 
         WHERE TABLE_SCHEMA = DATABASE() 
           AND TABLE_NAME = 'orders' 
           AND COLUMN_NAME = 'completed_at'
       `);
-      if (!columnCheck || columnCheck.length === 0) {
+      // queryMySQL returns results array directly
+      if (!columnCheck || !Array.isArray(columnCheck) || columnCheck.length === 0) {
         dateColumn = 'created_at';
       }
     } catch (err) {
       // If check fails, use created_at as fallback
+      logger.warn('Could not check for completed_at column, using created_at:', err.message);
       dateColumn = 'created_at';
     }
     
@@ -59,7 +61,7 @@ async function getTimeBreakdown(businessId, period, startDate, endDate) {
       params.push(endDate + ' 23:59:59');
     }
     
-    const [result] = await queryMySQL(`
+    const result = await queryMySQL(`
       SELECT 
         ${groupBy} as period,
         COUNT(*) as order_count,

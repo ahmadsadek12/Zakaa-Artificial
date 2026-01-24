@@ -202,37 +202,49 @@ async function getMostOrdered(businessId, startDate, endDate) {
  */
 async function getMostRewarding(businessId, startDate, endDate) {
   try {
-    const [result] = await queryMySQL(`
+    const params = [businessId];
+    let dateFilter = '';
+    if (startDate) {
+      dateFilter += ' AND o.created_at >= ?';
+      params.push(startDate);
+    }
+    if (endDate) {
+      dateFilter += ' AND o.created_at <= ?';
+      params.push(endDate + ' 23:59:59');
+    }
+    
+    const result = await queryMySQL(`
       SELECT 
         oi.item_id,
         i.name,
         SUM((oi.price_at_time - COALESCE(oi.cost_at_time, 0)) * oi.quantity) as total_profit,
+        SUM(oi.price_at_time * oi.quantity) as revenue,
         SUM(oi.quantity) as total_qty
       FROM order_items oi
       INNER JOIN orders o ON oi.order_id = o.id
       LEFT JOIN items i ON oi.item_id = i.id
       WHERE o.business_id = ?
         AND o.status = 'completed'
-        ${startDate ? 'AND o.created_at >= ?' : ''}
-        ${endDate ? 'AND o.created_at <= ?' : ''}
+        ${dateFilter}
       GROUP BY oi.item_id, i.name
       ORDER BY total_profit DESC
-      LIMIT 1
-    `, [businessId, startDate, endDate].filter(Boolean));
+      LIMIT 10
+    `, params);
     
     if (result && result.length > 0) {
-      return {
-        item_id: result[0].item_id,
-        name: result[0].name,
-        total_profit: parseFloat(result[0].total_profit || 0),
-        total_quantity: result[0].total_qty
-      };
+      return result.map(row => ({
+        name: row.name || 'Unknown',
+        revenue: parseFloat(row.revenue || 0),
+        profit: parseFloat(row.total_profit || 0),
+        quantity: row.total_qty || 0
+      }));
     }
     
-    return null;
+    return [];
   } catch (error) {
     logger.error('Error getting most rewarding:', error);
-    throw error;
+    // Return empty array instead of throwing
+    return [];
   }
 }
 

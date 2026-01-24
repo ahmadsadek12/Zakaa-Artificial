@@ -572,7 +572,7 @@ async function getNewVsReturningCustomers(businessId, filters = {}) {
     const { conditions, params } = buildFilterConditions({ ...filters, businessId });
     conditions.push("o.status = 'completed'");
     
-    const [result] = await queryMySQL(`
+    const result = await queryMySQL(`
       SELECT 
         o.customer_phone_number,
         COUNT(*) as order_count,
@@ -585,10 +585,10 @@ async function getNewVsReturningCustomers(businessId, filters = {}) {
     let newCustomers = 0;
     let returningCustomers = 0;
     
-    if (result) {
+    if (result && result.length > 0) {
       for (const row of result) {
         // Check if this is their first order in the period
-        const [firstOrderCheck] = await queryMySQL(`
+        const firstOrderCheck = await queryMySQL(`
           SELECT COUNT(*) as count
           FROM orders
           WHERE customer_phone_number = ?
@@ -597,7 +597,7 @@ async function getNewVsReturningCustomers(businessId, filters = {}) {
             AND created_at < ?
         `, [row.customer_phone_number, businessId, row.first_order_date]);
         
-        if (firstOrderCheck && firstOrderCheck[0] && firstOrderCheck[0].count === 0) {
+        if (firstOrderCheck && firstOrderCheck.length > 0 && firstOrderCheck[0].count === 0) {
           newCustomers++;
         } else {
           returningCustomers++;
@@ -606,9 +606,9 @@ async function getNewVsReturningCustomers(businessId, filters = {}) {
     }
     
     return {
-      new: newCustomers,
-      returning: returningCustomers,
-      total: newCustomers + returningCustomers
+      newCustomers: newCustomers,
+      returningCustomers: returningCustomers,
+      totalCustomers: newCustomers + returningCustomers
     };
   } catch (error) {
     logger.error('Error getting new vs returning customers:', error);
