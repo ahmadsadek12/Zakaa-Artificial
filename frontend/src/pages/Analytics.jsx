@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import { BarChart3, TrendingUp, DollarSign, ShoppingCart, Users, Package, Clock, Menu, X, Award, Star, Calendar, PieChart, MapPin, RefreshCw, MessageSquare } from 'lucide-react'
@@ -17,6 +17,40 @@ const getDefaultDateRange = () => {
     startDate: firstDayOfMonth.toISOString().split('T')[0],
     endDate: now.toISOString().split('T')[0]
   }
+}
+
+// Helper function to fill missing days in revenue data
+const fillMissingDays = (revenueData, startDate, endDate) => {
+  if (!startDate || !endDate) return revenueData
+  
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  const revenueMap = new Map()
+  
+  // Create a map of existing revenue data
+  revenueData.forEach(item => {
+    revenueMap.set(item.period, item)
+  })
+  
+  // Fill in missing days
+  const filledData = []
+  const current = new Date(start)
+  
+  while (current <= end) {
+    const dateStr = current.toISOString().split('T')[0]
+    if (revenueMap.has(dateStr)) {
+      filledData.push(revenueMap.get(dateStr))
+    } else {
+      filledData.push({
+        period: dateStr,
+        revenue: 0,
+        orders: 0
+      })
+    }
+    current.setDate(current.getDate() + 1)
+  }
+  
+  return filledData
 }
 
 export default function Analytics() {
@@ -181,7 +215,9 @@ export default function Analytics() {
         setOverview(null)
       }
       
-      setRevenue(revenueRes.status === 'fulfilled' ? revenueRes.value.data.data.revenue || [] : [])
+      // Store raw revenue data
+      const rawRevenue = revenueRes.status === 'fulfilled' ? revenueRes.value.data.data.revenue || [] : []
+      setRevenue(rawRevenue)
       setTopCustomers(topCustomersRes.status === 'fulfilled' ? topCustomersRes.value.data.data.customers || [] : [])
       setRecurringCustomers(recurringCustomersRes.status === 'fulfilled' ? recurringCustomersRes.value.data.data.customers || [] : [])
       setPopularItems(popularItemsRes.status === 'fulfilled' ? popularItemsRes.value.data.data.items || [] : [])
@@ -249,6 +285,15 @@ export default function Analytics() {
     // Scroll to top when switching types
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+
+  // Process revenue data to fill missing days
+  const processedRevenue = useMemo(() => {
+    if (!revenue || revenue.length === 0) return []
+    if (dateRange.startDate && dateRange.endDate) {
+      return fillMissingDays(revenue, dateRange.startDate, dateRange.endDate)
+    }
+    return revenue
+  }, [revenue, dateRange.startDate, dateRange.endDate])
 
   return (
     <div className="space-y-6">
@@ -410,11 +455,16 @@ export default function Analytics() {
       {selectedAnalyticsType === 'order' && (
         <div id="revenue" className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-6">Revenue Trend</h2>
-        {revenue.length > 0 ? (
+        {processedRevenue.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={revenue}>
+            <LineChart data={processedRevenue}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="period" />
+              <XAxis 
+                dataKey="period" 
+                angle={-45}
+                textAnchor="end"
+                height={80}
+              />
               <YAxis />
               <Tooltip />
               <Line type="monotone" dataKey="revenue" stroke="#0ea5e9" strokeWidth={2} />
@@ -808,9 +858,12 @@ export default function Analytics() {
         </h2>
         {peakOrderingHours.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={peakOrderingHours}>
+            <BarChart data={peakOrderingHours.sort((a, b) => (a.hour || 0) - (b.hour || 0))}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="hour" />
+              <XAxis 
+                dataKey="hour" 
+                label={{ value: 'Hour (0-23)', position: 'insideBottom', offset: -5 }}
+              />
               <YAxis />
               <Tooltip />
               <Bar dataKey="order_count" fill="#000000">

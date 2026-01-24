@@ -10,24 +10,53 @@ const { buildFilterConditions } = require('./analyticsUtils');
  */
 async function getTimeBreakdown(businessId, period, startDate, endDate) {
   try {
+    // Check if completed_at column exists, fallback to created_at
+    let dateColumn = 'completed_at';
+    try {
+      const [columnCheck] = await queryMySQL(`
+        SELECT COLUMN_NAME 
+        FROM information_schema.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'orders' 
+          AND COLUMN_NAME = 'completed_at'
+      `);
+      if (!columnCheck || columnCheck.length === 0) {
+        dateColumn = 'created_at';
+      }
+    } catch (err) {
+      // If check fails, use created_at as fallback
+      dateColumn = 'created_at';
+    }
+    
     let dateFormat, groupBy;
     
     switch (period) {
       case 'hour':
         dateFormat = '%Y-%m-%d %H:00:00';
-        groupBy = 'DATE_FORMAT(completed_at, "%Y-%m-%d %H:00:00")';
+        groupBy = `DATE_FORMAT(${dateColumn}, "%Y-%m-%d %H:00:00")`;
         break;
       case 'day':
         dateFormat = '%Y-%m-%d';
-        groupBy = 'DATE(completed_at)';
+        groupBy = `DATE(${dateColumn})`;
         break;
       case 'month':
         dateFormat = '%Y-%m';
-        groupBy = 'DATE_FORMAT(completed_at, "%Y-%m")';
+        groupBy = `DATE_FORMAT(${dateColumn}, "%Y-%m")`;
         break;
       default:
         dateFormat = '%Y-%m-%d';
-        groupBy = 'DATE(completed_at)';
+        groupBy = `DATE(${dateColumn})`;
+    }
+    
+    const params = [businessId];
+    let dateFilter = '';
+    if (startDate) {
+      dateFilter += ` AND ${dateColumn} >= ?`;
+      params.push(startDate);
+    }
+    if (endDate) {
+      dateFilter += ` AND ${dateColumn} <= ?`;
+      params.push(endDate + ' 23:59:59');
     }
     
     const [result] = await queryMySQL(`
@@ -39,14 +68,13 @@ async function getTimeBreakdown(businessId, period, startDate, endDate) {
       FROM orders
       WHERE business_id = ?
         AND status = 'completed'
-        AND completed_at IS NOT NULL
-        ${startDate ? 'AND completed_at >= ?' : ''}
-        ${endDate ? 'AND completed_at <= ?' : ''}
+        ${dateColumn === 'completed_at' ? `AND ${dateColumn} IS NOT NULL` : ''}
+        ${dateFilter}
       GROUP BY ${groupBy}
       ORDER BY period ASC
-    `, [businessId, startDate, endDate].filter(Boolean));
+    `, params);
     
-    return result.map(row => ({
+    return (result || []).map(row => ({
       period: row.period,
       order_count: row.order_count,
       total_revenue: parseFloat(row.total_revenue || 0),
@@ -388,12 +416,32 @@ async function getScheduledVsImmediateRequests(businessId, filters = {}) {
  */
 async function getDeliveryTypeSplit(businessId, filters = {}) {
   try {
+    // Check if delivery_type column exists
+    let hasDeliveryType = false;
+    try {
+      const [columnCheck] = await queryMySQL(`
+        SELECT COLUMN_NAME 
+        FROM information_schema.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'orders' 
+          AND COLUMN_NAME = 'delivery_type'
+      `);
+      hasDeliveryType = columnCheck && columnCheck.length > 0;
+    } catch (err) {
+      hasDeliveryType = false;
+    }
+    
     const { conditions, params } = buildFilterConditions({ ...filters, businessId });
     conditions.push("o.status = 'completed'");
     
+    if (!hasDeliveryType) {
+      // Return empty array if column doesn't exist
+      return [];
+    }
+    
     const [result] = await queryMySQL(`
       SELECT 
-        o.delivery_type,
+        COALESCE(o.delivery_type, 'unknown') as type,
         COUNT(*) as count,
         SUM(o.total) as revenue
       FROM orders o
@@ -401,10 +449,15 @@ async function getDeliveryTypeSplit(businessId, filters = {}) {
       GROUP BY o.delivery_type
     `, params);
     
-    return result || [];
+    return (result || []).map(row => ({
+      type: row.type || 'unknown',
+      count: row.count,
+      revenue: parseFloat(row.revenue || 0)
+    }));
   } catch (error) {
     logger.error('Error getting delivery type split:', error);
-    throw error;
+    // Return empty array on error instead of throwing
+    return [];
   }
 }
 
@@ -413,18 +466,37 @@ async function getDeliveryTypeSplit(businessId, filters = {}) {
  */
 async function getPeakOrderingHours(businessId, filters = {}) {
   try {
+    // Check if completed_at column exists, fallback to created_at
+    let dateColumn = 'completed_at';
+    try {
+      const [columnCheck] = await queryMySQL(`
+        SELECT COLUMN_NAME 
+        FROM information_schema.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'orders' 
+          AND COLUMN_NAME = 'completed_at'
+      `);
+      if (!columnCheck || columnCheck.length === 0) {
+        dateColumn = 'created_at';
+      }
+    } catch (err) {
+      dateColumn = 'created_at';
+    }
+    
     const { conditions, params } = buildFilterConditions({ ...filters, businessId });
     conditions.push("o.status = 'completed'");
-    conditions.push("o.completed_at IS NOT NULL");
+    if (dateColumn === 'completed_at') {
+      conditions.push("o.completed_at IS NOT NULL");
+    }
     
     const [result] = await queryMySQL(`
       SELECT 
-        HOUR(o.completed_at) as hour,
+        HOUR(o.${dateColumn}) as hour,
         COUNT(*) as order_count,
         SUM(o.total) as revenue
       FROM orders o
       WHERE ${conditions.join(' AND ')}
-      GROUP BY HOUR(o.completed_at)
+      GROUP BY HOUR(o.${dateColumn})
       ORDER BY order_count DESC
     `, params);
     
