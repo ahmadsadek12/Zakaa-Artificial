@@ -757,7 +757,7 @@ export default function Analytics() {
             <BarChart data={deliveredItems.map(item => ({
               ...item,
               completionRate: item.timesOrdered > 0 
-                ? ((item.timesDelivered / item.timesOrdered) * 100).toFixed(1)
+                ? parseFloat(((item.timesDelivered / item.timesOrdered) * 100).toFixed(1))
                 : 0
             }))}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -906,7 +906,7 @@ export default function Analytics() {
                   <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-3 px-4 text-sm">{item.name || item.serviceName || 'N/A'}</td>
                     <td className="py-3 px-4 text-sm font-medium">{item.totalQuantity || item.quantity || 0}</td>
-                    <td className="py-3 px-4 text-sm">${item.revenue?.toFixed(2) || 0}</td>
+                    <td className="py-3 px-4 text-sm">${typeof item.revenue === 'number' ? item.revenue.toFixed(2) : parseFloat(item.revenue || 0).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -940,7 +940,7 @@ export default function Analytics() {
                   <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-3 px-4 text-sm">{item.name || item.serviceName || 'N/A'}</td>
                     <td className="py-3 px-4 text-sm font-medium">${item.revenue?.toFixed(2) || 0}</td>
-                    <td className="py-3 px-4 text-sm">${item.profit?.toFixed(2) || 0}</td>
+                    <td className="py-3 px-4 text-sm">${typeof item.profit === 'number' ? item.profit.toFixed(2) : parseFloat(item.profit || 0).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1330,7 +1330,7 @@ export default function Analytics() {
                 <div className="space-y-4">
                   <div className="bg-green-50 p-4 rounded-lg">
                     <p className="text-sm text-gray-600 mb-1">Rate</p>
-                    <p className="text-3xl font-bold text-gray-900">{resolutionRate.resolution_rate?.toFixed(1) || 0}%</p>
+                    <p className="text-3xl font-bold text-gray-900">{typeof resolutionRate.resolution_rate === 'number' ? resolutionRate.resolution_rate.toFixed(1) : parseFloat(resolutionRate.resolution_rate || 0).toFixed(1)}%</p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-blue-50 p-3 rounded-lg">
@@ -1353,7 +1353,7 @@ export default function Analytics() {
                 </h2>
                 <div className="bg-green-50 p-6 rounded-lg">
                   <p className="text-sm text-gray-600 mb-2">Chat to Order</p>
-                  <p className="text-3xl font-bold text-gray-900">{conversionRate.resolution_rate?.toFixed(1) || 0}%</p>
+                  <p className="text-3xl font-bold text-gray-900">{typeof conversionRate.resolution_rate === 'number' ? conversionRate.resolution_rate.toFixed(1) : parseFloat(conversionRate.resolution_rate || 0).toFixed(1)}%</p>
                 </div>
               </div>
             )}
@@ -1368,7 +1368,7 @@ export default function Analytics() {
               </h2>
               <div className="bg-orange-50 p-6 rounded-lg">
                 <p className="text-sm text-gray-600 mb-2">LLM Didn't Understand</p>
-                <p className="text-3xl font-bold text-gray-900">{fallbackRate.fallback_rate?.toFixed(1) || 0}%</p>
+                <p className="text-3xl font-bold text-gray-900">{typeof fallbackRate.fallback_rate === 'number' ? fallbackRate.fallback_rate.toFixed(1) : parseFloat(fallbackRate.fallback_rate || 0).toFixed(1)}%</p>
               </div>
             </div>
           )}
@@ -1479,7 +1479,7 @@ export default function Analytics() {
                       <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="py-3 px-4 text-sm">{slot.hour || 0}:00</td>
                         <td className="py-3 px-4 text-sm font-medium">{slot.order_count || 0}</td>
-                        <td className="py-3 px-4 text-sm">${slot.revenue?.toFixed(2) || 0}</td>
+                        <td className="py-3 px-4 text-sm">${typeof slot.revenue === 'number' ? slot.revenue.toFixed(2) : parseFloat(slot.revenue || 0).toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1511,7 +1511,7 @@ export default function Analytics() {
                         <td className="py-3 px-4 text-sm">{area.location_address || 'N/A'}</td>
                         <td className="py-3 px-4 text-sm font-medium">{area.order_count || 0}</td>
                         <td className="py-3 px-4 text-sm">{area.unique_customers || 0}</td>
-                        <td className="py-3 px-4 text-sm">${area.revenue?.toFixed(2) || 0}</td>
+                        <td className="py-3 px-4 text-sm">${typeof area.revenue === 'number' ? area.revenue.toFixed(2) : parseFloat(area.revenue || 0).toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
