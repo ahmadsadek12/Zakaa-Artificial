@@ -403,33 +403,46 @@ async function getCustomerLifetimeValue(businessId, startDate, endDate) {
  */
 async function getLoyalCustomer(businessId, startDate, endDate) {
   try {
-    const [result] = await queryMySQL(`
+    const params = [businessId];
+    let dateFilter = '';
+    if (startDate) {
+      dateFilter += ' AND created_at >= ?';
+      params.push(startDate);
+    }
+    if (endDate) {
+      dateFilter += ' AND created_at <= ?';
+      params.push(endDate + ' 23:59:59');
+    }
+    
+    const result = await queryMySQL(`
       SELECT 
         customer_phone_number,
+        customer_name,
         COUNT(*) as order_count,
         SUM(total) as total_spent
       FROM orders
       WHERE business_id = ?
         AND status = 'completed'
-        ${startDate ? 'AND created_at >= ?' : ''}
-        ${endDate ? 'AND created_at <= ?' : ''}
-      GROUP BY customer_phone_number
+        ${dateFilter}
+      GROUP BY customer_phone_number, customer_name
       ORDER BY order_count DESC
       LIMIT 1
-    `, [businessId, startDate, endDate].filter(Boolean));
+    `, params);
     
     if (result && result.length > 0) {
       return {
-        customer_phone_number: result[0].customer_phone_number,
-        order_count: result[0].order_count,
-        total_spent: parseFloat(result[0].total_spent || 0)
+        customerPhoneNumber: result[0].customer_phone_number,
+        customerName: result[0].customer_name || 'Unknown',
+        orderCount: result[0].order_count,
+        totalSpent: parseFloat(result[0].total_spent || 0)
       };
     }
     
     return null;
   } catch (error) {
     logger.error('Error getting loyal customer:', error);
-    throw error;
+    // Return null instead of throwing to avoid 500 errors
+    return null;
   }
 }
 
