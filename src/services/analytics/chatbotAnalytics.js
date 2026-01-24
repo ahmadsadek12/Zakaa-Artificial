@@ -132,7 +132,7 @@ async function getAverageResponseTime(businessId, filters = {}) {
     // Fallback to MySQL
     const { conditions, params } = buildFilterConditions({ ...filters, businessId });
     
-    const [result] = await queryMySQL(`
+    const result = await queryMySQL(`
       SELECT 
         AVG(TIMESTAMPDIFF(MICROSECOND, o.created_at, o.first_response_at) / 1000) as avg_first_response_ms
       FROM orders o
@@ -140,7 +140,7 @@ async function getAverageResponseTime(businessId, filters = {}) {
         AND o.first_response_at IS NOT NULL
     `, params);
     
-    const avgMs = result && result[0] ? Math.round(result[0].avg_first_response_ms || 0) : 0;
+    const avgMs = result && result.length > 0 && result[0] ? Math.round(result[0].avg_first_response_ms || 0) : 0;
     
     return {
       first_response_ms: avgMs,
@@ -180,14 +180,14 @@ async function getResolutionRate(businessId, filters = {}) {
     // Get orders count
     const { conditions, params } = buildFilterConditions({ ...filters, businessId });
     
-    const [orderResult] = await queryMySQL(`
+    const orderResult = await queryMySQL(`
       SELECT COUNT(*) as count
       FROM orders o
       WHERE ${conditions.join(' AND ')}
         AND o.status != 'cart'
     `, params);
     
-    const orderCount = orderResult && orderResult[0] ? orderResult[0].count : 0;
+    const orderCount = orderResult && orderResult.length > 0 && orderResult[0] ? orderResult[0].count : 0;
     
     return {
       resolution_rate: chatCount > 0 ? (orderCount / chatCount) * 100 : 0,

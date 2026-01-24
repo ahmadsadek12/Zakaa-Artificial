@@ -92,6 +92,26 @@ export default function Analytics() {
   const [peakOrderingHours, setPeakOrderingHours] = useState([])
   const [deliveryTypeSplit, setDeliveryTypeSplit] = useState([])
   const [newVsReturning, setNewVsReturning] = useState(null)
+  // Financial Analytics
+  const [dailyReport, setDailyReport] = useState(null)
+  const [weeklySummary, setWeeklySummary] = useState(null)
+  const [monthlyPerformance, setMonthlyPerformance] = useState(null)
+  const [monthOverMonthGrowth, setMonthOverMonthGrowth] = useState(null)
+  const [bestDay, setBestDay] = useState(null)
+  const [bestHour, setBestHour] = useState(null)
+  // Chatbot Analytics
+  const [requestsHandled, setRequestsHandled] = useState(null)
+  const [conversations, setConversations] = useState(null)
+  const [responseTime, setResponseTime] = useState(null)
+  const [resolutionRate, setResolutionRate] = useState(null)
+  const [conversionRate, setConversionRate] = useState(null)
+  const [dropOffPoints, setDropOffPoints] = useState([])
+  const [mostAskedQuestions, setMostAskedQuestions] = useState([])
+  const [fallbackRate, setFallbackRate] = useState(null)
+  // Delivery Analytics
+  const [busySlots, setBusySlots] = useState([])
+  const [commonAreas, setCommonAreas] = useState([])
+  const [deliveryFeeRevenue, setDeliveryFeeRevenue] = useState(null)
   const [loading, setLoading] = useState(true)
   const [dateRange, setDateRange] = useState(getDefaultDateRange())
 
@@ -117,23 +137,7 @@ export default function Analytics() {
       })
       
       // Try to fetch premium metrics (will fail gracefully if not premium or 403)
-      const [
-        overviewRes,
-        revenueRes,
-        topCustomersRes,
-        recurringCustomersRes,
-        popularItemsRes,
-        deliveredItemsRes,
-        lifetimeValueRes,
-        loyalCustomerRes,
-        mostOrderedRes,
-        mostRewardingRes,
-        timeBreakdownRes,
-        orderStatusBreakdownRes,
-        peakOrderingHoursRes,
-        deliveryTypeSplitRes,
-        newVsReturningRes
-      ] = await Promise.allSettled([
+      const allResults = await Promise.allSettled([
         axios.get(`${API_URL}/api/analytics/overview`, { headers, params }).catch(err => {
           if (err.response?.status === 403) return { data: { data: { overview: null } } }
           throw err
@@ -193,8 +197,115 @@ export default function Analytics() {
         axios.get(`${API_URL}/api/analytics/data/customers/new-vs-returning`, { headers, params }).catch(err => {
           if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: { newVsReturning: null } } }
           throw err
+        }),
+        // Financial Analytics
+        axios.get(`${API_URL}/api/analytics/data/financial/daily-report`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/financial/weekly-summary`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/financial/monthly-performance`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/financial/month-over-month-growth`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/financial/best-day-this-month`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/financial/best-hour-this-month`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
+          throw err
+        }),
+        // Chatbot Analytics
+        axios.get(`${API_URL}/api/analytics/data/chatbot/requests-handled`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/chatbot/conversations`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/chatbot/response-time`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/chatbot/resolution-rate`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/chatbot/conversion-rate`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/chatbot/drop-off-points`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: [] } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/chatbot/most-asked-questions`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: [] } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/chatbot/fallback-rate`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
+          throw err
+        }),
+        // Delivery Analytics
+        axios.get(`${API_URL}/api/analytics/data/delivery/busy-slots`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: [] } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/delivery/common-areas`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: [] } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/delivery/fee-revenue`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
+          throw err
         })
       ])
+      
+      // Extract results
+      const [
+        overviewRes,
+        revenueRes,
+        topCustomersRes,
+        recurringCustomersRes,
+        popularItemsRes,
+        deliveredItemsRes,
+        lifetimeValueRes,
+        loyalCustomerRes,
+        mostOrderedRes,
+        mostRewardingRes,
+        timeBreakdownRes,
+        orderStatusBreakdownRes,
+        peakOrderingHoursRes,
+        deliveryTypeSplitRes,
+        newVsReturningRes,
+        dailyReportRes,
+        weeklySummaryRes,
+        monthlyPerformanceRes,
+        monthOverMonthGrowthRes,
+        bestDayRes,
+        bestHourRes,
+        requestsHandledRes,
+        conversationsRes,
+        responseTimeRes,
+        resolutionRateRes,
+        conversionRateRes,
+        dropOffPointsRes,
+        mostAskedQuestionsRes,
+        fallbackRateRes,
+        busySlotsRes,
+        commonAreasRes,
+        deliveryFeeRevenueRes
+      ] = allResults
       
       // Use premium overview if available, otherwise use basic overview
       const premiumOverview = overviewRes.status === 'fulfilled' ? overviewRes.value.data?.data?.overview : null
@@ -245,6 +356,29 @@ export default function Analytics() {
       setPeakOrderingHours(peakOrderingHoursRes.status === 'fulfilled' ? peakOrderingHoursRes.value.data.data || [] : [])
       setDeliveryTypeSplit(deliveryTypeSplitRes.status === 'fulfilled' ? deliveryTypeSplitRes.value.data.data || [] : [])
       setNewVsReturning(newVsReturningRes.status === 'fulfilled' ? newVsReturningRes.value.data.data || null : null)
+      
+      // Financial Analytics
+      setDailyReport(dailyReportRes.status === 'fulfilled' ? dailyReportRes.value.data.data || null : null)
+      setWeeklySummary(weeklySummaryRes.status === 'fulfilled' ? weeklySummaryRes.value.data.data || null : null)
+      setMonthlyPerformance(monthlyPerformanceRes.status === 'fulfilled' ? monthlyPerformanceRes.value.data.data || null : null)
+      setMonthOverMonthGrowth(monthOverMonthGrowthRes.status === 'fulfilled' ? monthOverMonthGrowthRes.value.data.data || null : null)
+      setBestDay(bestDayRes.status === 'fulfilled' ? bestDayRes.value.data.data || null : null)
+      setBestHour(bestHourRes.status === 'fulfilled' ? bestHourRes.value.data.data || null : null)
+      
+      // Chatbot Analytics
+      setRequestsHandled(requestsHandledRes.status === 'fulfilled' ? requestsHandledRes.value.data.data || null : null)
+      setConversations(conversationsRes.status === 'fulfilled' ? conversationsRes.value.data.data || null : null)
+      setResponseTime(responseTimeRes.status === 'fulfilled' ? responseTimeRes.value.data.data || null : null)
+      setResolutionRate(resolutionRateRes.status === 'fulfilled' ? resolutionRateRes.value.data.data || null : null)
+      setConversionRate(conversionRateRes.status === 'fulfilled' ? conversionRateRes.value.data.data || null : null)
+      setDropOffPoints(dropOffPointsRes.status === 'fulfilled' ? dropOffPointsRes.value.data.data || [] : [])
+      setMostAskedQuestions(mostAskedQuestionsRes.status === 'fulfilled' ? mostAskedQuestionsRes.value.data.data || [] : [])
+      setFallbackRate(fallbackRateRes.status === 'fulfilled' ? fallbackRateRes.value.data.data || null : null)
+      
+      // Delivery Analytics
+      setBusySlots(busySlotsRes.status === 'fulfilled' ? busySlotsRes.value.data.data || [] : [])
+      setCommonAreas(commonAreasRes.status === 'fulfilled' ? commonAreasRes.value.data.data || [] : [])
+      setDeliveryFeeRevenue(deliveryFeeRevenueRes.status === 'fulfilled' ? deliveryFeeRevenueRes.value.data.data || null : null)
     } catch (error) {
       console.error('Error fetching analytics:', error)
     } finally {
@@ -963,26 +1097,429 @@ export default function Analytics() {
       </div>
       )}
 
-      {/* Placeholder sections for other analytics types */}
+      {/* Financial Analytics */}
       {selectedAnalyticsType === 'financial' && (
-        <div className="card">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Financial Analytics</h2>
-          <div className="text-center py-12 text-gray-500">Financial analytics coming soon</div>
-        </div>
+        <>
+          {/* Daily Report */}
+          {dailyReport && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <DollarSign size={24} />
+                Daily Sales Report
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Date</p>
+                  <p className="text-lg font-bold text-gray-900">{dailyReport.date || 'N/A'}</p>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Orders</p>
+                  <p className="text-lg font-bold text-gray-900">{dailyReport.order_count || 0}</p>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Revenue</p>
+                  <p className="text-lg font-bold text-gray-900">${dailyReport.total_revenue?.toFixed(2) || 0}</p>
+                </div>
+                <div className="bg-orange-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Avg Order Value</p>
+                  <p className="text-lg font-bold text-gray-900">${dailyReport.avg_order_value?.toFixed(2) || 0}</p>
+                </div>
+                <div className="bg-pink-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Delivery Fees</p>
+                  <p className="text-lg font-bold text-gray-900">${dailyReport.delivery_fees?.toFixed(2) || 0}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Weekly Summary */}
+          {weeklySummary && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <Calendar size={24} />
+                Weekly Summary
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Week Period</p>
+                  <p className="text-lg font-bold text-gray-900">
+                    {weeklySummary.week_start} to {weeklySummary.week_end}
+                  </p>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
+                  <p className="text-lg font-bold text-gray-900">${weeklySummary.total_revenue?.toFixed(2) || 0}</p>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Total Orders</p>
+                  <p className="text-lg font-bold text-gray-900">{weeklySummary.total_orders || 0}</p>
+                </div>
+                <div className="bg-orange-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Avg Daily Revenue</p>
+                  <p className="text-lg font-bold text-gray-900">${weeklySummary.avg_daily_revenue?.toFixed(2) || 0}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Monthly Performance */}
+          {monthlyPerformance && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <TrendingUp size={24} />
+                Monthly Performance
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Month</p>
+                  <p className="text-lg font-bold text-gray-900">
+                    {monthlyPerformance.year}-{String(monthlyPerformance.month).padStart(2, '0')}
+                  </p>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
+                  <p className="text-lg font-bold text-gray-900">${monthlyPerformance.total_revenue?.toFixed(2) || 0}</p>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Total Orders</p>
+                  <p className="text-lg font-bold text-gray-900">{monthlyPerformance.total_orders || 0}</p>
+                </div>
+                <div className="bg-orange-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Avg Order Value</p>
+                  <p className="text-lg font-bold text-gray-900">${monthlyPerformance.avg_order_value?.toFixed(2) || 0}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Month Over Month Growth */}
+          {monthOverMonthGrowth && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <TrendingUp size={24} />
+                Month Over Month Growth
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-2">Revenue Growth</p>
+                  <p className={`text-3xl font-bold ${monthOverMonthGrowth.revenue_growth_percent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {monthOverMonthGrowth.revenue_growth_percent?.toFixed(1) || 0}%
+                  </p>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-2">Order Growth</p>
+                  <p className={`text-3xl font-bold ${monthOverMonthGrowth.order_growth_percent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {monthOverMonthGrowth.order_growth_percent?.toFixed(1) || 0}%
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Best Day & Hour */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {bestDay && (
+              <div className="card">
+                <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                  <Calendar size={24} />
+                  Best Day This Month
+                </h2>
+                <div className="space-y-4">
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600 mb-1">Date</p>
+                    <p className="text-lg font-bold text-gray-900">{bestDay.period || bestDay.date || 'N/A'}</p>
+                  </div>
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600 mb-1">Revenue</p>
+                    <p className="text-lg font-bold text-gray-900">${bestDay.total_revenue?.toFixed(2) || 0}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {bestHour && (
+              <div className="card">
+                <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                  <Clock size={24} />
+                  Best Hour This Month
+                </h2>
+                <div className="space-y-4">
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600 mb-1">Hour</p>
+                    <p className="text-lg font-bold text-gray-900">{bestHour.hour || 0}:00</p>
+                  </div>
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600 mb-1">Orders</p>
+                    <p className="text-lg font-bold text-gray-900">{bestHour.order_count || 0}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       )}
 
+      {/* Chatbot/Ops Analytics */}
       {selectedAnalyticsType === 'chatbot' && (
-        <div className="card">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Chatbot/Ops Analytics</h2>
-          <div className="text-center py-12 text-gray-500">Chatbot analytics coming soon</div>
-        </div>
+        <>
+          {/* Requests Handled */}
+          {requestsHandled && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <MessageSquare size={24} />
+                Requests Handled
+              </h2>
+              <div className="bg-blue-50 p-6 rounded-lg">
+                <p className="text-sm text-gray-600 mb-2">Total Inbound Messages</p>
+                <p className="text-3xl font-bold text-gray-900">{requestsHandled.count || 0}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Conversations */}
+          {conversations && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <Users size={24} />
+                Conversations
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Total Messages</p>
+                  <p className="text-2xl font-bold text-gray-900">{conversations.count || 0}</p>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Unique Customers</p>
+                  <p className="text-2xl font-bold text-gray-900">{conversations.unique_customers || 0}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Response Time */}
+          {responseTime && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <Clock size={24} />
+                Response Time
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">First Response</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {responseTime.first_response_ms ? (responseTime.first_response_ms / 1000).toFixed(2) : 0}s
+                  </p>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Overall Average</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {responseTime.overall_avg_ms ? (responseTime.overall_avg_ms / 1000).toFixed(2) : 0}s
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Resolution & Conversion Rates */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {resolutionRate && (
+              <div className="card">
+                <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                  <TrendingUp size={24} />
+                  Resolution Rate
+                </h2>
+                <div className="space-y-4">
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600 mb-1">Rate</p>
+                    <p className="text-3xl font-bold text-gray-900">{resolutionRate.resolution_rate?.toFixed(1) || 0}%</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <p className="text-xs text-gray-600 mb-1">Chats</p>
+                      <p className="text-lg font-bold text-gray-900">{resolutionRate.chats_count || 0}</p>
+                    </div>
+                    <div className="bg-purple-50 p-3 rounded-lg">
+                      <p className="text-xs text-gray-600 mb-1">Orders</p>
+                      <p className="text-lg font-bold text-gray-900">{resolutionRate.orders_count || 0}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {conversionRate && (
+              <div className="card">
+                <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                  <TrendingUp size={24} />
+                  Conversion Rate
+                </h2>
+                <div className="bg-green-50 p-6 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-2">Chat to Order</p>
+                  <p className="text-3xl font-bold text-gray-900">{conversionRate.resolution_rate?.toFixed(1) || 0}%</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Fallback Rate */}
+          {fallbackRate && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <MessageSquare size={24} />
+                Fallback Rate
+              </h2>
+              <div className="bg-orange-50 p-6 rounded-lg">
+                <p className="text-sm text-gray-600 mb-2">LLM Didn't Understand</p>
+                <p className="text-3xl font-bold text-gray-900">{fallbackRate.fallback_rate?.toFixed(1) || 0}%</p>
+              </div>
+            </div>
+          )}
+
+          {/* Drop Off Points */}
+          {dropOffPoints.length > 0 && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <TrendingUp size={24} />
+                Drop Off Points
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Point</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Count</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dropOffPoints.map((point, index) => (
+                      <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-sm">{point.point || 'N/A'}</td>
+                        <td className="py-3 px-4 text-sm font-medium">{point.count || 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Most Asked Questions */}
+          {mostAskedQuestions.length > 0 && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <MessageSquare size={24} />
+                Most Asked Questions
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Question</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Count</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mostAskedQuestions.map((q, index) => (
+                      <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-sm">{q.question || 'N/A'}</td>
+                        <td className="py-3 px-4 text-sm font-medium">{q.count || 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
+      {/* Delivery/Logistics Analytics */}
       {selectedAnalyticsType === 'delivery' && (
-        <div className="card">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Delivery/Logistics Analytics</h2>
-          <div className="text-center py-12 text-gray-500">Delivery analytics coming soon</div>
-        </div>
+        <>
+          {/* Delivery Fee Revenue */}
+          {deliveryFeeRevenue && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <DollarSign size={24} />
+                Delivery Fee Revenue
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Total Delivery Fees</p>
+                  <p className="text-2xl font-bold text-gray-900">${deliveryFeeRevenue.total_delivery_fees?.toFixed(2) || 0}</p>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Delivery Orders</p>
+                  <p className="text-2xl font-bold text-gray-900">{deliveryFeeRevenue.delivery_order_count || 0}</p>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
+                  <p className="text-2xl font-bold text-gray-900">${deliveryFeeRevenue.total_revenue?.toFixed(2) || 0}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Busy Delivery Slots */}
+          {busySlots.length > 0 && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <Clock size={24} />
+                Busy Delivery Slots
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Hour</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Orders</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {busySlots.map((slot, index) => (
+                      <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-sm">{slot.hour || 0}:00</td>
+                        <td className="py-3 px-4 text-sm font-medium">{slot.order_count || 0}</td>
+                        <td className="py-3 px-4 text-sm">${slot.revenue?.toFixed(2) || 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Common Delivery Areas */}
+          {commonAreas.length > 0 && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <MapPin size={24} />
+                Common Delivery Areas
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Area</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Orders</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Unique Customers</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {commonAreas.slice(0, 20).map((area, index) => (
+                      <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-sm">{area.location_address || 'N/A'}</td>
+                        <td className="py-3 px-4 text-sm font-medium">{area.order_count || 0}</td>
+                        <td className="py-3 px-4 text-sm">{area.unique_customers || 0}</td>
+                        <td className="py-3 px-4 text-sm">${area.revenue?.toFixed(2) || 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {selectedAnalyticsType === 'reservations' && (

@@ -48,7 +48,7 @@ async function getBusyDeliverySlots(businessId, filters = {}) {
     conditions.push("o.status = 'completed'");
     conditions.push("o.scheduled_for IS NOT NULL");
     
-    const [result] = await queryMySQL(`
+    const result = await queryMySQL(`
       SELECT 
         HOUR(o.scheduled_for) as hour,
         COUNT(*) as order_count,
@@ -76,7 +76,7 @@ async function getCommonDeliveryAreas(businessId, filters = {}) {
     conditions.push("o.delivery_type = 'delivery'");
     conditions.push("o.location_address IS NOT NULL AND o.location_address != ''");
     
-    const [result] = await queryMySQL(`
+    const result = await queryMySQL(`
       SELECT 
         o.location_address,
         COUNT(*) as order_count,
@@ -105,7 +105,7 @@ async function getDeliveryFeeRevenue(businessId, filters = {}) {
     conditions.push("o.status = 'completed'");
     conditions.push("o.delivery_type = 'delivery'");
     
-    const [result] = await queryMySQL(`
+    const result = await queryMySQL(`
       SELECT 
         SUM(o.delivery_price) as total_delivery_fees,
         COUNT(*) as delivery_order_count,
@@ -114,7 +114,7 @@ async function getDeliveryFeeRevenue(businessId, filters = {}) {
       WHERE ${conditions.join(' AND ')}
     `, params);
     
-    if (result && result[0]) {
+    if (result && result.length > 0 && result[0]) {
       return {
         total_delivery_fees: parseFloat(result[0].total_delivery_fees || 0),
         delivery_order_count: result[0].delivery_order_count,
