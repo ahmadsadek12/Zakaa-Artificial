@@ -300,8 +300,8 @@ export default function Analytics() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  // Process revenue data to fill missing days
-  const processedRevenue = useMemo(() => {
+  // Process revenue data to fill missing days - process directly instead of useMemo
+  const getProcessedRevenue = () => {
     try {
       if (!revenue || !Array.isArray(revenue) || revenue.length === 0) {
         return []
@@ -314,7 +314,9 @@ export default function Analytics() {
       console.error('Error processing revenue:', error)
       return revenue || []
     }
-  }, [revenue, dateRange?.startDate, dateRange?.endDate])
+  }
+  
+  const processedRevenue = getProcessedRevenue()
 
   return (
     <div className="space-y-6">
