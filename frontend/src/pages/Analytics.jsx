@@ -21,36 +21,50 @@ const getDefaultDateRange = () => {
 
 // Helper function to fill missing days in revenue data
 const fillMissingDays = (revenueData, startDate, endDate) => {
-  if (!startDate || !endDate) return revenueData
-  
-  const start = new Date(startDate)
-  const end = new Date(endDate)
-  const revenueMap = new Map()
-  
-  // Create a map of existing revenue data
-  revenueData.forEach(item => {
-    revenueMap.set(item.period, item)
-  })
-  
-  // Fill in missing days
-  const filledData = []
-  const current = new Date(start)
-  
-  while (current <= end) {
-    const dateStr = current.toISOString().split('T')[0]
-    if (revenueMap.has(dateStr)) {
-      filledData.push(revenueMap.get(dateStr))
-    } else {
-      filledData.push({
-        period: dateStr,
-        revenue: 0,
-        orders: 0
-      })
+  try {
+    if (!revenueData || !Array.isArray(revenueData)) return []
+    if (!startDate || !endDate) return revenueData
+    
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    
+    // Validate dates
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return revenueData
     }
-    current.setDate(current.getDate() + 1)
+    
+    const revenueMap = new Map()
+    
+    // Create a map of existing revenue data
+    revenueData.forEach(item => {
+      if (item && item.period) {
+        revenueMap.set(item.period, item)
+      }
+    })
+    
+    // Fill in missing days
+    const filledData = []
+    const current = new Date(start)
+    
+    while (current <= end) {
+      const dateStr = current.toISOString().split('T')[0]
+      if (revenueMap.has(dateStr)) {
+        filledData.push(revenueMap.get(dateStr))
+      } else {
+        filledData.push({
+          period: dateStr,
+          revenue: 0,
+          orders: 0
+        })
+      }
+      current.setDate(current.getDate() + 1)
+    }
+    
+    return filledData
+  } catch (error) {
+    console.error('Error in fillMissingDays:', error)
+    return revenueData || []
   }
-  
-  return filledData
 }
 
 export default function Analytics() {
@@ -288,12 +302,19 @@ export default function Analytics() {
 
   // Process revenue data to fill missing days
   const processedRevenue = useMemo(() => {
-    if (!revenue || revenue.length === 0) return []
-    if (dateRange.startDate && dateRange.endDate) {
-      return fillMissingDays(revenue, dateRange.startDate, dateRange.endDate)
+    try {
+      if (!revenue || !Array.isArray(revenue) || revenue.length === 0) {
+        return []
+      }
+      if (dateRange?.startDate && dateRange?.endDate) {
+        return fillMissingDays(revenue, dateRange.startDate, dateRange.endDate)
+      }
+      return revenue
+    } catch (error) {
+      console.error('Error processing revenue:', error)
+      return revenue || []
     }
-    return revenue
-  }, [revenue, dateRange.startDate, dateRange.endDate])
+  }, [revenue, dateRange?.startDate, dateRange?.endDate])
 
   return (
     <div className="space-y-6">
