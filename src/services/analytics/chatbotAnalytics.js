@@ -322,7 +322,8 @@ async function getMostAskedQuestions(businessId, limit = 20, filters = {}) {
       .slice(0, limit);
   } catch (error) {
     logger.error('Error getting most asked questions:', error);
-    throw error;
+    // Return empty array instead of throwing
+    return [];
   }
 }
 
@@ -336,6 +337,10 @@ async function getFallbackRate(businessId, filters = {}) {
       messageLogs = await getMongoCollection('message_logs');
     } catch (mongoError) {
       logger.warn('MongoDB not available for fallback rate:', mongoError.message);
+      return { fallback_rate: 0, total_messages: 0, fallback_count: 0 };
+    }
+    
+    if (!messageLogs) {
       return { fallback_rate: 0, total_messages: 0, fallback_count: 0 };
     }
     
@@ -353,8 +358,8 @@ async function getFallbackRate(businessId, filters = {}) {
     const totalMessages = await messageLogs.countDocuments(query);
     
     // Check for fallback indicators (messages with "fallback" or "didn't understand" in response)
-    query.fallback_used = true;
-    const fallbackCount = await messageLogs.countDocuments(query);
+    const fallbackQuery = { ...query, fallback_used: true };
+    const fallbackCount = await messageLogs.countDocuments(fallbackQuery);
     
     return {
       fallback_rate: totalMessages > 0 ? (fallbackCount / totalMessages) * 100 : 0,
@@ -363,7 +368,8 @@ async function getFallbackRate(businessId, filters = {}) {
     };
   } catch (error) {
     logger.error('Error getting fallback rate:', error);
-    throw error;
+    // Return default values instead of throwing
+    return { fallback_rate: 0, total_messages: 0, fallback_count: 0 };
   }
 }
 
