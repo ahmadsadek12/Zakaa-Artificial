@@ -136,7 +136,7 @@ async function getDailySalesReport(businessId, date = null) {
     const { conditions, params } = buildFilterConditions(filters);
     conditions.push("o.status = 'completed'");
     
-    const [result] = await queryMySQL(`
+    const result = await queryMySQL(`
       SELECT 
         COUNT(*) as order_count,
         SUM(o.total) as total_revenue,
@@ -148,7 +148,7 @@ async function getDailySalesReport(businessId, date = null) {
     `, params);
     
     // Get profit if cost data exists
-    const [columnCheck] = await queryMySQL(`
+    const columnCheck = await queryMySQL(`
       SELECT COLUMN_NAME 
       FROM information_schema.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
@@ -158,7 +158,7 @@ async function getDailySalesReport(businessId, date = null) {
     
     let totalProfit = 0;
     if (columnCheck && columnCheck.length > 0) {
-      const [profitResult] = await queryMySQL(`
+      const profitResult = await queryMySQL(`
         SELECT SUM((oi.price_at_time - COALESCE(oi.cost_at_time, 0)) * oi.quantity) as total_profit
         FROM order_items oi
         INNER JOIN orders o ON oi.order_id = o.id
@@ -166,10 +166,10 @@ async function getDailySalesReport(businessId, date = null) {
           AND o.completed_at IS NOT NULL
       `, params);
       
-      totalProfit = profitResult && profitResult[0] ? parseFloat(profitResult[0].total_profit || 0) : 0;
+      totalProfit = profitResult && profitResult.length > 0 && profitResult[0] ? parseFloat(profitResult[0].total_profit || 0) : 0;
     }
     
-    if (result && result[0]) {
+    if (result && result.length > 0 && result[0]) {
       return {
         date: targetDate,
         order_count: result[0].order_count,
