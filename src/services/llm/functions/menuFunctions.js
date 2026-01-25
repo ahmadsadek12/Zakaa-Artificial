@@ -141,25 +141,38 @@ async function executeMenuFunction(functionName, args, context) {
       }
       
       if (allImageUrls.length > 0) {
-        // Limit to first 2 images only
-        const limitedImageUrls = allImageUrls.slice(0, 2);
-        
-        // Build message - if multiple menus, include menu names
-        let message = '📋 Here are our menus:';
-        if (menusWithImages.length > 1) {
-          // Multiple menus - list menu names
-          message += '\n\n';
-          for (const { menu, imageUrls } of menusWithImages) {
-            message += `**${menu.name}** (${imageUrls.length} image${imageUrls.length > 1 ? 's' : ''})\n`;
+        // Group images by menu name
+        const imagesByMenu = {};
+        for (const img of allImageUrls) {
+          if (!imagesByMenu[img.menuName]) {
+            imagesByMenu[img.menuName] = [];
           }
+          imagesByMenu[img.menuName].push(img);
+        }
+        
+        // Build menus array - each menu gets its own message
+        const menusToSend = [];
+        for (const [menuName, menuImages] of Object.entries(imagesByMenu)) {
+          // Limit to first 2 images per menu
+          const limitedImages = menuImages.slice(0, 2);
+          menusToSend.push({
+            menuName: menuName,
+            message: `Here is our ${menuName} menu`,
+            imageUrls: limitedImages.map(img => img.url),
+            imageUrlsWithMenu: limitedImages
+          });
         }
         
         const result = {
           success: true,
-          message: message,
-          // Return only first 2 images with menu names for better captions
-          imageUrls: limitedImageUrls.map(img => img.url),
-          imageUrlsWithMenu: limitedImageUrls, // Include full objects with menu names
+          message: menusToSend.length === 1 
+            ? `Here is our ${menusToSend[0].menuName} menu`
+            : `Here are our menus:`,
+          // For backward compatibility, include all images
+          imageUrls: allImageUrls.slice(0, 2).map(img => img.url),
+          imageUrlsWithMenu: allImageUrls.slice(0, 2),
+          // New structure for sending menus separately
+          menusToSend: menusToSend,
           shouldSendImages: true,
           items: []
         };
@@ -171,20 +184,22 @@ async function executeMenuFunction(functionName, args, context) {
       // STEP 2: No images - check for PDF
       const menusWithPdf = allMenus.filter(menu => menu.menu_pdf_url);
       if (menusWithPdf.length > 0) {
-        const pdfUrls = menusWithPdf.map(menu => menu.menu_pdf_url);
-        
-        let message = '📋 Here are our menus:';
-        if (menusWithPdf.length > 1) {
-          message += '\n\n';
-          for (const menu of menusWithPdf) {
-            message += `**${menu.name}**\n`;
-          }
-        }
+        // Build menus array - each menu gets its own message
+        const menusToSend = menusWithPdf.map(menu => ({
+          menuName: menu.name,
+          message: `Here is our ${menu.name} menu`,
+          pdfUrl: menu.menu_pdf_url
+        }));
         
         const result = {
           success: true,
-          message: message,
-          pdfUrls: pdfUrls,
+          message: menusToSend.length === 1 
+            ? `Here is our ${menusToSend[0].menuName} menu`
+            : `Here are our menus:`,
+          // For backward compatibility
+          pdfUrls: menusToSend.map(m => m.pdfUrl),
+          // New structure for sending menus separately
+          menusToSend: menusToSend,
           shouldSendPdf: true,
           items: []
         };
@@ -196,14 +211,21 @@ async function executeMenuFunction(functionName, args, context) {
       // STEP 3: No PDF - check for links
       const menusWithLink = allMenus.filter(menu => menu.menu_link);
       if (menusWithLink.length > 0) {
-        let message = '📋 Here are our menus:\n\n';
-        for (const menu of menusWithLink) {
-          message += `**${menu.name}**\n🔗 Menu link: ${menu.menu_link}\n\n`;
-        }
+        // Build menus array - each menu gets its own message
+        const menusToSend = menusWithLink.map(menu => ({
+          menuName: menu.name,
+          message: `Here is our ${menu.name} menu`,
+          menuLink: menu.menu_link
+        }));
+        
+        let combinedMessage = menusToSend.length === 1 
+          ? `Here is our ${menusToSend[0].menuName} menu:\n🔗 Menu link: ${menusToSend[0].menuLink}`
+          : menusToSend.map(m => `**${m.menuName}**\n🔗 Menu link: ${m.menuLink}`).join('\n\n');
         
         const result = {
           success: true,
-          message: message,
+          message: combinedMessage,
+          menusToSend: menusToSend,
           items: []
         };
         

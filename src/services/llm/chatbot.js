@@ -413,7 +413,17 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
           }
           
           // Track menu image URLs from function results
-          if (result.shouldSendImages && result.imageUrls && Array.isArray(result.imageUrls) && result.imageUrls.length > 0) {
+          // Check for new menusToSend structure first (for sending menus separately)
+          if (result.menusToSend && Array.isArray(result.menusToSend) && result.menusToSend.length > 0) {
+            if (!context.menusToSend) {
+              context.menusToSend = [];
+            }
+            // Add each menu with its own message
+            for (const menu of result.menusToSend) {
+              context.menusToSend.push(menu);
+            }
+          } else if (result.shouldSendImages && result.imageUrls && Array.isArray(result.imageUrls) && result.imageUrls.length > 0) {
+            // Fallback to old structure
             if (!context.imagesToSend) {
               context.imagesToSend = [];
             }
@@ -512,7 +522,8 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
       orderCreated,
       orderId,
       imagesToSend: context.imagesToSend || [],
-      pdfsToSend: context.pdfsToSend || []
+      pdfsToSend: context.pdfsToSend || [],
+      menusToSend: context.menusToSend || []
     };
   } catch (error) {
     logger.error('Error in chatbot service:', {

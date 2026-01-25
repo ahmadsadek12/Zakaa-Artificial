@@ -233,7 +233,202 @@ async function processMessage(message, value) {
       // Determine which WhatsApp provider to use
       const whatsappProvider = process.env.WHATSAPP_PROVIDER;
       
-      // Send PDFs first if any
+      // Handle menusToSend - send each menu separately with its own message
+      if (response.menusToSend && response.menusToSend.length > 0) {
+        const { sendMessage } = require('./messageSender');
+        const { sendImage } = require('./messageSender');
+        const { sendDocument } = require('./messageSender');
+        const { sendMessage: twilioSendMessage } = require('./twilioMessageSender');
+        const { sendImage: twilioSendImage } = require('./twilioMessageSender');
+        const { sendDocument: twilioSendDocument } = require('./twilioMessageSender');
+        
+        for (const menu of response.menusToSend) {
+          try {
+            // Send text message first: "Here is our [menu name] menu"
+            const menuMessage = menu.message || `Here is our ${menu.menuName} menu`;
+            
+            if (whatsappProvider === 'twilio') {
+              const twilioNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+              await twilioSendMessage({
+                to: from,
+                from: twilioNumber,
+                message: menuMessage
+              });
+            } else {
+              await sendMessage({
+                phoneNumberId: branch?.whatsapp_phone_number_id || business.whatsapp_phone_number_id,
+                accessToken: branch?.whatsapp_access_token_encrypted || business.whatsapp_access_token_encrypted,
+                to: from,
+                message: menuMessage,
+                messageType: 'text'
+              });
+            }
+            
+            // Log text message
+            await logMessage({
+              businessId: business.id,
+              branchId: branch?.id,
+              customerPhoneNumber: from,
+              whatsappUserId: from,
+              direction: 'outbound',
+              channel: 'whatsapp',
+              messageType: 'text',
+              text: menuMessage,
+              metaMessageId: require('../../utils/uuid').generateUUID(),
+              timestamp: new Date(),
+              llmUsed: true
+            });
+            
+            // Send menu images if any
+            if (menu.imageUrls && Array.isArray(menu.imageUrls) && menu.imageUrls.length > 0) {
+              for (const imageUrl of menu.imageUrls) {
+                try {
+                  if (whatsappProvider === 'twilio') {
+                    const twilioNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+                    await twilioSendImage({
+                      to: from,
+                      from: twilioNumber,
+                      imageUrl: imageUrl,
+                      caption: ''
+                    });
+                  } else {
+                    await sendImage({
+                      phoneNumberId: branch?.whatsapp_phone_number_id || business.whatsapp_phone_number_id,
+                      accessToken: branch?.whatsapp_access_token_encrypted || business.whatsapp_access_token_encrypted,
+                      to: from,
+                      imageUrl: imageUrl,
+                      caption: ''
+                    });
+                  }
+                  
+                  // Log image message
+                  await logMessage({
+                    businessId: business.id,
+                    branchId: branch?.id,
+                    customerPhoneNumber: from,
+                    whatsappUserId: from,
+                    direction: 'outbound',
+                    channel: 'whatsapp',
+                    messageType: 'image',
+                    mediaUrl: imageUrl,
+                    metaMessageId: require('../../utils/uuid').generateUUID(),
+                    timestamp: new Date(),
+                    llmUsed: true
+                  });
+                } catch (imageError) {
+                  logger.error('Failed to send menu image via WhatsApp:', {
+                    to: from,
+                    imageUrl: imageUrl,
+                    error: imageError.message
+                  });
+                }
+              }
+            }
+            
+            // Send menu link if any (as text message)
+            if (menu.menuLink) {
+              try {
+                const linkMessage = `🔗 Menu link: ${menu.menuLink}`;
+                if (whatsappProvider === 'twilio') {
+                  const twilioNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+                  await twilioSendMessage({
+                    to: from,
+                    from: twilioNumber,
+                    message: linkMessage
+                  });
+                } else {
+                  await sendMessage({
+                    phoneNumberId: branch?.whatsapp_phone_number_id || business.whatsapp_phone_number_id,
+                    accessToken: branch?.whatsapp_access_token_encrypted || business.whatsapp_access_token_encrypted,
+                    to: from,
+                    message: linkMessage,
+                    messageType: 'text'
+                  });
+                }
+                
+                // Log link message
+                await logMessage({
+                  businessId: business.id,
+                  branchId: branch?.id,
+                  customerPhoneNumber: from,
+                  whatsappUserId: from,
+                  direction: 'outbound',
+                  channel: 'whatsapp',
+                  messageType: 'text',
+                  text: linkMessage,
+                  metaMessageId: require('../../utils/uuid').generateUUID(),
+                  timestamp: new Date(),
+                  llmUsed: true
+                });
+              } catch (linkError) {
+                logger.error('Failed to send menu link via WhatsApp:', {
+                  to: from,
+                  menuLink: menu.menuLink,
+                  error: linkError.message
+                });
+              }
+            }
+            
+            // Send menu PDF if any
+            if (menu.pdfUrl) {
+              try {
+                if (whatsappProvider === 'twilio') {
+                  const twilioNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+                  await twilioSendDocument({
+                    to: from,
+                    from: twilioNumber,
+                    documentUrl: menu.pdfUrl,
+                    caption: ''
+                  });
+                } else {
+                  await sendDocument({
+                    phoneNumberId: branch?.whatsapp_phone_number_id || business.whatsapp_phone_number_id,
+                    accessToken: branch?.whatsapp_access_token_encrypted || business.whatsapp_access_token_encrypted,
+                    to: from,
+                    documentUrl: menu.pdfUrl,
+                    caption: '',
+                    filename: `${menu.menuName || 'menu'}.pdf`
+                  });
+                }
+                
+                // Log PDF message
+                await logMessage({
+                  businessId: business.id,
+                  branchId: branch?.id,
+                  customerPhoneNumber: from,
+                  whatsappUserId: from,
+                  direction: 'outbound',
+                  channel: 'whatsapp',
+                  messageType: 'document',
+                  text: `Menu PDF: ${menu.menuName}`,
+                  mediaUrl: menu.pdfUrl,
+                  metaMessageId: require('../../utils/uuid').generateUUID(),
+                  timestamp: new Date(),
+                  llmUsed: true
+                });
+              } catch (pdfError) {
+                logger.error('Failed to send menu PDF via WhatsApp:', {
+                  to: from,
+                  documentUrl: menu.pdfUrl,
+                  error: pdfError.message
+                });
+              }
+            }
+          } catch (menuError) {
+            logger.error('Failed to send menu via WhatsApp:', {
+              to: from,
+              menuName: menu.menuName,
+              error: menuError.message
+            });
+          }
+        }
+        
+        // Skip the old PDF/image handling if we already sent menus
+        // Don't send the general text response either since we sent menu-specific messages
+        return;
+      }
+      
+      // Send PDFs first if any (old structure - for backward compatibility)
       if (response.pdfsToSend && response.pdfsToSend.length > 0) {
         const { sendDocument } = require('./messageSender');
         const { sendDocument: twilioSendDocument } = require('./twilioMessageSender');
