@@ -33,7 +33,7 @@ function getDeliveryFunctionDefinitions() {
       type: 'function',
       function: {
         name: 'set_delivery_address',
-        description: 'Set the delivery address. Call this IMMEDIATELY when customer provides ANY location information. Lebanese addresses are often given in one sentence with commas or natural speech. Examples: "Salim Salam, Abraj Beirut, Block B2, 21, 7ad LIU" or "michel abi chahla street, abraj beirut building, block b2 21st floor, beirut". Extract the COMPLETE text exactly as customer says it.',
+        description: 'Set the delivery address. Call this IMMEDIATELY when customer provides ANY location information. ⚠️ CRITICAL: When customer provides an address, ONLY call this function - DO NOT call add_service_to_cart(). Addresses are NOT item names. Lebanese addresses are often given in one sentence with commas or natural speech. Examples: "Salim Salam, Abraj Beirut, Block B2, 21, 7ad LIU" or "michel abi chahla street, abraj beirut building, block b2 21st floor, beirut". Extract the COMPLETE text exactly as customer says it. If customer already has items in cart and provides address, ONLY update address - DO NOT add items again.',
         parameters: {
           type: 'object',
           properties: {
@@ -84,7 +84,7 @@ function getDeliveryFunctionDefinitions() {
       type: 'function',
       function: {
         name: 'set_scheduled_time',
-        description: 'Set scheduled time for order delivery/pickup. Use when customer wants to schedule order for future time. Parse natural language like "tomorrow at 7pm", "Friday 6:30pm", "in 2 hours". For restaurants that are closed, this is required.',
+        description: 'Set scheduled time for order delivery/pickup. Use when customer wants to schedule order for future time. ⚠️ CRITICAL: When customer provides a time/schedule, ONLY call this function - DO NOT call add_service_to_cart(). Times are NOT item names. Parse natural language like "tomorrow at 7pm", "Friday 6:30pm", "in 2 hours", "12pm tomorrow". For restaurants that are closed, this is required. If customer already has items in cart and provides time, ONLY update scheduled time - DO NOT add items again.',
         parameters: {
           type: 'object',
           properties: {
