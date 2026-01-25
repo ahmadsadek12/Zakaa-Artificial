@@ -258,8 +258,7 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:176',message:'Cart created successfully',data:{orderId,businessId,insertUserId,insertBranchId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
     // #endregion
-    // Determine order source (check if customerPhoneNumber is telegram: format)
-    const orderSource = customerPhoneNumber.startsWith('telegram:') ? 'telegram' : 'whatsapp';
+    // orderSource already declared above, reuse it
     
     return {
       id: orderId,
