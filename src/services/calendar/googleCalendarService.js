@@ -7,15 +7,20 @@ const logger = require('../../utils/logger');
 
 // OAuth2 client configuration
 function getOAuth2Client() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${process.env.API_BASE_URL || 'http://localhost:3000'}/api/calendar/google/oauth/callback`;
+  try {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${process.env.API_BASE_URL || 'http://localhost:3000'}/api/calendar/google/oauth/callback`;
 
-  if (!clientId || !clientSecret) {
-    throw new Error('Google OAuth credentials not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in environment variables.');
+    if (!clientId || !clientSecret) {
+      throw new Error('Google OAuth credentials not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in environment variables.');
+    }
+
+    return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+  } catch (error) {
+    logger.error('Error creating OAuth2 client:', error);
+    throw error;
   }
-
-  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
 
 /**

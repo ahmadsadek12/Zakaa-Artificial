@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
-import { UtensilsCrossed, Plus, Edit, Trash2, Power, PowerOff, Calendar, Users, MapPin, Phone, CheckCircle, XCircle, Clock, History, AlertCircle } from 'lucide-react'
+import { UtensilsCrossed, Plus, Edit, Trash2, Power, PowerOff, Calendar, Users, MapPin, Phone, CheckCircle, XCircle, Clock, History, AlertCircle, Search } from 'lucide-react'
 import { format } from 'date-fns'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
@@ -12,8 +12,9 @@ export default function TableReservations() {
   const [reservations, setReservations] = useState([])
   const [historyReservations, setHistoryReservations] = useState([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('tables') // 'tables', 'reservations', or 'history'
+  const [activeTab, setActiveTab] = useState('reservations') // 'reservations', 'tables', or 'history'
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [searchTerm, setSearchTerm] = useState('')
   const [showTableModal, setShowTableModal] = useState(false)
   const [showReservationModal, setShowReservationModal] = useState(false)
   const [editingTable, setEditingTable] = useState(null)
@@ -258,6 +259,16 @@ export default function TableReservations() {
       <div className="mb-6 border-b border-gray-200">
         <div className="flex gap-4">
           <button
+            onClick={() => setActiveTab('reservations')}
+            className={`pb-4 px-4 font-medium transition-colors ${
+              activeTab === 'reservations'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Table Reservation
+          </button>
+          <button
             onClick={() => setActiveTab('tables')}
             className={`pb-4 px-4 font-medium transition-colors ${
               activeTab === 'tables'
@@ -268,16 +279,6 @@ export default function TableReservations() {
             Tables
           </button>
           <button
-            onClick={() => setActiveTab('reservations')}
-            className={`pb-4 px-4 font-medium transition-colors ${
-              activeTab === 'reservations'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Reservations
-          </button>
-          <button
             onClick={() => setActiveTab('history')}
             className={`pb-4 px-4 font-medium transition-colors ${
               activeTab === 'history'
@@ -286,10 +287,26 @@ export default function TableReservations() {
             }`}
           >
             <History className="w-4 h-4 inline mr-2" />
-            History
+            Table History
           </button>
         </div>
       </div>
+
+      {/* Search Bar */}
+      {(activeTab === 'reservations' || activeTab === 'history') && (
+        <div className="mb-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder="Search reservations by customer name, phone, or table..."
+              className="input pl-10"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Date Selector for Reservations */}
       {activeTab === 'reservations' && (
@@ -425,7 +442,19 @@ export default function TableReservations() {
 
           {/* Reservations List */}
           <div className="space-y-4">
-            {reservations.map((reservation) => {
+            {reservations
+              .filter((reservation) => {
+                if (!searchTerm) return true
+                const searchLower = searchTerm.toLowerCase()
+                const customerName = (reservation.customer_name || '').toLowerCase()
+                const phone = reservation.customer_phone_number || ''
+                const table = tables.find(t => t.id === reservation.table_id)
+                const tableNumber = table ? `table ${table.table_number}`.toLowerCase() : ''
+                return customerName.includes(searchLower) || 
+                       phone.includes(searchTerm) ||
+                       tableNumber.includes(searchLower)
+              })
+              .map((reservation) => {
               const table = tables.find(t => t.id === reservation.table_id)
               
               return (
@@ -521,7 +550,18 @@ export default function TableReservations() {
             })}
           </div>
 
-          {reservations.length === 0 && (
+          {reservations
+            .filter((reservation) => {
+              if (!searchTerm) return true
+              const searchLower = searchTerm.toLowerCase()
+              const customerName = (reservation.customer_name || '').toLowerCase()
+              const phone = reservation.customer_phone_number || ''
+              const table = tables.find(t => t.id === reservation.table_id)
+              const tableNumber = table ? `table ${table.table_number}`.toLowerCase() : ''
+              return customerName.includes(searchLower) || 
+                     phone.includes(searchTerm) ||
+                     tableNumber.includes(searchLower)
+            }).length === 0 && (
             <div className="text-center py-12 bg-white border border-gray-200 rounded-lg">
               <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-500">No confirmed reservations for this date</p>
@@ -541,13 +581,38 @@ export default function TableReservations() {
 
           {/* History Reservations List */}
           <div className="space-y-4">
-            {historyReservations.map((reservation) => {
+            {historyReservations
+            .filter((reservation) => {
+              if (!searchTerm) return true
+              const searchLower = searchTerm.toLowerCase()
+              const customerName = (reservation.customer_name || '').toLowerCase()
+              const phone = reservation.customer_phone_number || ''
               const table = tables.find(t => t.id === reservation.table_id)
+              const tableNumber = table ? `table ${table.table_number}`.toLowerCase() : ''
+              return customerName.includes(searchLower) || 
+                     phone.includes(searchTerm) ||
+                     tableNumber.includes(searchLower)
+            })
+            .map((reservation) => {
+              const table = tables.find(t => t.id === reservation.table_id)
+              
+              // Create tooltip content
+              const tooltipContent = `
+                Customer: ${reservation.customer_name || 'N/A'}
+                Phone: ${reservation.customer_phone_number}
+                Date: ${format(new Date(reservation.reservation_date), 'MMM d, yyyy')}
+                Time: ${reservation.reservation_time}
+                Guests: ${reservation.number_of_guests || 'N/A'}
+                Table: ${table ? `Table ${table.table_number}` : reservation.table_id ? `ID: ${reservation.table_id.substring(0, 8)}...` : 'Auto-assigned'}
+                Status: ${reservation.status === 'no_show' ? 'No Show' : reservation.status}
+                ${reservation.notes ? `Notes: ${reservation.notes}` : ''}
+              `.trim()
               
               return (
                 <div
                   key={reservation.id}
-                  className="border rounded-lg p-4 bg-white hover:shadow-md transition-shadow"
+                  className="border rounded-lg p-4 bg-white hover:shadow-md transition-shadow relative group"
+                  title={tooltipContent}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -613,7 +678,18 @@ export default function TableReservations() {
             })}
           </div>
 
-          {historyReservations.length === 0 && (
+          {historyReservations
+            .filter((reservation) => {
+              if (!searchTerm) return true
+              const searchLower = searchTerm.toLowerCase()
+              const customerName = (reservation.customer_name || '').toLowerCase()
+              const phone = reservation.customer_phone_number || ''
+              const table = tables.find(t => t.id === reservation.table_id)
+              const tableNumber = table ? `table ${table.table_number}`.toLowerCase() : ''
+              return customerName.includes(searchLower) || 
+                     phone.includes(searchTerm) ||
+                     tableNumber.includes(searchLower)
+            }).length === 0 && (
             <div className="text-center py-12 bg-white border border-gray-200 rounded-lg">
               <History className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-500">No reservation history found</p>

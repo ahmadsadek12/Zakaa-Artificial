@@ -225,11 +225,27 @@ async function getMostRewarding(businessId, startDate, endDate) {
       params.push(endDate + ' 23:59:59');
     }
     
+    // Check if cost_at_time column exists
+    const columnCheck = await queryMySQL(`
+      SELECT COLUMN_NAME 
+      FROM information_schema.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'order_items' 
+        AND COLUMN_NAME = 'cost_at_time'
+    `);
+    
+    const hasCostColumn = columnCheck && columnCheck.length > 0;
+    
+    // Build profit calculation based on whether cost column exists
+    const profitCalculation = hasCostColumn
+      ? 'SUM((oi.price_at_time - COALESCE(oi.cost_at_time, 0)) * oi.quantity) as total_profit'
+      : 'SUM(oi.price_at_time * oi.quantity) as total_profit'; // Use revenue as profit if cost not tracked
+    
     const result = await queryMySQL(`
       SELECT 
         oi.item_id,
         i.name,
-        SUM((oi.price_at_time - COALESCE(oi.cost_at_time, 0)) * oi.quantity) as total_profit,
+        ${profitCalculation},
         SUM(oi.price_at_time * oi.quantity) as revenue,
         SUM(oi.quantity) as total_qty
       FROM order_items oi

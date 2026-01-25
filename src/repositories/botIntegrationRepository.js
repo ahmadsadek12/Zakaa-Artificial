@@ -9,13 +9,13 @@ const { encryptToken, decryptToken } = require('../../utils/encryption');
  * Find integration by owner and platform
  */
 async function findByOwnerAndPlatform(ownerType, ownerId, platform) {
-  const [integrations] = await queryMySQL(
+  const integrations = await queryMySQL(
     `SELECT * FROM bot_integrations 
      WHERE owner_type = ? AND owner_id = ? AND platform = ?`,
     [ownerType, ownerId, platform]
   );
   
-  if (integrations.length === 0) {
+  if (!integrations || integrations.length === 0) {
     return null;
   }
   
@@ -61,13 +61,13 @@ async function findByOwner(ownerType, ownerId) {
  * Find integration by phone number ID (for WhatsApp)
  */
 async function findByPhoneNumberId(phoneNumberId) {
-  const [integrations] = await queryMySQL(
+  const integrations = await queryMySQL(
     `SELECT * FROM bot_integrations 
      WHERE phone_number_id = ? AND platform = 'whatsapp'`,
     [phoneNumberId]
   );
   
-  if (integrations.length === 0) {
+  if (!integrations || integrations.length === 0) {
     return null;
   }
   

@@ -15,6 +15,7 @@ export default function Orders() {
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [activeTab, setActiveTab] = useState('all')
   const [showOrderModal, setShowOrderModal] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [orderDetails, setOrderDetails] = useState(null)
@@ -46,7 +47,12 @@ export default function Orders() {
       fetchOrders()
     }, 30000)
     return () => clearInterval(interval)
-  }, [statusFilter])
+  }, [statusFilter, activeTab])
+  
+  // Sync activeTab with statusFilter
+  useEffect(() => {
+    setStatusFilter(activeTab)
+  }, [activeTab])
   
   const fetchItems = async () => {
     try {
@@ -127,11 +133,16 @@ export default function Orders() {
   }
 
   const filteredOrders = orders.filter((order) => {
+    // Filter by search term
     const matchesSearch =
       order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.customer_phone_number?.includes(searchTerm) ||
       order.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())
-    return matchesSearch
+    
+    // Filter by active tab (status)
+    const matchesStatus = activeTab === 'all' || order.status === activeTab
+    
+    return matchesSearch && matchesStatus
   })
 
   const getStatusColor = (status) => {
@@ -308,6 +319,13 @@ export default function Orders() {
     { value: 'completed', label: 'Completed' },
     { value: 'rejected', label: 'Rejected' },
   ]
+  
+  const orderTabs = [
+    { value: 'all', label: 'All' },
+    { value: 'accepted', label: 'Accepted' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'rejected', label: 'Rejected' },
+  ]
 
   if (loading) {
     return (
@@ -333,33 +351,36 @@ export default function Orders() {
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="card">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder={`Search ${terms.orders.toLowerCase()}...`}
-              className="input pl-10"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Filter size={20} className="text-gray-400" />
-            <select
-              className="input"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+      {/* Tabs */}
+      <div className="mb-6 border-b border-gray-200">
+        <div className="flex gap-4">
+          {orderTabs.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => setActiveTab(tab.value)}
+              className={`pb-4 px-4 font-medium transition-colors ${
+                activeTab === tab.value
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
             >
-              {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Search Bar */}
+      <div className="mb-6">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder={`Search ${terms.orders.toLowerCase()}...`}
+            className="input pl-10"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
       </div>
 
