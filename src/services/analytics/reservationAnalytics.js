@@ -10,14 +10,27 @@ const { buildFilterConditions } = require('./analyticsUtils');
  */
 async function getTotalReservations(businessId, filters = {}) {
   try {
-    const { conditions, params } = buildFilterConditions({ ...filters, businessId });
-    // Map businessId to business_user_id for reservations table
-    const businessIdIndex = conditions.findIndex(c => c.includes('business_id'));
-    if (businessIdIndex >= 0) {
-      conditions[businessIdIndex] = conditions[businessIdIndex].replace('business_id', 'business_user_id');
-    } else {
-      conditions.push('r.business_user_id = ?');
-      params.unshift(businessId);
+    const conditions = [];
+    const params = [];
+    
+    // Business filter
+    conditions.push('r.business_user_id = ?');
+    params.push(businessId);
+    
+    // Date filters
+    if (filters.startDate) {
+      conditions.push('r.reservation_date >= ?');
+      params.push(filters.startDate);
+    }
+    if (filters.endDate) {
+      conditions.push('r.reservation_date <= ?');
+      params.push(filters.endDate);
+    }
+    
+    // Branch filter
+    if (filters.branchId) {
+      conditions.push('r.user_id = ?');
+      params.push(filters.branchId);
     }
     
     const result = await queryMySQL(`
@@ -41,13 +54,23 @@ async function getTotalReservations(businessId, filters = {}) {
  */
 async function getReservationCompletionRate(businessId, filters = {}) {
   try {
-    const { conditions, params } = buildFilterConditions({ ...filters, businessId });
-    const businessIdIndex = conditions.findIndex(c => c.includes('business_id'));
-    if (businessIdIndex >= 0) {
-      conditions[businessIdIndex] = conditions[businessIdIndex].replace('business_id', 'business_user_id');
-    } else {
-      conditions.push('r.business_user_id = ?');
-      params.unshift(businessId);
+    const conditions = [];
+    const params = [];
+    
+    conditions.push('r.business_user_id = ?');
+    params.push(businessId);
+    
+    if (filters.startDate) {
+      conditions.push('r.reservation_date >= ?');
+      params.push(filters.startDate);
+    }
+    if (filters.endDate) {
+      conditions.push('r.reservation_date <= ?');
+      params.push(filters.endDate);
+    }
+    if (filters.branchId) {
+      conditions.push('r.user_id = ?');
+      params.push(filters.branchId);
     }
     
     const result = await queryMySQL(`
@@ -78,13 +101,23 @@ async function getReservationCompletionRate(businessId, filters = {}) {
  */
 async function getNoShowRate(businessId, filters = {}) {
   try {
-    const { conditions, params } = buildFilterConditions({ ...filters, businessId });
-    const businessIdIndex = conditions.findIndex(c => c.includes('business_id'));
-    if (businessIdIndex >= 0) {
-      conditions[businessIdIndex] = conditions[businessIdIndex].replace('business_id', 'business_user_id');
-    } else {
-      conditions.push('r.business_user_id = ?');
-      params.unshift(businessId);
+    const conditions = [];
+    const params = [];
+    
+    conditions.push('r.business_user_id = ?');
+    params.push(businessId);
+    
+    if (filters.startDate) {
+      conditions.push('r.reservation_date >= ?');
+      params.push(filters.startDate);
+    }
+    if (filters.endDate) {
+      conditions.push('r.reservation_date <= ?');
+      params.push(filters.endDate);
+    }
+    if (filters.branchId) {
+      conditions.push('r.user_id = ?');
+      params.push(filters.branchId);
     }
     
     // Check if no_show column exists
@@ -150,13 +183,23 @@ async function getNoShowRate(businessId, filters = {}) {
  */
 async function getPeakReservationHours(businessId, filters = {}) {
   try {
-    const { conditions, params } = buildFilterConditions({ ...filters, businessId });
-    const businessIdIndex = conditions.findIndex(c => c.includes('business_id'));
-    if (businessIdIndex >= 0) {
-      conditions[businessIdIndex] = conditions[businessIdIndex].replace('business_id', 'business_user_id');
-    } else {
-      conditions.push('r.business_user_id = ?');
-      params.unshift(businessId);
+    const conditions = [];
+    const params = [];
+    
+    conditions.push('r.business_user_id = ?');
+    params.push(businessId);
+    
+    if (filters.startDate) {
+      conditions.push('r.reservation_date >= ?');
+      params.push(filters.startDate);
+    }
+    if (filters.endDate) {
+      conditions.push('r.reservation_date <= ?');
+      params.push(filters.endDate);
+    }
+    if (filters.branchId) {
+      conditions.push('r.user_id = ?');
+      params.push(filters.branchId);
     }
     
     const result = await queryMySQL(`
@@ -182,13 +225,23 @@ async function getPeakReservationHours(businessId, filters = {}) {
  */
 async function getPeakReservationDays(businessId, filters = {}) {
   try {
-    const { conditions, params } = buildFilterConditions({ ...filters, businessId });
-    const businessIdIndex = conditions.findIndex(c => c.includes('business_id'));
-    if (businessIdIndex >= 0) {
-      conditions[businessIdIndex] = conditions[businessIdIndex].replace('business_id', 'business_user_id');
-    } else {
-      conditions.push('r.business_user_id = ?');
-      params.unshift(businessId);
+    const conditions = [];
+    const params = [];
+    
+    conditions.push('r.business_user_id = ?');
+    params.push(businessId);
+    
+    if (filters.startDate) {
+      conditions.push('r.reservation_date >= ?');
+      params.push(filters.startDate);
+    }
+    if (filters.endDate) {
+      conditions.push('r.reservation_date <= ?');
+      params.push(filters.endDate);
+    }
+    if (filters.branchId) {
+      conditions.push('r.user_id = ?');
+      params.push(filters.branchId);
     }
     
     const result = await queryMySQL(`
@@ -214,13 +267,23 @@ async function getPeakReservationDays(businessId, filters = {}) {
  */
 async function getTableUtilization(businessId, filters = {}) {
   try {
-    const { conditions, params } = buildFilterConditions({ ...filters, businessId });
-    const businessIdIndex = conditions.findIndex(c => c.includes('business_id'));
-    if (businessIdIndex >= 0) {
-      conditions[businessIdIndex] = conditions[businessIdIndex].replace('business_id', 'business_user_id');
-    } else {
-      conditions.push('r.business_user_id = ?');
-      params.unshift(businessId);
+    const conditions = [];
+    const params = [];
+    
+    conditions.push('r.business_user_id = ?');
+    params.push(businessId);
+    
+    if (filters.startDate) {
+      conditions.push('r.reservation_date >= ?');
+      params.push(filters.startDate);
+    }
+    if (filters.endDate) {
+      conditions.push('r.reservation_date <= ?');
+      params.push(filters.endDate);
+    }
+    if (filters.branchId) {
+      conditions.push('r.user_id = ?');
+      params.push(filters.branchId);
     }
     
     // Get reservations per table
@@ -257,13 +320,23 @@ async function getTableUtilization(businessId, filters = {}) {
  */
 async function getAvgGuestsPerReservation(businessId, filters = {}) {
   try {
-    const { conditions, params } = buildFilterConditions({ ...filters, businessId });
-    const businessIdIndex = conditions.findIndex(c => c.includes('business_id'));
-    if (businessIdIndex >= 0) {
-      conditions[businessIdIndex] = conditions[businessIdIndex].replace('business_id', 'business_user_id');
-    } else {
-      conditions.push('r.business_user_id = ?');
-      params.unshift(businessId);
+    const conditions = [];
+    const params = [];
+    
+    conditions.push('r.business_user_id = ?');
+    params.push(businessId);
+    
+    if (filters.startDate) {
+      conditions.push('r.reservation_date >= ?');
+      params.push(filters.startDate);
+    }
+    if (filters.endDate) {
+      conditions.push('r.reservation_date <= ?');
+      params.push(filters.endDate);
+    }
+    if (filters.branchId) {
+      conditions.push('r.user_id = ?');
+      params.push(filters.branchId);
     }
     
     const result = await queryMySQL(`
