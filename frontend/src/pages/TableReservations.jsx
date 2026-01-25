@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
-import { UtensilsCrossed, Plus, Edit, Trash2, Power, PowerOff, Calendar, Users, MapPin, Phone, CheckCircle, XCircle, Clock } from 'lucide-react'
+import { UtensilsCrossed, Plus, Edit, Trash2, Power, PowerOff, Calendar, Users, MapPin, Phone, CheckCircle, XCircle, Clock, History, AlertCircle } from 'lucide-react'
 import { format } from 'date-fns'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
@@ -10,8 +10,9 @@ export default function TableReservations() {
   const { user } = useAuth()
   const [tables, setTables] = useState([])
   const [reservations, setReservations] = useState([])
+  const [historyReservations, setHistoryReservations] = useState([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('tables') // 'tables' or 'reservations'
+  const [activeTab, setActiveTab] = useState('tables') // 'tables', 'reservations', or 'history'
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [showTableModal, setShowTableModal] = useState(false)
   const [showReservationModal, setShowReservationModal] = useState(false)
@@ -52,17 +53,40 @@ export default function TableReservations() {
       })
       setTables(tablesRes.data.data.tables || [])
 
-      // Fetch reservations for selected date
+      // Fetch reservations for selected date (confirmed only)
       if (activeTab === 'reservations') {
         const reservationsRes = await axios.get(`${API_URL}/api/reservations`, {
           params: { 
             startDate: selectedDate,
             endDate: selectedDate,
-            type: 'table'
+            type: 'table',
+            status: 'confirmed'
           },
           headers
         })
         setReservations(reservationsRes.data.data.reservations || [])
+      }
+      
+      // Fetch history reservations (non-confirmed) - fetch all and filter on frontend
+      if (activeTab === 'history') {
+        const historyRes = await axios.get(`${API_URL}/api/reservations`, {
+          params: { 
+            type: 'table'
+          },
+          headers
+        })
+        // Filter to show only non-confirmed reservations
+        const allReservations = historyRes.data.data.reservations || []
+        const nonConfirmed = allReservations.filter(r => 
+          r.status !== 'confirmed' && (r.status === 'cancelled' || r.status === 'completed' || r.status === 'no_show')
+        )
+        // Sort by date descending (most recent first)
+        nonConfirmed.sort((a, b) => {
+          const dateA = new Date(`${a.reservation_date} ${a.reservation_time}`)
+          const dateB = new Date(`${b.reservation_date} ${b.reservation_time}`)
+          return dateB - dateA
+        })
+        setHistoryReservations(nonConfirmed)
       }
     } catch (error) {
       console.error('Error fetching data:', error)
@@ -253,6 +277,17 @@ export default function TableReservations() {
           >
             Reservations
           </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`pb-4 px-4 font-medium transition-colors ${
+              activeTab === 'history'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <History className="w-4 h-4 inline mr-2" />
+            History
+          </button>
         </div>
       </div>
 
@@ -408,9 +443,10 @@ export default function TableReservations() {
                           reservation.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
                           reservation.status === 'completed' ? 'bg-green-100 text-green-800' :
                           reservation.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                          reservation.status === 'no_show' ? 'bg-orange-100 text-orange-800' :
                           'bg-gray-100 text-gray-800'
                         }`}>
-                          {reservation.status}
+                          {reservation.status === 'no_show' ? 'No Show' : reservation.status}
                         </span>
                       </div>
                       
@@ -425,10 +461,20 @@ export default function TableReservations() {
                             <span>{reservation.number_of_guests} guests</span>
                           </div>
                         )}
-                        {table && (
+                        {table ? (
                           <div className="flex items-center gap-2">
                             <UtensilsCrossed className="w-4 h-4" />
                             <span>Table {table.table_number}</span>
+                          </div>
+                        ) : reservation.table_id ? (
+                          <div className="flex items-center gap-2">
+                            <UtensilsCrossed className="w-4 h-4" />
+                            <span className="text-gray-500">Table ID: {reservation.table_id.substring(0, 8)}...</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <UtensilsCrossed className="w-4 h-4" />
+                            <span className="text-gray-500">Auto-assigned</span>
                           </div>
                         )}
                         <div className="flex items-center gap-2">
@@ -451,6 +497,13 @@ export default function TableReservations() {
                             title="Mark as Completed"
                           >
                             <CheckCircle className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleUpdateReservationStatus(reservation.id, 'no_show')}
+                            className="p-2 rounded bg-orange-100 text-orange-700 hover:bg-orange-200"
+                            title="Mark as No Show"
+                          >
+                            <AlertCircle className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleUpdateReservationStatus(reservation.id, 'cancelled')}
