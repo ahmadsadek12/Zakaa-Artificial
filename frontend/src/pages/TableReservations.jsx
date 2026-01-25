@@ -133,10 +133,14 @@ export default function TableReservations() {
         reservationDate: reservationForm.reservation_date,
         reservationTime: reservationForm.reservation_time,
         numberOfGuests: reservationForm.number_of_guests || null,
-        tableId: reservationForm.table_id || null,
         notes: reservationForm.notes || null,
         source: 'dashboard',
         platform: 'dashboard'
+      }
+      
+      // Only include tableId if it's a valid UUID (not empty string)
+      if (reservationForm.table_id && reservationForm.table_id.trim() !== '') {
+        payload.tableId = reservationForm.table_id
       }
       
       await axios.post(`${API_URL}/api/reservations`, payload, {
