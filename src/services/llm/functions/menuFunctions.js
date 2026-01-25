@@ -168,12 +168,9 @@ async function executeMenuFunction(functionName, args, context) {
           message: menusToSend.length === 1 
             ? `Here is our ${menusToSend[0].menuName} menu`
             : `Here are our menus:`,
-          // For backward compatibility, include all images
-          imageUrls: allImageUrls.slice(0, 2).map(img => img.url),
-          imageUrlsWithMenu: allImageUrls.slice(0, 2),
           // New structure for sending menus separately
           menusToSend: menusToSend,
-          shouldSendImages: true,
+          // Don't set shouldSendImages when using menusToSend to avoid old code path
           items: []
         };
         
