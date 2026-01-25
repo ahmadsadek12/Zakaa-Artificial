@@ -244,10 +244,45 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
       message // Pass current message to check for fresh start requests
     );
     
+    // Check if customer is greeting (to determine if we should greet back)
+    const greetingPhrases = ['hello', 'hi', 'hey', 'hey there', 'good morning', 'good afternoon', 'good evening', 'greetings', 'marhaba', 'ahlan', 'ahlan wa sahlan', 'salam', 'salam alaikum'];
+    const messageLower = (message || '').toLowerCase().trim();
+    const isCustomerGreeting = greetingPhrases.some(phrase => messageLower === phrase || messageLower.startsWith(phrase + ' ') || messageLower.endsWith(' ' + phrase));
+    
+    // Check if it's been over 1 hour since last message
+    const messageLogs = await getMongoCollection('message_logs');
+    let hoursSinceLastMessage = null;
+    let shouldGreet = false;
+    
+    if (messageLogs) {
+      const lastMessageQuery = {
+        businessId: business.id,
+        branchId: branch?.id || business.id,
+        customerPhoneNumber: customerPhoneNumber
+      };
+      const lastMessage = await messageLogs.findOne(lastMessageQuery, { sort: { receivedAt: -1 } });
+      
+      if (lastMessage) {
+        const lastMessageTime = new Date(lastMessage.receivedAt || lastMessage.timestamp);
+        hoursSinceLastMessage = (Date.now() - lastMessageTime.getTime()) / (1000 * 60 * 60);
+        // Greet if it's been over 1 hour OR if customer is greeting
+        shouldGreet = hoursSinceLastMessage >= 1 || isCustomerGreeting;
+      } else {
+        // No previous messages - this is truly first message, so greet
+        shouldGreet = true;
+      }
+    } else {
+      // MongoDB not available - use messageHistory length as fallback
+      shouldGreet = messageHistory.length === 0 || isCustomerGreeting;
+    }
+    
     logger.info('Conversation history loaded', { 
       customerPhoneNumber, 
       messageCount: messageHistory.length,
       isFirstMessage: messageHistory.length === 0,
+      isCustomerGreeting,
+      hoursSinceLastMessage,
+      shouldGreet,
       messages: messageHistory.map(m => ({ role: m.role, textPreview: m.text.substring(0, 50) }))
     });
     
