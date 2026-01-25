@@ -131,19 +131,19 @@ async function getConversationHistory(businessId, branchId, customerPhoneNumber,
       return [];
     }
     
-    // Get the last message timestamp to check if more than 1 hour has passed
-    // Include platform in query to avoid cross-platform mixing
+    // Get the last message timestamp to check if more than 2 hours has passed
+    // Note: MongoDB uses snake_case fields (business_id, customer_phone_number, timestamp)
     const lastMessageQuery = {
-      businessId: businessId,
-      branchId: branchId || businessId,
-      customerPhoneNumber: customerPhoneNumber
+      business_id: businessId,
+      branch_id: branchId || businessId,
+      customer_phone_number: customerPhoneNumber
     };
     
     const lastMessage = await messageLogs
-      .findOne(lastMessageQuery, { sort: { receivedAt: -1 } });
+      .findOne(lastMessageQuery, { sort: { timestamp: -1 } });
     
     if (lastMessage) {
-      const lastMessageTime = new Date(lastMessage.receivedAt || lastMessage.timestamp);
+      const lastMessageTime = new Date(lastMessage.timestamp || lastMessage.receivedAt);
       const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
       
       // If last message was more than 2 hours ago, reset conversation (fresh start)
@@ -161,10 +161,10 @@ async function getConversationHistory(businessId, branchId, customerPhoneNumber,
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
     
     const query = {
-      businessId: businessId,
-      branchId: branchId || businessId,
-      customerPhoneNumber: customerPhoneNumber,
-      receivedAt: { $gte: twoHoursAgo }
+      business_id: businessId,
+      branch_id: branchId || businessId,
+      customer_phone_number: customerPhoneNumber,
+      timestamp: { $gte: twoHoursAgo }
     };
     
     logger.info('Fetching conversation history', {
@@ -176,7 +176,7 @@ async function getConversationHistory(businessId, branchId, customerPhoneNumber,
     
     const allMessages = await messageLogs
       .find(query)
-      .sort({ receivedAt: 1 })
+      .sort({ timestamp: 1 })
       .limit(limit)
       .toArray();
     
@@ -185,7 +185,7 @@ async function getConversationHistory(businessId, branchId, customerPhoneNumber,
       messageCount: allMessages.length,
       messages: allMessages.map(m => ({
         direction: m.direction,
-        receivedAt: m.receivedAt,
+        timestamp: m.timestamp,
         textPreview: (m.text || '').substring(0, 50)
       }))
     });
@@ -257,17 +257,18 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
     if (messageLogs) {
       try {
         // Get the last message BEFORE the current one (exclude messages from the last minute to avoid current message)
+        // Note: MongoDB uses snake_case fields (business_id, customer_phone_number, timestamp)
         const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
         const lastMessageQuery = {
-          businessId: business.id,
-          branchId: branch?.id || business.id,
-          customerPhoneNumber: customerPhoneNumber,
-          receivedAt: { $lt: oneMinuteAgo } // Exclude very recent messages (current message)
+          business_id: business.id,
+          branch_id: branch?.id || business.id,
+          customer_phone_number: customerPhoneNumber,
+          timestamp: { $lt: oneMinuteAgo } // Exclude very recent messages (current message)
         };
-        const lastMessage = await messageLogs.findOne(lastMessageQuery, { sort: { receivedAt: -1 } });
+        const lastMessage = await messageLogs.findOne(lastMessageQuery, { sort: { timestamp: -1 } });
         
         if (lastMessage) {
-          const lastMessageTime = new Date(lastMessage.receivedAt || lastMessage.timestamp);
+          const lastMessageTime = new Date(lastMessage.timestamp || lastMessage.receivedAt);
           hoursSinceLastMessage = (Date.now() - lastMessageTime.getTime()) / (1000 * 60 * 60);
           // Greet ONLY if it's been over 2 hours since last message OR if customer is greeting
           shouldGreet = hoursSinceLastMessage >= 2 || isCustomerGreeting;
@@ -277,18 +278,18 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
           // But if messageHistory is empty but there might be older messages, don't greet
           // Check if there are ANY messages at all (not just in last 2 hours)
           const anyMessageQuery = {
-            businessId: business.id,
-            branchId: branch?.id || business.id,
-            customerPhoneNumber: customerPhoneNumber
+            business_id: business.id,
+            branch_id: branch?.id || business.id,
+            customer_phone_number: customerPhoneNumber
           };
-          const anyMessage = await messageLogs.findOne(anyMessageQuery, { sort: { receivedAt: -1 } });
+          const anyMessage = await messageLogs.findOne(anyMessageQuery, { sort: { timestamp: -1 } });
           
           if (!anyMessage) {
             // Truly first message ever - greet
             shouldGreet = true;
           } else {
             // There are messages but they're older than 2 hours - check if it's been 2+ hours
-            const anyMessageTime = new Date(anyMessage.receivedAt || anyMessage.timestamp);
+            const anyMessageTime = new Date(anyMessage.timestamp || anyMessage.receivedAt);
             const hoursSinceAnyMessage = (Date.now() - anyMessageTime.getTime()) / (1000 * 60 * 60);
             shouldGreet = hoursSinceAnyMessage >= 2 || isCustomerGreeting;
           }
