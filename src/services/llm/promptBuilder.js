@@ -265,6 +265,7 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
 
 **ORDER PROCESS - MANDATORY STEPS (ONLY when customer wants to order):**
 - ⚠️ CRITICAL - QUANTITY PARSING: When customer says "3 trio", "I want 3 trios", "give me 5 burgers", etc., you MUST parse the number as quantity and the item name separately. For "3 trio", use add_service_to_cart(itemName="trio", quantity=3). DO NOT search for an item called "3 trio" - extract quantity=3 and itemName="trio".
+- ⚠️ CRITICAL - CART CONFIRMATION: Before adding items to cart, check if cart already has items using get_cart(). If cart has items and customer says "I want 3 trios" (or similar), ask them: "You already have items in your cart. Do you want to add to your existing order, or replace your cart? Reply with 'add' or 'replace'." Only add items after customer confirms. If customer says "add" or "yes, add", then call add_service_to_cart(). If customer says "replace" or "clear and add", call clear_cart() first, then add_service_to_cart().
 - ⚠️ CRITICAL - QUANTITY UPDATES: When customer says "remove 3 of the 6" or "I have 6, remove 3", calculate the final quantity (6-3=3) and use update_service_quantity(itemName="trio", quantity=3). When customer says "I want 3 trios overall" or "fix it to 3", use update_service_quantity(itemName="trio", quantity=3). Always set quantity to the FINAL desired amount, not the change.
 - Step 1: ⚠️ CRITICAL - CHECK OPEN STATUS FIRST: Before asking about delivery type or anything else, you MUST check if restaurant is open using get_closing_time() or confirm_order(). This is the FIRST thing to do when customer wants to order.
 - Step 2: If CLOSED: Tell customer we're closed immediately, show opening hours using get_opening_hours(), and offer to schedule using set_scheduled_time(). DO NOT ask about delivery type if we're closed - schedule first, then ask delivery type.
@@ -353,7 +354,7 @@ ${isFoodAndBeverage ? `
 - send_menu_pdf() / send_menu_image() / send_item_image() - Send menu/item images when requested
 - add_service_to_cart() - ⚠️ Add items when customer wants to order. CRITICAL: Parse quantities correctly - "3 trio" means itemName="trio", quantity=3. Extract numbers as quantity, not part of item name.
 - update_service_quantity() - ⚠️ Update quantity when customer wants to change it. CRITICAL: "remove 3 of the 6" means final quantity=3. "I want 3 total" means quantity=3. Always set to FINAL desired quantity.
-- remove_service_from_cart() - Remove an item completely from cart
+- remove_service_from_cart() - ⚠️ Remove an item completely from cart. Use this IMMEDIATELY when customer says "remove [item]", "take out [item]", "I don't want [item]", "delete [item]", "cancel [item]", or any variation. Make it easy for customers to remove items - don't ask for confirmation, just remove it when they mention it.
 - clear_cart() - Clear entire cart when customer wants to start over
 - set_order_notes() - Save special instructions when customer mentions modifications (e.g., "no tomato", "extra spicy")
 - set_delivery_address() - ⚠️ Set address when customer provides delivery location (auto-sets delivery type). CRITICAL: When customer provides address, ONLY call this function - DO NOT call add_service_to_cart(). Addresses are NOT item names. If customer has items in cart, they're providing delivery info, not ordering more.

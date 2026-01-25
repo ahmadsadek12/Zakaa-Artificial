@@ -37,13 +37,13 @@ function getCartFunctionDefinitions() {
       type: 'function',
       function: {
         name: 'remove_service_from_cart',
-        description: 'Remove a service from the customer\'s ongoing order. Use this when customer wants to remove something from their order.',
+        description: 'Remove a service from the customer\'s ongoing order. Use this when customer wants to remove something from their order. ⚠️ CRITICAL: Use this when customer says "remove [item]", "take out [item]", "I don\'t want [item]", "delete [item]", "cancel [item]", or any variation of wanting to remove an item. Make it easy for customers to remove items - if they mention removing something, call this function immediately.',
         parameters: {
           type: 'object',
           properties: {
             itemName: {
               type: 'string',
-              description: 'The name of the item to remove from ongoing order'
+              description: 'The name of the item to remove from ongoing order. Match from items currently in cart.'
             }
           },
           required: ['itemName']
@@ -118,6 +118,10 @@ async function executeCartFunction(functionName, args, context) {
     case 'add_service_to_cart': {
       const { itemName, quantity = 1 } = args;
       
+      // Check current cart first to see if it has items
+      const currentCart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
+      const hasExistingItems = currentCart.items && currentCart.items.length > 0;
+      
       // Check cache for menu items first to reduce DB queries
       const cacheKey = `menu_items_${business.id}`;
       let cachedItems = cache.get(cacheKey);
@@ -160,6 +164,18 @@ async function executeCartFunction(functionName, args, context) {
         }
         
         item = items[0];
+      }
+      
+      // If cart has existing items, return a message asking if they want to replace or add
+      if (hasExistingItems) {
+        const cartSummary = cartManager.getCartSummary(currentCart);
+        return {
+          success: false,
+          needsConfirmation: true,
+          error: `You already have items in your cart:\n${cartSummary}\n\nDo you want to:\n1. Add ${quantity}x ${item.name} to your existing order, or\n2. Replace your cart with ${quantity}x ${item.name}?\n\nPlease reply with "add" or "replace".`,
+          item: { itemId: item.id, name: item.name, price: parseFloat(item.price), quantity: parseInt(quantity) },
+          cart: currentCart
+        };
       }
       
       // Add item to cart first
