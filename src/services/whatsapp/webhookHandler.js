@@ -246,8 +246,20 @@ async function processMessage(message, value) {
           try {
             const menuMessage = menu.message || `Here is our ${menu.menuName} menu`;
             
+            logger.debug('Processing menu to send', {
+              menuName: menu.menuName,
+              hasImageUrls: !!menu.imageUrls,
+              imageUrlsLength: menu.imageUrls?.length || 0,
+              hasPdfUrl: !!menu.pdfUrl,
+              hasMenuLink: !!menu.menuLink
+            });
+            
             // Send menu images if any (with caption)
             if (menu.imageUrls && Array.isArray(menu.imageUrls) && menu.imageUrls.length > 0) {
+              logger.debug('Sending menu images', {
+                menuName: menu.menuName,
+                imageCount: menu.imageUrls.length
+              });
               for (const imageUrl of menu.imageUrls) {
                 try {
                   if (whatsappProvider === 'twilio') {
@@ -393,6 +405,7 @@ async function processMessage(message, value) {
         
         // Skip the old PDF/image handling if we already sent menus
         // Don't send the general text response either since we sent menu-specific messages
+        logger.debug('Sent menus via menusToSend, skipping old handlers');
         return;
       }
       
