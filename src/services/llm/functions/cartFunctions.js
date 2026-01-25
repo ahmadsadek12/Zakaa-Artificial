@@ -337,6 +337,68 @@ async function executeCartFunction(functionName, args, context) {
       };
     }
     
+    case 'check_item_availability': {
+      const { itemName } = args;
+      
+      // Check cache for menu items first to reduce DB queries
+      const cacheKey = `menu_items_${business.id}`;
+      let cachedItems = cache.get(cacheKey);
+      
+      let item = null;
+      
+      // If we have cached items, try to find item in cache first
+      if (cachedItems && cachedItems.items) {
+        const itemNameLower = itemName.toLowerCase();
+        item = cachedItems.items.find(i => 
+          i.name.toLowerCase() === itemNameLower ||
+          i.name.toLowerCase().includes(itemNameLower) ||
+          itemNameLower.includes(i.name.toLowerCase())
+        );
+      }
+      
+      // If not found in cache or no cache, query database
+      if (!item) {
+        const items = await queryMySQL(
+          `SELECT * FROM items 
+           WHERE business_id = ? AND availability = 'available' AND deleted_at IS NULL
+           AND (LOWER(name) LIKE ? OR LOWER(name) LIKE ? OR LOWER(name) = ?)
+           ORDER BY CASE WHEN LOWER(name) = ? THEN 1 WHEN LOWER(name) LIKE ? THEN 2 ELSE 3 END
+           LIMIT 1`,
+          [
+            business.id,
+            `%${itemName.toLowerCase()}%`,
+            `${itemName.toLowerCase().split(' ')[0]}%`,
+            itemName.toLowerCase(),
+            itemName.toLowerCase(),
+            `${itemName.toLowerCase()}%`
+          ]
+        );
+        
+        if (items.length > 0) {
+          item = items[0];
+        }
+      }
+      
+      if (!item) {
+        return {
+          success: false,
+          available: false,
+          message: `Sorry, we don't have "${itemName}" available. Would you like to see our menu?`
+        };
+      }
+      
+      return {
+        success: true,
+        available: true,
+        message: `Yes, we have ${item.name} for $${parseFloat(item.price).toFixed(2)}. Would you like to add it to your order?`,
+        item: {
+          name: item.name,
+          price: parseFloat(item.price),
+          description: item.description
+        }
+      };
+    }
+    
     case 'get_cart': {
       const cart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
       const summary = cartManager.getCartSummary(cart);
