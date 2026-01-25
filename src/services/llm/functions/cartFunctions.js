@@ -232,15 +232,24 @@ async function executeCartFunction(functionName, args, context) {
       const { itemName } = args;
       const cart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
       
-      const cartItem = cart.items?.find(item => 
+      if (!cart.items || cart.items.length === 0) {
+        return {
+          success: false,
+          error: `Your cart is empty. There's nothing to remove.`
+        };
+      }
+      
+      const cartItem = cart.items.find(item => 
         item.name.toLowerCase().includes(itemName.toLowerCase()) ||
         itemName.toLowerCase().includes(item.name.toLowerCase())
       );
       
       if (!cartItem) {
+        // List available items to help customer
+        const itemList = cart.items.map(item => `- ${item.name} (${item.quantity}x)`).join('\n');
         return {
           success: false,
-          error: `Item "${itemName}" not found in your ongoing order.`
+          error: `Item "${itemName}" not found in your ongoing order.\n\nCurrent items in your cart:\n${itemList}\n\nPlease specify which item you'd like to remove.`
         };
       }
       
@@ -253,9 +262,14 @@ async function executeCartFunction(functionName, args, context) {
       
       logger.info('Item removed from cart via function call', { itemName: cartItem.name });
       
+      const remainingItems = updatedCart.items && updatedCart.items.length > 0;
+      const message = remainingItems 
+        ? `Removed ${cartItem.name} from your ongoing order.`
+        : `Removed ${cartItem.name} from your ongoing order. Your cart is now empty.`;
+      
       return {
         success: true,
-        message: `Removed ${cartItem.name} from your ongoing order`,
+        message: message,
         cart: updatedCart
       };
     }
