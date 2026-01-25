@@ -112,6 +112,17 @@ export default function Analytics() {
   const [busySlots, setBusySlots] = useState([])
   const [commonAreas, setCommonAreas] = useState([])
   const [deliveryFeeRevenue, setDeliveryFeeRevenue] = useState(null)
+  // Reservations Analytics
+  const [totalReservations, setTotalReservations] = useState(null)
+  const [reservationCompletionRate, setReservationCompletionRate] = useState(null)
+  const [noShowRate, setNoShowRate] = useState(null)
+  const [peakReservationHours, setPeakReservationHours] = useState([])
+  const [peakReservationDays, setPeakReservationDays] = useState([])
+  const [tableUtilization, setTableUtilization] = useState([])
+  const [avgGuests, setAvgGuests] = useState(null)
+  // Legacy/General Analytics
+  const [branchComparison, setBranchComparison] = useState([])
+  const [freeMetrics, setFreeMetrics] = useState(null)
   const [loading, setLoading] = useState(true)
   const [dateRange, setDateRange] = useState(getDefaultDateRange())
 
@@ -268,6 +279,44 @@ export default function Analytics() {
         axios.get(`${API_URL}/api/analytics/data/delivery/fee-revenue`, { headers, params }).catch(err => {
           if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
           throw err
+        }),
+        // Reservations Analytics
+        axios.get(`${API_URL}/api/analytics/data/reservations/total`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/reservations/completion-rate`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/reservations/no-show-rate`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/reservations/peak-hours`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: [] } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/reservations/peak-days`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: [] } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/reservations/table-utilization`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: [] } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/data/reservations/avg-guests`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: null } }
+          throw err
+        }),
+        // Legacy/General Analytics
+        axios.get(`${API_URL}/api/analytics/branches`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: [] } }
+          throw err
+        }),
+        axios.get(`${API_URL}/api/analytics/free`, { headers, params }).catch(err => {
+          if (err.response?.status === 403 || err.response?.status === 500) return { data: { data: { freeMetrics: null } } }
+          throw err
         })
       ])
       
@@ -304,7 +353,16 @@ export default function Analytics() {
         fallbackRateRes,
         busySlotsRes,
         commonAreasRes,
-        deliveryFeeRevenueRes
+        deliveryFeeRevenueRes,
+        totalReservationsRes,
+        reservationCompletionRateRes,
+        noShowRateRes,
+        peakReservationHoursRes,
+        peakReservationDaysRes,
+        tableUtilizationRes,
+        avgGuestsRes,
+        branchComparisonRes,
+        freeMetricsRes
       ] = allResults
       
       // Use premium overview if available, otherwise use basic overview
@@ -379,6 +437,19 @@ export default function Analytics() {
       setBusySlots(busySlotsRes.status === 'fulfilled' ? busySlotsRes.value.data.data || [] : [])
       setCommonAreas(commonAreasRes.status === 'fulfilled' ? commonAreasRes.value.data.data || [] : [])
       setDeliveryFeeRevenue(deliveryFeeRevenueRes.status === 'fulfilled' ? deliveryFeeRevenueRes.value.data.data || null : null)
+      
+      // Reservations Analytics
+      setTotalReservations(totalReservationsRes.status === 'fulfilled' ? totalReservationsRes.value.data.data || null : null)
+      setReservationCompletionRate(reservationCompletionRateRes.status === 'fulfilled' ? reservationCompletionRateRes.value.data.data || null : null)
+      setNoShowRate(noShowRateRes.status === 'fulfilled' ? noShowRateRes.value.data.data || null : null)
+      setPeakReservationHours(peakReservationHoursRes.status === 'fulfilled' ? peakReservationHoursRes.value.data.data || [] : [])
+      setPeakReservationDays(peakReservationDaysRes.status === 'fulfilled' ? peakReservationDaysRes.value.data.data || [] : [])
+      setTableUtilization(tableUtilizationRes.status === 'fulfilled' ? tableUtilizationRes.value.data.data || [] : [])
+      setAvgGuests(avgGuestsRes.status === 'fulfilled' ? avgGuestsRes.value.data.data || null : null)
+      
+      // Legacy/General Analytics
+      setBranchComparison(branchComparisonRes.status === 'fulfilled' ? branchComparisonRes.value.data.data || [] : [])
+      setFreeMetrics(freeMetricsRes.status === 'fulfilled' ? freeMetricsRes.value.data.data?.freeMetrics || null : null)
     } catch (error) {
       console.error('Error fetching analytics:', error)
     } finally {
@@ -1522,18 +1593,283 @@ export default function Analytics() {
         </>
       )}
 
+      {/* Reservations Analytics */}
       {selectedAnalyticsType === 'reservations' && (
-        <div className="card">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Reservations Analytics</h2>
-          <div className="text-center py-12 text-gray-500">Reservations analytics coming soon</div>
-        </div>
+        <>
+          {/* Total Reservations */}
+          {totalReservations && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <Calendar size={24} />
+                Total Reservations
+              </h2>
+              {totalReservations.message ? (
+                <div className="text-center py-12 text-gray-500">{totalReservations.message}</div>
+              ) : (
+                <div className="bg-blue-50 p-6 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-2">Total</p>
+                  <p className="text-3xl font-bold text-gray-900">{totalReservations.total || 0}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Completion Rate */}
+          {reservationCompletionRate && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <TrendingUp size={24} />
+                Completion Rate
+              </h2>
+              {reservationCompletionRate.message ? (
+                <div className="text-center py-12 text-gray-500">{reservationCompletionRate.message}</div>
+              ) : (
+                <div className="bg-green-50 p-6 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-2">Rate</p>
+                  <p className="text-3xl font-bold text-gray-900">
+                    {typeof reservationCompletionRate.completion_rate === 'number' 
+                      ? reservationCompletionRate.completion_rate.toFixed(1) 
+                      : parseFloat(reservationCompletionRate.completion_rate || 0).toFixed(1)}%
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* No Show Rate */}
+          {noShowRate && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <TrendingUp size={24} />
+                No Show Rate
+              </h2>
+              {noShowRate.message ? (
+                <div className="text-center py-12 text-gray-500">{noShowRate.message}</div>
+              ) : (
+                <div className="bg-orange-50 p-6 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-2">Rate</p>
+                  <p className="text-3xl font-bold text-gray-900">
+                    {typeof noShowRate.no_show_rate === 'number' 
+                      ? noShowRate.no_show_rate.toFixed(1) 
+                      : parseFloat(noShowRate.no_show_rate || 0).toFixed(1)}%
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Peak Hours */}
+          {peakReservationHours.length > 0 && !peakReservationHours[0]?.message && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <Clock size={24} />
+                Peak Reservation Hours
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Hour</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Reservations</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {peakReservationHours.map((hour, index) => (
+                      <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-sm">{hour.hour || 0}:00</td>
+                        <td className="py-3 px-4 text-sm font-medium">{hour.count || 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Peak Days */}
+          {peakReservationDays.length > 0 && !peakReservationDays[0]?.message && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <Calendar size={24} />
+                Peak Reservation Days
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Day</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Reservations</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {peakReservationDays.map((day, index) => (
+                      <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-sm">{day.day || day.period || 'N/A'}</td>
+                        <td className="py-3 px-4 text-sm font-medium">{day.count || 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Table Utilization */}
+          {tableUtilization.length > 0 && !tableUtilization[0]?.message && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <BarChart3 size={24} />
+                Table Utilization
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Table</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Utilization</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableUtilization.map((table, index) => (
+                      <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-sm">{table.table_id || table.table || 'N/A'}</td>
+                        <td className="py-3 px-4 text-sm font-medium">
+                          {typeof table.utilization === 'number' 
+                            ? table.utilization.toFixed(1) 
+                            : parseFloat(table.utilization || 0).toFixed(1)}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Avg Guests */}
+          {avgGuests && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <Users size={24} />
+                Average Guests Per Reservation
+              </h2>
+              {avgGuests.message ? (
+                <div className="text-center py-12 text-gray-500">{avgGuests.message}</div>
+              ) : (
+                <div className="bg-purple-50 p-6 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-2">Average</p>
+                  <p className="text-3xl font-bold text-gray-900">
+                    {typeof avgGuests.avg_guests === 'number' 
+                      ? avgGuests.avg_guests.toFixed(1) 
+                      : parseFloat(avgGuests.avg_guests || 0).toFixed(1)}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
+      {/* Legacy/General Analytics */}
       {selectedAnalyticsType === 'legacy' && (
-        <div className="card">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Legacy/General Analytics</h2>
-          <div className="text-center py-12 text-gray-500">Legacy analytics coming soon</div>
-        </div>
+        <>
+          {/* Overview (already displayed at top, but can show here too) */}
+          {overview && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <BarChart3 size={24} />
+                Overview
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Total Orders</p>
+                  <p className="text-2xl font-bold text-gray-900">{overview.totalOrders || 0}</p>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Completed</p>
+                  <p className="text-2xl font-bold text-gray-900">{overview.completedOrders || 0}</p>
+                </div>
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Cancelled</p>
+                  <p className="text-2xl font-bold text-gray-900">{overview.cancelledOrders || 0}</p>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    ${typeof overview.totalRevenue === 'number' 
+                      ? overview.totalRevenue.toFixed(2) 
+                      : parseFloat(overview.totalRevenue || 0).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Branch Comparison */}
+          {branchComparison.length > 0 && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <BarChart3 size={24} />
+                Branch Comparison
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Branch</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Orders</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {branchComparison.map((branch, index) => (
+                      <tr key={branch.branchId || index} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-sm">{branch.branchId || branch.branch_name || 'N/A'}</td>
+                        <td className="py-3 px-4 text-sm font-medium">{branch.orders || 0}</td>
+                        <td className="py-3 px-4 text-sm">
+                          ${typeof branch.revenue === 'number' 
+                            ? branch.revenue.toFixed(2) 
+                            : parseFloat(branch.revenue || 0).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Free Metrics */}
+          {freeMetrics && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <TrendingUp size={24} />
+                Free Metrics
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {freeMetrics.milestones && (
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600 mb-1">Best Minute</p>
+                    <p className="text-lg font-bold text-gray-900">{freeMetrics.milestones.count || 0} orders</p>
+                    <p className="text-xs text-gray-500">{freeMetrics.milestones.minute || 'N/A'}</p>
+                  </div>
+                )}
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Requests Handled</p>
+                  <p className="text-lg font-bold text-gray-900">{freeMetrics.requests_handled || 0}</p>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Avg Response Time</p>
+                  <p className="text-lg font-bold text-gray-900">
+                    {freeMetrics.avg_response_time_ms 
+                      ? (freeMetrics.avg_response_time_ms / 1000).toFixed(2) 
+                      : 0}s
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
