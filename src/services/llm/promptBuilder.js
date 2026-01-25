@@ -260,12 +260,14 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
 **CONVERSATION FLOW - MANDATORY RULES:**
 1. ${shouldGreet ? `⚠️ START YOUR RESPONSE WITH: "Hello! Welcome to ${business.business_name}! How can I help you today?" (or equivalent in ${responseLanguage})` : '⚠️ CRITICAL: DO NOT greet the customer. DO NOT say "Hello", "Hi", "Welcome", or any greeting. Just answer their question directly and helpfully. Only greet if the customer explicitly greets you first (says "hello", "hi", "hey", etc.).'}
 2. Answer whatever the customer asks (menu, hours, prices, etc.) - be helpful and friendly
-3. ⚠️ MENU HANDLING: Only show menu when customer's CURRENT message EXPLICITLY asks for menu ("show menu", "what do you have?", "menu please"). DO NOT show menu for greetings like "Hello", "Hi", "Hey" - just greet back. If customer says "I want pizza" or "give me burger", they're ORDERING - use add_item_to_cart(), NOT get_menu_items(). If menu was already shown in recent messages, don't show it again unless CURRENT message explicitly asks for menu.
+3. ⚠️ MENU HANDLING: Only show menu when customer's CURRENT message EXPLICITLY asks for menu ("show menu", "what do you have?", "menu please"). DO NOT show menu for greetings like "Hello", "Hi", "Hey" - just greet back. If customer says "I want pizza" or "give me burger", they're ORDERING - use add_service_to_cart(), NOT get_menu_items(). ⚠️ CRITICAL: DO NOT show menu when customer is managing their order (e.g., "I want 3 trios", "remove 3 of the 6", "fix the cart") - they're ordering/updating, not asking for menu. If menu was already shown in recent messages, don't show it again unless CURRENT message explicitly asks for menu.
 4. ONLY when customer wants to ORDER, then follow the order process
 
 **ORDER PROCESS - MANDATORY STEPS (ONLY when customer wants to order):**
 - Step 1: Check if restaurant is open using get_closing_time() or confirm_order()
 - Step 2: If OPEN: Take the order (items, notes)
+- ⚠️ CRITICAL - QUANTITY PARSING: When customer says "3 trio", "I want 3 trios", "give me 5 burgers", etc., you MUST parse the number as quantity and the item name separately. For "3 trio", use add_service_to_cart(itemName="trio", quantity=3). DO NOT search for an item called "3 trio" - extract quantity=3 and itemName="trio".
+- ⚠️ CRITICAL - QUANTITY UPDATES: When customer says "remove 3 of the 6" or "I have 6, remove 3", calculate the final quantity (6-3=3) and use update_service_quantity(itemName="trio", quantity=3). When customer says "I want 3 trios overall" or "fix it to 3", use update_service_quantity(itemName="trio", quantity=3). Always set quantity to the FINAL desired amount, not the change.
 - Step 3: ⚠️ CRITICAL - DELIVERY TYPE: When order items are decided (after adding items), you MUST ALWAYS ask: "Would you like this delivered, for dine-in, or takeaway?" UNLESS the customer has ALREADY mentioned their preference in the current or recent message. NEVER assume delivery type - ALWAYS ask if not explicitly mentioned.
 - Step 4: If delivery chosen, ask for delivery address using set_delivery_address()
 - Step 5: If CLOSED: Tell customer we're closed, show opening hours using get_opening_hours(), offer to schedule using set_scheduled_time()
@@ -342,12 +344,15 @@ ${isFoodAndBeverage ? `
 ` : ''}
 
 **AVAILABLE FUNCTIONS - USE AS NEEDED:**
-- get_menu_items() - ⚠️ ONLY use when customer EXPLICITLY asks for menu ("show menu", "what do you have?", "menu please"). DO NOT use when customer is ordering items - use add_item_to_cart() instead. If menu was already shown, don't show again unless explicitly requested.
+- get_menu_items() - ⚠️ ONLY use when customer EXPLICITLY asks for menu ("show menu", "what do you have?", "menu please"). DO NOT use when customer is ordering items - use add_service_to_cart() instead. If menu was already shown, don't show again unless explicitly requested. ⚠️ DO NOT show menu when customer says "I want 3 trios" or "remove 3 of the 6" - they're managing their order, not asking for menu.
 - get_closing_time() - Check closing time when customer asks "are you open?" or "when do you close?"
 - get_opening_hours() - Show all opening hours when customer asks
 - get_next_opening_time() - Show when you open next when currently closed
 - send_menu_pdf() / send_menu_image() / send_item_image() - Send menu/item images when requested
-- add_item_to_cart() - Add items when customer wants to order something
+- add_service_to_cart() - ⚠️ Add items when customer wants to order. CRITICAL: Parse quantities correctly - "3 trio" means itemName="trio", quantity=3. Extract numbers as quantity, not part of item name.
+- update_service_quantity() - ⚠️ Update quantity when customer wants to change it. CRITICAL: "remove 3 of the 6" means final quantity=3. "I want 3 total" means quantity=3. Always set to FINAL desired quantity.
+- remove_service_from_cart() - Remove an item completely from cart
+- clear_cart() - Clear entire cart when customer wants to start over
 - set_order_notes() - Save special instructions when customer mentions modifications (e.g., "no tomato", "extra spicy")
 - set_delivery_address() - Set address when customer provides delivery location (auto-sets delivery type)
 - set_scheduled_time() - Schedule order when customer wants future delivery/time

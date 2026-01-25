@@ -15,17 +15,17 @@ function getCartFunctionDefinitions() {
       type: 'function',
       function: {
         name: 'add_service_to_cart',
-        description: 'Add a service to the customer\'s ongoing order. Use this when customer wants to order something (e.g., "I want pizza", "baddi pizza", "give me burger"). Match the service name from available menu items.',
+        description: 'Add a service to the customer\'s ongoing order. Use this when customer wants to order something (e.g., "I want pizza", "baddi pizza", "give me burger", "3 trio", "I want 5 burgers"). ⚠️ CRITICAL: Parse quantities from natural language - if customer says "3 trio" or "I want 3 trios", extract quantity=3 and itemName="trio" (NOT itemName="3 trio"). Always extract the number as quantity and the item name separately. Match the item name from available menu items.',
         parameters: {
           type: 'object',
           properties: {
             itemName: {
               type: 'string',
-              description: 'The name of the item to add (match exactly from menu items, or use closest match)'
+              description: 'The name of the item to add (match exactly from menu items, or use closest match). ⚠️ DO NOT include numbers in itemName - if customer says "3 trio", use itemName="trio" and quantity=3. Extract only the item name, not the quantity.'
             },
             quantity: {
               type: 'number',
-              description: 'Quantity to add (default: 1)',
+              description: 'Quantity to add. ⚠️ CRITICAL: Extract this from the customer\'s message. If they say "3 trio", "I want 3 trios", "give me 3 trio", etc., set quantity=3. If no number is mentioned, default to 1.',
               default: 1
             }
           },
@@ -54,17 +54,17 @@ function getCartFunctionDefinitions() {
       type: 'function',
       function: {
         name: 'update_service_quantity',
-        description: 'Update the quantity of a service in the ongoing order.',
+        description: 'Update the quantity of a service in the ongoing order. Use this when customer wants to change quantity (e.g., "make it 3", "I want 3 trios total", "remove 3 of the 6", "change to 5"). ⚠️ CRITICAL: If customer says "remove 3 of the 6" or "I have 6, remove 3", calculate the new quantity (6-3=3) and set quantity=3. If customer says "I want 3 trios overall" or "fix it to 3", set quantity=3. Always calculate the final desired quantity, not the change amount.',
         parameters: {
           type: 'object',
           properties: {
             itemName: {
               type: 'string',
-              description: 'The name of the item to update'
+              description: 'The name of the item to update (match from items in cart)'
             },
             quantity: {
               type: 'number',
-              description: 'New quantity (must be > 0, use remove_item_from_cart to remove)'
+              description: 'The FINAL desired quantity (not the change amount). ⚠️ CRITICAL: If customer has 6 items and says "remove 3", calculate 6-3=3 and set quantity=3. If customer says "I want 3 total", set quantity=3. This is the final quantity they want, not how many to add/remove.'
             }
           },
           required: ['itemName', 'quantity']
