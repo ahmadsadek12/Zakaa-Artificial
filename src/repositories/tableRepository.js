@@ -233,11 +233,45 @@ async function findAvailable(ownerUserId, date = null, time = null) {
  * @param {string} positionPreference - Optional position preference (matches position_label)
  */
 async function findAvailableForSlot(ownerUserId, date, time, numberOfGuests = null, positionPreference = null) {
+  // Check which columns exist in tables table
+  let hasOwnerUserId = false;
+  let hasTableNumber = false;
+  let hasIsActive = false;
+  let hasMinSeats = false;
+  let hasMaxSeats = false;
+  
+  try {
+    const tableColumns = await queryMySQL(`
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'tables'
+      AND COLUMN_NAME IN ('owner_user_id', 'table_number', 'is_active', 'min_seats', 'max_seats')
+    `);
+    if (Array.isArray(tableColumns)) {
+      const columnNames = tableColumns.map(c => c.COLUMN_NAME || c.column_name);
+      hasOwnerUserId = columnNames.includes('owner_user_id');
+      hasTableNumber = columnNames.includes('table_number');
+      hasIsActive = columnNames.includes('is_active');
+      hasMinSeats = columnNames.includes('min_seats');
+      hasMaxSeats = columnNames.includes('max_seats');
+    }
+  } catch (err) {
+    console.warn('Could not check tables columns:', err.message);
+  }
+
+  // Use appropriate column names based on what exists
+  const ownerColumn = hasOwnerUserId ? 't.owner_user_id' : 't.user_id';
+  const tableNumberColumn = hasTableNumber ? 't.table_number' : 't.number';
+  const activeColumn = hasIsActive ? 't.is_active' : 't.reserved';
+  const minSeatsColumn = hasMinSeats ? 't.min_seats' : 't.seats';
+  const maxSeatsColumn = hasMaxSeats ? 't.max_seats' : 't.seats';
+  
   let sql = `
     SELECT t.* 
     FROM tables t
-    WHERE t.owner_user_id = ? 
-    AND t.is_active = true
+    WHERE ${ownerColumn} = ? 
+    AND ${activeColumn} = true
     AND t.id NOT IN (
       SELECT r.table_id 
       FROM reservations r 
@@ -252,7 +286,7 @@ async function findAvailableForSlot(ownerUserId, date, time, numberOfGuests = nu
   
   // Filter by guest count if provided
   if (numberOfGuests) {
-    sql += ' AND t.min_seats <= ? AND t.max_seats >= ?';
+    sql += ` AND ${minSeatsColumn} <= ? AND ${maxSeatsColumn} >= ?`;
     params.push(numberOfGuests, numberOfGuests);
   }
   
@@ -262,7 +296,7 @@ async function findAvailableForSlot(ownerUserId, date, time, numberOfGuests = nu
     params.push(`%${positionPreference.toLowerCase()}%`);
   }
   
-  sql += ' ORDER BY t.table_number ASC';
+  sql += ` ORDER BY ${tableNumberColumn} ASC`;
   
   return await queryMySQL(sql, params);
 }

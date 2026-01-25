@@ -219,14 +219,65 @@ async function create(reservationData) {
   // Determine platform from source
   const platform = reservationData.platform || reservationData.source || 'whatsapp';
   
-  // Snapshot table details if table_id is provided
+  // Auto-assign table if not provided
+  let assignedTableId = reservationData.tableId;
+  if (!assignedTableId && reservationData.reservationDate && reservationData.reservationTime) {
+    const tableRepo = require('./tableRepository');
+    const ownerUserId = reservationData.ownerUserId || reservationData.userId || reservationData.businessUserId;
+    
+    // Find available tables for this slot
+    const availableTables = await tableRepo.findAvailableForSlot(
+      ownerUserId,
+      reservationData.reservationDate,
+      reservationData.reservationTime,
+      reservationData.numberOfGuests || null,
+      null // positionPreference
+    );
+    
+    if (availableTables.length > 0) {
+      // Select best matching table
+      // Prefer tables that fit guests without too much extra capacity
+      let bestTable = availableTables[0];
+      let bestScore = Infinity;
+      
+      const numberOfGuests = reservationData.numberOfGuests || 0;
+      
+      for (const table of availableTables) {
+        const minSeats = table.min_seats || table.seats || 0;
+        const maxSeats = table.max_seats || table.seats || 0;
+        
+        // Calculate score: lower is better
+        // Prefer tables that fit guests with minimal extra capacity
+        let score = maxSeats - numberOfGuests;
+        
+        // If table is too small, give it a very high score (low priority)
+        if (numberOfGuests > maxSeats) {
+          score = 10000;
+        }
+        
+        // If table is too large (more than double), increase score
+        if (maxSeats > numberOfGuests * 2) {
+          score += (maxSeats - numberOfGuests * 2) * 0.5;
+        }
+        
+        if (score < bestScore) {
+          bestScore = score;
+          bestTable = table;
+        }
+      }
+      
+      assignedTableId = bestTable.id;
+    }
+  }
+  
+  // Snapshot table details if table_id is provided or auto-assigned
   let minSeatsSnapshot = reservationData.minSeatsSnapshot || reservationData.min_seats_snapshot || null;
   let maxSeatsSnapshot = reservationData.maxSeatsSnapshot || reservationData.max_seats_snapshot || null;
   let positionSnapshot = reservationData.positionSnapshot || reservationData.position_snapshot || null;
   
-  if (reservationData.tableId && (!minSeatsSnapshot || !maxSeatsSnapshot)) {
+  if (assignedTableId && (!minSeatsSnapshot || !maxSeatsSnapshot)) {
     const tableRepo = require('./tableRepository');
-    const table = await tableRepo.findById(reservationData.tableId);
+    const table = await tableRepo.findById(assignedTableId);
     if (table) {
       minSeatsSnapshot = minSeatsSnapshot || table.min_seats || table.seats;
       maxSeatsSnapshot = maxSeatsSnapshot || table.max_seats || table.seats;
@@ -235,9 +286,9 @@ async function create(reservationData) {
   }
   
   // Prevent double-booking: check for existing confirmed reservation at same table/date/time
-  if (reservationData.tableId && reservationData.reservationDate && reservationData.reservationTime) {
+  if (assignedTableId && reservationData.reservationDate && reservationData.reservationTime) {
     const existing = await findByTableAndDateTime(
-      reservationData.tableId,
+      assignedTableId,
       reservationData.reservationDate,
       reservationData.reservationTime
     );
@@ -277,7 +328,7 @@ async function create(reservationData) {
       reservationData.userId || null,
       reservationData.businessUserId,
       ownerUserId,
-      reservationData.tableId || null,
+      assignedTableId || null,
       reservationData.itemId || null,
       reservationData.customerPhoneNumber,
       reservationData.customerName,
@@ -310,7 +361,7 @@ async function create(reservationData) {
       reservationData.userId || null,
       reservationData.businessUserId,
       ownerUserId,
-      reservationData.tableId || null,
+      assignedTableId || null,
       reservationData.customerPhoneNumber,
       reservationData.customerName,
       reservationData.reservationDate,
