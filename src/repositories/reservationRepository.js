@@ -243,6 +243,7 @@ async function create(reservationData) {
       const numberOfGuests = reservationData.numberOfGuests || 0;
       
       for (const table of availableTables) {
+        // Normalize column names for backward compatibility
         const minSeats = table.min_seats || table.seats || 0;
         const maxSeats = table.max_seats || table.seats || 0;
         
@@ -253,11 +254,16 @@ async function create(reservationData) {
         // If table is too small, give it a very high score (low priority)
         if (numberOfGuests > maxSeats) {
           score = 10000;
-        }
-        
-        // If table is too large (more than double), increase score
-        if (maxSeats > numberOfGuests * 2) {
-          score += (maxSeats - numberOfGuests * 2) * 0.5;
+        } else {
+          // If table is too large (more than double), increase score
+          if (maxSeats > numberOfGuests * 2) {
+            score += (maxSeats - numberOfGuests * 2) * 0.5;
+          }
+          
+          // Prefer tables where min_seats is closer to number of guests
+          if (minSeats > numberOfGuests) {
+            score += (minSeats - numberOfGuests) * 0.3;
+          }
         }
         
         if (score < bestScore) {
