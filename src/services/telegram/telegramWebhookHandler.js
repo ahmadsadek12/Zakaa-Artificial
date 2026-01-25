@@ -259,7 +259,99 @@ async function processMessage(message, businessId = null) {
         responseMessage += `\n\n✅ Your order has been placed! Order #${response.orderId.substring(0, 8).toUpperCase()}`;
       }
       
-      // Send PDFs first if any
+      // Handle menusToSend - send each menu separately with its own message
+      if (response.menusToSend && response.menusToSend.length > 0) {
+        for (const menu of response.menusToSend) {
+          try {
+            const menuMessage = menu.message || `Here is our ${menu.menuName} menu`;
+            
+            logger.debug('Processing menu to send (Telegram)', {
+              menuName: menu.menuName,
+              hasImageUrls: !!menu.imageUrls,
+              imageUrlsLength: menu.imageUrls?.length || 0,
+              hasPdfUrl: !!menu.pdfUrl,
+              hasMenuLink: !!menu.menuLink
+            });
+            
+            // Send menu images if any (with caption)
+            if (menu.imageUrls && Array.isArray(menu.imageUrls) && menu.imageUrls.length > 0) {
+              logger.debug('Sending menu images (Telegram)', {
+                menuName: menu.menuName,
+                imageCount: menu.imageUrls.length
+              });
+              for (const imageUrl of menu.imageUrls) {
+                try {
+                  await telegramMessageSender.sendPhoto({
+                    chatId,
+                    imageUrl: imageUrl,
+                    caption: menuMessage,
+                    botToken: business.telegram_bot_token
+                  });
+                } catch (imageError) {
+                  logger.error('Failed to send menu image via Telegram:', {
+                    chatId,
+                    imageUrl: imageUrl,
+                    error: imageError.message
+                  });
+                }
+              }
+            }
+            
+            // Send menu PDF if any (with caption)
+            if (menu.pdfUrl) {
+              try {
+                await telegramMessageSender.sendDocument({
+                  chatId,
+                  documentUrl: menu.pdfUrl,
+                  caption: menuMessage,
+                  botToken: business.telegram_bot_token
+                });
+              } catch (pdfError) {
+                logger.error('Failed to send menu PDF via Telegram:', {
+                  chatId,
+                  documentUrl: menu.pdfUrl,
+                  error: pdfError.message
+                });
+              }
+            }
+            
+            // Send menu link if any (as text message with the menu message)
+            if (menu.menuLink) {
+              try {
+                const linkMessage = `${menuMessage}\n🔗 Menu link: ${menu.menuLink}`;
+                await telegramMessageSender.sendMessageWithRetry({
+                  chatId,
+                  message: linkMessage,
+                  botToken: business.telegram_bot_token,
+                  options: {
+                    parse_mode: undefined,
+                    disable_web_page_preview: false
+                  }
+                });
+              } catch (linkError) {
+                logger.error('Failed to send menu link via Telegram:', {
+                  chatId,
+                  menuLink: menu.menuLink,
+                  error: linkError.message
+                });
+              }
+            }
+          } catch (menuError) {
+            logger.error('Failed to send menu via Telegram:', {
+              chatId,
+              menuName: menu.menuName,
+              error: menuError.message
+            });
+          }
+        }
+        
+        // Skip the old PDF/image handling if we already sent menus
+        // Don't send the general text response either since we sent menu-specific messages
+        logger.debug('Sent menus via menusToSend (Telegram), skipping old handlers');
+        return;
+      }
+      
+      // Send PDFs first if any (old structure - for backward compatibility)
       if (response.pdfsToSend && response.pdfsToSend.length > 0) {
         for (const pdf of response.pdfsToSend) {
           try {
