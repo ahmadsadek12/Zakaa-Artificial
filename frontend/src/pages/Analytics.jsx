@@ -138,9 +138,6 @@ export default function Analytics() {
       if (dateRange.startDate) params.startDate = dateRange.startDate
       if (dateRange.endDate) params.endDate = dateRange.endDate
 
-      // Fetch free metrics first
-      const freeMetricsRes = await axios.get(`${API_URL}/api/analytics/free`, { headers, params }).catch(() => ({ data: { data: { freeMetrics: null } } }))
-      
       // Try to fetch basic overview (no premium required)
       const basicOverviewRes = await axios.get(`${API_URL}/api/analytics/basic-overview`, { headers, params }).catch((err) => {
         console.error('Error fetching basic overview:', err)
