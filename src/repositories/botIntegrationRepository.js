@@ -9,28 +9,39 @@ const { encryptToken, decryptToken } = require('../../utils/encryption');
  * Find integration by owner and platform
  */
 async function findByOwnerAndPlatform(ownerType, ownerId, platform) {
-  const integrations = await queryMySQL(
-    `SELECT * FROM bot_integrations 
-     WHERE owner_type = ? AND owner_id = ? AND platform = ?`,
-    [ownerType, ownerId, platform]
-  );
-  
-  if (!integrations || integrations.length === 0) {
-    return null;
-  }
-  
-  const integration = integrations[0];
-  
-  // Decrypt token if present
-  if (integration.access_token_encrypted) {
-    try {
-      integration.access_token = decryptToken(integration.access_token_encrypted);
-    } catch (error) {
-      console.error('Failed to decrypt token:', error);
+  try {
+    const integrations = await queryMySQL(
+      `SELECT * FROM bot_integrations 
+       WHERE owner_type = ? AND owner_id = ? AND platform = ?`,
+      [ownerType, ownerId, platform]
+    );
+    
+    if (!integrations || !Array.isArray(integrations) || integrations.length === 0) {
+      return null;
     }
+    
+    const integration = integrations[0];
+    
+    if (!integration) {
+      return null;
+    }
+    
+    // Decrypt token if present
+    if (integration.access_token_encrypted) {
+      try {
+        integration.access_token = decryptToken(integration.access_token_encrypted);
+      } catch (error) {
+        console.error('Failed to decrypt token:', error);
+        // Don't fail the whole request if decryption fails
+        integration.access_token = null;
+      }
+    }
+    
+    return integration;
+  } catch (error) {
+    console.error('Error in findByOwnerAndPlatform:', error);
+    throw error;
   }
-  
-  return integration;
 }
 
 /**
