@@ -69,6 +69,18 @@ router.get('/google/oauth/url', asyncHandler(async (req, res) => {
     });
   } catch (error) {
     logger.error('Error generating Google OAuth URL:', error);
+    
+    // Check if it's a credentials configuration error
+    if (error.message && error.message.includes('not configured')) {
+      return res.status(503).json({
+        success: false,
+        error: { 
+          message: 'Google Calendar integration is not configured. Please contact support.',
+          details: 'Google OAuth credentials are missing from server configuration.'
+        }
+      });
+    }
+    
     res.status(500).json({
       success: false,
       error: { message: error.message || 'Failed to generate OAuth URL' }

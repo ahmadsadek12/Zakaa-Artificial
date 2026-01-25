@@ -29,21 +29,26 @@ function getOAuth2Client() {
  * @returns {string} Authorization URL
  */
 function getAuthUrl(businessId) {
-  const oauth2Client = getOAuth2Client();
-  
-  const scopes = [
-    'https://www.googleapis.com/auth/calendar',
-    'https://www.googleapis.com/auth/calendar.events'
-  ];
+  try {
+    const oauth2Client = getOAuth2Client();
+    
+    const scopes = [
+      'https://www.googleapis.com/auth/calendar',
+      'https://www.googleapis.com/auth/calendar.events'
+    ];
 
-  const url = oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: scopes,
-    state: businessId, // Pass business ID in state for callback
-    prompt: 'consent' // Force consent to get refresh token
-  });
+    const url = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: scopes,
+      state: businessId, // Pass business ID in state for callback
+      prompt: 'consent' // Force consent to get refresh token
+    });
 
-  return url;
+    return url;
+  } catch (error) {
+    logger.error('Error generating Google OAuth URL:', error);
+    throw error;
+  }
 }
 
 /**
