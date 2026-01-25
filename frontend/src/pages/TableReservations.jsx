@@ -125,7 +125,21 @@ export default function TableReservations() {
   const handleCreateReservation = async () => {
     try {
       const token = localStorage.getItem('token')
-      await axios.post(`${API_URL}/api/reservations`, reservationForm, {
+      
+      // Transform snake_case to camelCase for API
+      const payload = {
+        customerPhoneNumber: reservationForm.customer_phone_number,
+        customerName: reservationForm.customer_name,
+        reservationDate: reservationForm.reservation_date,
+        reservationTime: reservationForm.reservation_time,
+        numberOfGuests: reservationForm.number_of_guests || null,
+        tableId: reservationForm.table_id || null,
+        notes: reservationForm.notes || null,
+        source: 'dashboard',
+        platform: 'dashboard'
+      }
+      
+      await axios.post(`${API_URL}/api/reservations`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       })
       setShowReservationModal(false)
@@ -134,7 +148,10 @@ export default function TableReservations() {
       alert('Reservation created successfully')
     } catch (error) {
       console.error('Error creating reservation:', error)
-      alert(error.response?.data?.error?.message || 'Failed to create reservation')
+      const errorMessage = error.response?.data?.error?.message || 
+                          error.response?.data?.error?.details?.[0]?.msg ||
+                          'Failed to create reservation'
+      alert(errorMessage)
     }
   }
 
