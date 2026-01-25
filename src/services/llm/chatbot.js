@@ -272,19 +272,37 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
           // Greet ONLY if it's been over 2 hours since last message OR if customer is greeting
           shouldGreet = hoursSinceLastMessage >= 2 || isCustomerGreeting;
         } else {
-          // No previous messages (or only current message) - check if messageHistory is empty
-          // If messageHistory is empty, it means no messages in last 2 hours, so this is a fresh start
-          shouldGreet = messageHistory.length === 0 || isCustomerGreeting;
+          // No previous messages found at all - this is truly the first message ever
+          // Only greet if customer greets first, or if it's truly first message (no history)
+          // But if messageHistory is empty but there might be older messages, don't greet
+          // Check if there are ANY messages at all (not just in last 2 hours)
+          const anyMessageQuery = {
+            businessId: business.id,
+            branchId: branch?.id || business.id,
+            customerPhoneNumber: customerPhoneNumber
+          };
+          const anyMessage = await messageLogs.findOne(anyMessageQuery, { sort: { receivedAt: -1 } });
+          
+          if (!anyMessage) {
+            // Truly first message ever - greet
+            shouldGreet = true;
+          } else {
+            // There are messages but they're older than 2 hours - check if it's been 2+ hours
+            const anyMessageTime = new Date(anyMessage.receivedAt || anyMessage.timestamp);
+            const hoursSinceAnyMessage = (Date.now() - anyMessageTime.getTime()) / (1000 * 60 * 60);
+            shouldGreet = hoursSinceAnyMessage >= 2 || isCustomerGreeting;
+          }
         }
       } catch (error) {
         // If MongoDB query fails, fall back to messageHistory check
         logger.warn('Error checking last message time, using fallback', { error: error.message });
-        shouldGreet = messageHistory.length === 0 || isCustomerGreeting;
+        // Only greet if truly no history AND customer greets, or if customer greets
+        shouldGreet = isCustomerGreeting;
       }
     } else {
       // MongoDB not available - use messageHistory length as fallback
-      // Only greet if no history (truly first message) OR if customer is greeting
-      shouldGreet = (messageHistory.length === 0) || isCustomerGreeting;
+      // Only greet if customer greets (can't check time without MongoDB)
+      shouldGreet = isCustomerGreeting;
     }
     
     logger.info('Conversation history loaded', { 
