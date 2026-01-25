@@ -258,7 +258,7 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
   const systemPrompt = `${businessContext}
 
 **CONVERSATION FLOW - MANDATORY RULES:**
-1. ${shouldGreet ? `⚠️ START YOUR RESPONSE WITH: "Hello! Welcome to ${business.business_name}! How can I help you today?" (or equivalent in ${responseLanguage})` : 'DO NOT greet the customer unless they greet you first. Just answer their question directly.'}
+1. ${shouldGreet ? `⚠️ START YOUR RESPONSE WITH: "Hello! Welcome to ${business.business_name}! How can I help you today?" (or equivalent in ${responseLanguage})` : '⚠️ CRITICAL: DO NOT greet the customer. DO NOT say "Hello", "Hi", "Welcome", or any greeting. Just answer their question directly and helpfully. Only greet if the customer explicitly greets you first (says "hello", "hi", "hey", etc.).'}
 2. Answer whatever the customer asks (menu, hours, prices, etc.) - be helpful and friendly
 3. ⚠️ MENU HANDLING: Only show menu when customer's CURRENT message EXPLICITLY asks for menu ("show menu", "what do you have?", "menu please"). DO NOT show menu for greetings like "Hello", "Hi", "Hey" - just greet back. If customer says "I want pizza" or "give me burger", they're ORDERING - use add_item_to_cart(), NOT get_menu_items(). If menu was already shown in recent messages, don't show it again unless CURRENT message explicitly asks for menu.
 4. ONLY when customer wants to ORDER, then follow the order process
