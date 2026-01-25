@@ -232,13 +232,16 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:202',message:'Before INSERT into orders',data:{orderId,businessId,insertUserId,customerPhoneNumber},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'B'})}).catch(()=>{});
     // #endregion
+    // Determine order source (check if customerPhoneNumber is telegram: format)
+    const orderSource = customerPhoneNumber.startsWith('telegram:') ? 'telegram' : 'whatsapp';
+    
     try {
       await connection.query(`
         INSERT INTO orders (
           id, business_id, user_id, customer_phone_number,
-          status, subtotal, delivery_price, total, delivery_type, notes
-        ) VALUES (?, ?, ?, ?, 'cart', 0, 0, 0, ?, '__cart__')
-      `, [orderId, businessId, insertUserId, customerPhoneNumber, defaultDeliveryType]);
+          status, subtotal, delivery_price, total, delivery_type, notes, order_source
+        ) VALUES (?, ?, ?, ?, 'cart', 0, 0, 0, ?, '__cart__', ?)
+      `, [orderId, businessId, insertUserId, customerPhoneNumber, defaultDeliveryType, orderSource]);
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:173',message:'INSERT successful',data:{orderId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
       // #endregion
@@ -255,6 +258,9 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/031c3f3a-8e12-4d7a-9e88-5f983560a92c',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cartManager.js:176',message:'Cart created successfully',data:{orderId,businessId,insertUserId,insertBranchId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
     // #endregion
+    // Determine order source (check if customerPhoneNumber is telegram: format)
+    const orderSource = customerPhoneNumber.startsWith('telegram:') ? 'telegram' : 'whatsapp';
+    
     return {
       id: orderId,
       business_id: businessId,
@@ -262,6 +268,7 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
       branch_id: null, // branch_id column removed from orders table
       customer_phone_number: customerPhoneNumber,
       status: 'cart', // Return 'cart' for API compatibility (DB has 'pending' with notes='__cart__')
+      order_source: orderSource, // Include order_source in cart object
       items: [],
       subtotal: 0,
       delivery_price: 0,
