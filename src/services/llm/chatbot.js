@@ -157,8 +157,8 @@ async function getConversationHistory(businessId, branchId, customerPhoneNumber,
       }
     }
     
-    // Get messages from the last 1 hour (for active conversations)
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    // Get messages from the last 2 hours (for active conversations)
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
     
     const query = {
       businessId: businessId,
