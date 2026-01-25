@@ -561,107 +561,126 @@ export default function TableReservations() {
       {/* Reservation Modal */}
       {showReservationModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">New Reservation</h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="label">Customer Name *</label>
-                <input
-                  type="text"
-                  className="input"
-                  value={reservationForm.customer_name}
-                  onChange={(e) => setReservationForm({ ...reservationForm, customer_name: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="label">Customer Phone *</label>
-                <input
-                  type="tel"
-                  className="input"
-                  value={reservationForm.customer_phone_number}
-                  onChange={(e) => setReservationForm({ ...reservationForm, customer_phone_number: e.target.value })}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Date *</label>
-                  <input
-                    type="date"
-                    className="input"
-                    value={reservationForm.reservation_date}
-                    onChange={(e) => setReservationForm({ ...reservationForm, reservation_date: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="label">Time *</label>
-                  <input
-                    type="time"
-                    className="input"
-                    value={reservationForm.reservation_time}
-                    onChange={(e) => setReservationForm({ ...reservationForm, reservation_time: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="label">Number of Guests</label>
-                <input
-                  type="number"
-                  className="input"
-                  value={reservationForm.number_of_guests}
-                  onChange={(e) => setReservationForm({ ...reservationForm, number_of_guests: parseInt(e.target.value) || '' })}
-                  min="1"
-                />
-              </div>
-
-              <div>
-                <label className="label">Table (Optional)</label>
-                <select
-                  className="input"
-                  value={reservationForm.table_id}
-                  onChange={(e) => setReservationForm({ ...reservationForm, table_id: e.target.value })}
-                >
-                  <option value="">Auto-assign</option>
-                  {tables.filter(t => t.is_active).map(table => (
-                    <option key={table.id} value={table.id}>
-                      Table {table.table_number} ({table.min_seats}-{table.max_seats} seats)
-                      {table.position_label && ` - ${table.position_label}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="label">Notes</label>
-                <textarea
-                  className="input"
-                  value={reservationForm.notes}
-                  onChange={(e) => setReservationForm({ ...reservationForm, notes: e.target.value })}
-                  rows="3"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
+          <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] flex flex-col relative">
+            {/* Header with close button */}
+            <div className="flex-shrink-0 p-6 pb-4 border-b border-gray-200">
               <button
                 onClick={() => {
                   setShowReservationModal(false)
                   resetReservationForm()
                 }}
-                className="btn btn-secondary flex-1"
+                className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-2xl font-bold z-10 bg-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-gray-100"
+                aria-label="Close"
               >
-                Cancel
+                ×
               </button>
-              <button
-                onClick={handleCreateReservation}
-                className="btn btn-primary flex-1"
-                disabled={!reservationForm.customer_name || !reservationForm.customer_phone_number || !reservationForm.reservation_date || !reservationForm.reservation_time}
-              >
-                Create Reservation
-              </button>
+              <h2 className="text-xl font-bold text-gray-900 pr-8">New Reservation</h2>
+            </div>
+            
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto p-6 pt-4">
+              <div className="space-y-4">
+                <div>
+                  <label className="label">Customer Name *</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={reservationForm.customer_name}
+                    onChange={(e) => setReservationForm({ ...reservationForm, customer_name: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="label">Customer Phone *</label>
+                  <input
+                    type="tel"
+                    className="input"
+                    value={reservationForm.customer_phone_number}
+                    onChange={(e) => setReservationForm({ ...reservationForm, customer_phone_number: e.target.value })}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="label">Date *</label>
+                    <input
+                      type="date"
+                      className="input"
+                      value={reservationForm.reservation_date}
+                      onChange={(e) => setReservationForm({ ...reservationForm, reservation_date: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Time *</label>
+                    <input
+                      type="time"
+                      className="input"
+                      value={reservationForm.reservation_time}
+                      onChange={(e) => setReservationForm({ ...reservationForm, reservation_time: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label">Number of Guests</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={reservationForm.number_of_guests}
+                    onChange={(e) => setReservationForm({ ...reservationForm, number_of_guests: parseInt(e.target.value) || '' })}
+                    min="1"
+                  />
+                </div>
+
+                <div>
+                  <label className="label">Table (Optional)</label>
+                  <select
+                    className="input"
+                    value={reservationForm.table_id}
+                    onChange={(e) => setReservationForm({ ...reservationForm, table_id: e.target.value })}
+                  >
+                    <option value="">Auto-assign</option>
+                    {tables.filter(t => t.is_active).map(table => (
+                      <option key={table.id} value={table.id}>
+                        Table {table.table_number} ({table.min_seats}-{table.max_seats} seats)
+                        {table.position_label && ` - ${table.position_label}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="label">Notes</label>
+                  <textarea
+                    className="input"
+                    value={reservationForm.notes}
+                    onChange={(e) => setReservationForm({ ...reservationForm, notes: e.target.value })}
+                    rows="3"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Footer with buttons */}
+            <div className="flex-shrink-0 p-6 pt-4 border-t border-gray-200">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowReservationModal(false)
+                    resetReservationForm()
+                  }}
+                  className="btn btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateReservation}
+                  className="btn btn-primary flex-1"
+                  disabled={!reservationForm.customer_name || !reservationForm.customer_phone_number || !reservationForm.reservation_date || !reservationForm.reservation_time}
+                >
+                  Create Reservation
+                </button>
+              </div>
             </div>
           </div>
         </div>
