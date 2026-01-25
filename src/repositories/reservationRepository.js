@@ -247,37 +247,87 @@ async function create(reservationData) {
     }
   }
   
-  await queryMySQL(`
-    INSERT INTO reservations (
-      id, user_id, business_user_id, owner_user_id, table_id, item_id,
-      customer_phone_number, customer_name,
-      reservation_date, reservation_time, number_of_guests, notes, status,
-      reservation_kind, reservation_type, start_at, source, platform,
-      min_seats_snapshot, max_seats_snapshot, position_snapshot
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [
-    reservationId,
-    reservationData.userId || null,
-    reservationData.businessUserId,
-    ownerUserId,
-    reservationData.tableId || null,
-    reservationData.itemId || null,
-    reservationData.customerPhoneNumber,
-    reservationData.customerName,
-    reservationData.reservationDate,
-    reservationData.reservationTime,
-    reservationData.numberOfGuests || null,
-    reservationData.notes || null,
-    reservationData.status || 'confirmed',
-    reservationData.reservationKind || 'table',
-    reservationType,
-    startAt || null,
-    reservationData.source || 'whatsapp',
-    platform,
-    minSeatsSnapshot,
-    maxSeatsSnapshot,
-    positionSnapshot
-  ]);
+  // Check if item_id column exists
+  let hasItemId = false;
+  try {
+    const columnCheck = await queryMySQL(`
+      SELECT COLUMN_NAME 
+      FROM information_schema.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'reservations' 
+        AND COLUMN_NAME = 'item_id'
+    `);
+    hasItemId = columnCheck && columnCheck.length > 0;
+  } catch (err) {
+    hasItemId = false;
+  }
+  
+  // Build INSERT statement based on available columns
+  if (hasItemId) {
+    await queryMySQL(`
+      INSERT INTO reservations (
+        id, user_id, business_user_id, owner_user_id, table_id, item_id,
+        customer_phone_number, customer_name,
+        reservation_date, reservation_time, number_of_guests, notes, status,
+        reservation_kind, reservation_type, start_at, source, platform,
+        min_seats_snapshot, max_seats_snapshot, position_snapshot
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      reservationId,
+      reservationData.userId || null,
+      reservationData.businessUserId,
+      ownerUserId,
+      reservationData.tableId || null,
+      reservationData.itemId || null,
+      reservationData.customerPhoneNumber,
+      reservationData.customerName,
+      reservationData.reservationDate,
+      reservationData.reservationTime,
+      reservationData.numberOfGuests || null,
+      reservationData.notes || null,
+      reservationData.status || 'confirmed',
+      reservationData.reservationKind || 'table',
+      reservationType,
+      startAt || null,
+      reservationData.source || 'whatsapp',
+      platform,
+      minSeatsSnapshot,
+      maxSeatsSnapshot,
+      positionSnapshot
+    ]);
+  } else {
+    // Insert without item_id column
+    await queryMySQL(`
+      INSERT INTO reservations (
+        id, user_id, business_user_id, owner_user_id, table_id,
+        customer_phone_number, customer_name,
+        reservation_date, reservation_time, number_of_guests, notes, status,
+        reservation_kind, reservation_type, start_at, source, platform,
+        min_seats_snapshot, max_seats_snapshot, position_snapshot
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      reservationId,
+      reservationData.userId || null,
+      reservationData.businessUserId,
+      ownerUserId,
+      reservationData.tableId || null,
+      reservationData.customerPhoneNumber,
+      reservationData.customerName,
+      reservationData.reservationDate,
+      reservationData.reservationTime,
+      reservationData.numberOfGuests || null,
+      reservationData.notes || null,
+      reservationData.status || 'confirmed',
+      reservationData.reservationKind || 'table',
+      reservationType,
+      startAt || null,
+      reservationData.source || 'whatsapp',
+      platform,
+      minSeatsSnapshot,
+      maxSeatsSnapshot,
+      positionSnapshot
+    ]);
+  }
   
   return await findById(reservationId);
 }
