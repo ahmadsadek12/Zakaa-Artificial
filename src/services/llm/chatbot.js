@@ -249,35 +249,36 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
     const messageLower = (message || '').toLowerCase().trim();
     const isCustomerGreeting = greetingPhrases.some(phrase => messageLower === phrase || messageLower.startsWith(phrase + ' ') || messageLower.endsWith(' ' + phrase));
     
-    // Check if it's been over 2 hours since last greeting (not just last message)
+    // Check if it's been over 2 hours since last message (excluding current message)
     const messageLogs = await getMongoCollection('message_logs');
-    let hoursSinceLastGreeting = null;
+    let hoursSinceLastMessage = null;
     let shouldGreet = false;
     
     if (messageLogs) {
-      // Get the last greeting message from the chatbot (outbound messages that contain greeting phrases)
-      const greetingPatterns = ['hello', 'welcome', 'hi', 'hey', 'marhaba', 'ahlan'];
-      const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
-      const lastGreetingQuery = {
-        businessId: business.id,
-        branchId: branch?.id || business.id,
-        customerPhoneNumber: customerPhoneNumber,
-        direction: 'outbound',
-        receivedAt: { $lt: oneMinuteAgo }, // Exclude very recent messages (current message)
-        $or: greetingPatterns.map(pattern => ({
-          text: { $regex: pattern, $options: 'i' }
-        }))
-      };
-      const lastGreeting = await messageLogs.findOne(lastGreetingQuery, { sort: { receivedAt: -1 } });
-      
-      if (lastGreeting) {
-        const lastGreetingTime = new Date(lastGreeting.receivedAt || lastGreeting.timestamp);
-        hoursSinceLastGreeting = (Date.now() - lastGreetingTime.getTime()) / (1000 * 60 * 60);
-        // Greet ONLY if it's been over 2 hours since last greeting OR if customer is greeting
-        shouldGreet = hoursSinceLastGreeting >= 2 || isCustomerGreeting;
-      } else {
-        // No previous greeting found - check if messageHistory is empty (truly first message)
-        // Or if customer is greeting
+      try {
+        // Get the last message BEFORE the current one (exclude messages from the last minute to avoid current message)
+        const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
+        const lastMessageQuery = {
+          businessId: business.id,
+          branchId: branch?.id || business.id,
+          customerPhoneNumber: customerPhoneNumber,
+          receivedAt: { $lt: oneMinuteAgo } // Exclude very recent messages (current message)
+        };
+        const lastMessage = await messageLogs.findOne(lastMessageQuery, { sort: { receivedAt: -1 } });
+        
+        if (lastMessage) {
+          const lastMessageTime = new Date(lastMessage.receivedAt || lastMessage.timestamp);
+          hoursSinceLastMessage = (Date.now() - lastMessageTime.getTime()) / (1000 * 60 * 60);
+          // Greet ONLY if it's been over 2 hours since last message OR if customer is greeting
+          shouldGreet = hoursSinceLastMessage >= 2 || isCustomerGreeting;
+        } else {
+          // No previous messages (or only current message) - check if messageHistory is empty
+          // If messageHistory is empty, it means no messages in last 2 hours, so this is a fresh start
+          shouldGreet = messageHistory.length === 0 || isCustomerGreeting;
+        }
+      } catch (error) {
+        // If MongoDB query fails, fall back to messageHistory check
+        logger.warn('Error checking last message time, using fallback', { error: error.message });
         shouldGreet = messageHistory.length === 0 || isCustomerGreeting;
       }
     } else {
@@ -291,7 +292,7 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
       messageCount: messageHistory.length,
       isFirstMessage: messageHistory.length === 0,
       isCustomerGreeting,
-      hoursSinceLastGreeting,
+      hoursSinceLastMessage,
       shouldGreet,
       messages: messageHistory.map(m => ({ role: m.role, textPreview: m.text.substring(0, 50) }))
     });
