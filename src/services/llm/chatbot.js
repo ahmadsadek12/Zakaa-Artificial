@@ -192,7 +192,7 @@ async function getConversationHistory(businessId, branchId, customerPhoneNumber,
     
     // Map to role and text
     const formattedMessages = allMessages.map(m => ({
-      role: m.direction === 'in' ? 'customer' : 'assistant',
+      role: (m.direction === 'inbound' || m.direction === 'in') ? 'customer' : 'assistant',
       text: m.text || ''
     }));
     
