@@ -74,6 +74,23 @@ function getCartFunctionDefinitions() {
     {
       type: 'function',
       function: {
+        name: 'check_item_availability',
+        description: 'Check if a specific item is available in the menu. Use this when customer asks "do you have [item]?", "is [item] available?", "do you sell [item]?", "how much is [item]?" etc. This queries the database to check if the item actually exists. DO NOT guess or assume - only use this function to check.',
+        parameters: {
+          type: 'object',
+          properties: {
+            itemName: {
+              type: 'string',
+              description: 'The name of the item to check (e.g., "Pepsi", "pizza", "burger")'
+            }
+          },
+          required: ['itemName']
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
         name: 'get_cart',
         description: 'Get the current ongoing order contents. Use this when customer asks to see their order, order summary, or what they ordered.',
         parameters: {
