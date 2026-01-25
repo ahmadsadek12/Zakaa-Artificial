@@ -131,7 +131,7 @@ async function getConversationHistory(businessId, branchId, customerPhoneNumber,
       return [];
     }
     
-    // Get the last message timestamp to check if more than 3 hours have passed
+    // Get the last message timestamp to check if more than 1 hour has passed
     // Include platform in query to avoid cross-platform mixing
     const lastMessageQuery = {
       businessId: businessId,
@@ -144,11 +144,11 @@ async function getConversationHistory(businessId, branchId, customerPhoneNumber,
     
     if (lastMessage) {
       const lastMessageTime = new Date(lastMessage.receivedAt || lastMessage.timestamp);
-      const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
       
-      // If last message was more than 3 hours ago, reset conversation (fresh start)
-      if (lastMessageTime < threeHoursAgo) {
-        logger.info('Last message was more than 3 hours ago - resetting conversation history', {
+      // If last message was more than 1 hour ago, reset conversation (fresh start)
+      if (lastMessageTime < oneHourAgo) {
+        logger.info('Last message was more than 1 hour ago - resetting conversation history', {
           customerPhoneNumber,
           lastMessageTime: lastMessageTime.toISOString(),
           hoursSinceLastMessage: (Date.now() - lastMessageTime.getTime()) / (1000 * 60 * 60)
@@ -157,14 +157,14 @@ async function getConversationHistory(businessId, branchId, customerPhoneNumber,
       }
     }
     
-    // Get messages from the last 3 hours (for active conversations)
-    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    // Get messages from the last 1 hour (for active conversations)
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     
     const query = {
       businessId: businessId,
       branchId: branchId || businessId,
       customerPhoneNumber: customerPhoneNumber,
-      receivedAt: { $gte: threeHoursAgo }
+      receivedAt: { $gte: oneHourAgo }
     };
     
     logger.info('Fetching conversation history', {
@@ -270,7 +270,7 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
       responseLanguage: language
     });
     
-    logger.info('Building prompt with detected language', { customerPhoneNumber, language, isFirstMessage: messageHistory.length === 0 });
+    logger.info('Building prompt with detected language', { customerPhoneNumber, language, isFirstMessage: messageHistory.length === 0, shouldGreet });
     
     // Build prompt with full context
     const prompt = await promptBuilder.buildPrompt({
@@ -280,7 +280,8 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
       message,
       language,
       messageHistory,
-      isFirstMessage: messageHistory.length === 0
+      isFirstMessage: messageHistory.length === 0,
+      shouldGreet: shouldGreet
     });
     
     // Build messages array with conversation history
