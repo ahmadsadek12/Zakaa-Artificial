@@ -524,7 +524,99 @@ export default function TableReservations() {
           {reservations.length === 0 && (
             <div className="text-center py-12 bg-white border border-gray-200 rounded-lg">
               <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">No reservations for this date</p>
+              <p className="text-gray-500">No confirmed reservations for this date</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* History Tab */}
+      {activeTab === 'history' && (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-900">
+              Reservation History
+            </h2>
+          </div>
+
+          {/* History Reservations List */}
+          <div className="space-y-4">
+            {historyReservations.map((reservation) => {
+              const table = tables.find(t => t.id === reservation.table_id)
+              
+              return (
+                <div
+                  key={reservation.id}
+                  className="border rounded-lg p-4 bg-white hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          {reservation.customer_name || reservation.customer_phone_number}
+                        </h3>
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          reservation.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                          reservation.status === 'completed' ? 'bg-green-100 text-green-800' :
+                          reservation.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                          reservation.status === 'no_show' ? 'bg-orange-100 text-orange-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {reservation.status === 'no_show' ? 'No Show' : reservation.status}
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm text-gray-600">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4" />
+                          <span>{format(new Date(reservation.reservation_date), 'MMM d, yyyy')}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4" />
+                          <span>{reservation.reservation_time}</span>
+                        </div>
+                        {reservation.number_of_guests && (
+                          <div className="flex items-center gap-2">
+                            <Users className="w-4 h-4" />
+                            <span>{reservation.number_of_guests} guests</span>
+                          </div>
+                        )}
+                        {table ? (
+                          <div className="flex items-center gap-2">
+                            <UtensilsCrossed className="w-4 h-4" />
+                            <span>Table {table.table_number}</span>
+                          </div>
+                        ) : reservation.table_id ? (
+                          <div className="flex items-center gap-2">
+                            <UtensilsCrossed className="w-4 h-4" />
+                            <span className="text-gray-500">Table ID: {reservation.table_id.substring(0, 8)}...</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <UtensilsCrossed className="w-4 h-4" />
+                            <span className="text-gray-500">Auto-assigned</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <Phone className="w-4 h-4" />
+                          <span className="font-mono">{reservation.customer_phone_number}</span>
+                        </div>
+                      </div>
+                      
+                      {reservation.notes && (
+                        <p className="text-sm text-gray-600 mt-2">{reservation.notes}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {historyReservations.length === 0 && (
+            <div className="text-center py-12 bg-white border border-gray-200 rounded-lg">
+              <History className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500">No reservation history found</p>
             </div>
           )}
         </div>
