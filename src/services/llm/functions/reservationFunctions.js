@@ -34,7 +34,7 @@ function getReservationFunctionDefinitions() {
       type: 'function',
       function: {
         name: 'create_table_reservation',
-        description: 'Create a table reservation. Use this when customer wants to reserve a table for a specific date and time. If tableNumber is not provided, automatically selects the best available table based on number of guests and preferences.',
+        description: 'Create a table reservation. Use when customer wants to reserve a table. If customer specifies a table number/position (e.g., "table 5", "terrace table"), include it. Otherwise, system auto-selects best table based on guest count.',
         parameters: {
           type: 'object',
           properties: {
@@ -48,11 +48,11 @@ function getReservationFunctionDefinitions() {
             },
             numberOfGuests: {
               type: 'number',
-              description: 'Number of guests (recommended for auto-selecting appropriate table)'
+              description: 'Number of guests (HIGHLY RECOMMENDED for auto-selecting appropriate table)'
             },
             customerName: {
               type: 'string',
-              description: 'Customer name (optional)'
+              description: 'Customer name (optional, will use phone number if not provided)'
             },
             notes: {
               type: 'string',
@@ -60,11 +60,11 @@ function getReservationFunctionDefinitions() {
             },
             tableNumber: {
               type: 'string',
-              description: 'Specific table number to reserve (optional - if not provided, system will auto-select best available table)'
+              description: 'Specific table number customer wants (e.g., "5", "T3"). Optional - if not provided, auto-selects best table.'
             },
             positionPreference: {
               type: 'string',
-              description: 'Position preference like "terrace", "inside", "window", "near bar" (optional - helps auto-select table)'
+              description: 'Position preference: "terrace", "inside", "window", "near bar", "quiet corner" (helps auto-select table if no specific table requested)'
             }
           },
           required: ['reservationDate', 'reservationTime']
@@ -195,6 +195,11 @@ function getReservationFunctionDefinitions() {
  */
 async function checkTableReservationsEligible(businessId) {
   try {
+    if (!businessId) {
+      logger.error('checkTableReservationsEligible called with undefined businessId');
+      return { eligible: false, reason: 'Business ID is required' };
+    }
+    
     // Check business type
     const [business] = await queryMySQL(
       `SELECT business_type FROM users WHERE id = ? AND user_type = 'business'`,
@@ -202,10 +207,17 @@ async function checkTableReservationsEligible(businessId) {
     );
     
     if (!business || business.length === 0) {
+      logger.error('Business not found for table reservations', { businessId });
       return { eligible: false, reason: 'Business not found' };
     }
     
-    const businessType = business[0].business_type?.toLowerCase();
+    const businessRow = business[0];
+    if (!businessRow) {
+      logger.error('Business row is undefined', { businessId, business });
+      return { eligible: false, reason: 'Business not found' };
+    }
+    
+    const businessType = businessRow.business_type?.toLowerCase();
     if (businessType !== 'food and beverage' && businessType !== 'f & b' && businessType !== 'f&b') {
       return { eligible: false, reason: 'Table reservations are only available for Food & Beverage businesses' };
     }
@@ -236,6 +248,14 @@ async function executeReservationFunction(functionName, args, context) {
   
   // Check eligibility for table reservation functions
   if (functionName === 'get_tables' || functionName === 'create_table_reservation' || functionName === 'cancel_table_reservation') {
+    if (!business || !business.id) {
+      logger.error('Business is undefined in table reservation context', { business, context });
+      return {
+        success: false,
+        error: 'Business information is missing. Please contact support.'
+      };
+    }
+    
     const eligibility = await checkTableReservationsEligible(business.id);
     if (!eligibility.eligible) {
       return {

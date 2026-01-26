@@ -378,6 +378,7 @@ export default function Settings() {
     businessName: '',
     businessType: 'food and beverage',
     lastOrderBeforeClosingMinutes: '30',
+    defaultCancelableBeforeHours: '2',
     email: '',
     contactPhoneNumber: '',
     businessDescription: '',
@@ -438,6 +439,7 @@ export default function Settings() {
         businessName: user.business_name || user.businessName || '',
         businessType: user.business_type || (user.business_type === 'f & b' ? 'food and beverage' : 'food and beverage'),
         lastOrderBeforeClosingMinutes: user.last_order_before_closing_minutes || '30',
+        defaultCancelableBeforeHours: user.default_cancelable_before_hours !== undefined ? String(user.default_cancelable_before_hours) : '2',
         email: user.email || '',
         contactPhoneNumber: user.contact_phone_number || '',
         businessDescription: user.business_description || '',
@@ -1004,6 +1006,22 @@ export default function Settings() {
                   />
                   <p className="text-sm text-gray-500 mt-1">
                     How many minutes before closing time should you stop accepting new orders? (e.g., 30 = stop accepting orders 30 minutes before closing)
+                  </p>
+                </div>
+                
+                <div className="md:col-span-2">
+                  <label className="label">Default Cancellation Deadline (hours before scheduled time)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="168"
+                    className="input"
+                    value={formData.defaultCancelableBeforeHours}
+                    onChange={(e) => setFormData({ ...formData, defaultCancelableBeforeHours: e.target.value })}
+                    placeholder="2"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Default hours before scheduled time that customers can cancel orders. This applies to all scheduled orders unless a specific item has its own cancellation policy. (e.g., 2 = customers must cancel at least 2 hours before scheduled time)
                   </p>
                 </div>
               </div>

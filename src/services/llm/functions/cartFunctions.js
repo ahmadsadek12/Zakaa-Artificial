@@ -135,6 +135,24 @@ async function executeCartFunction(functionName, args, context) {
     case 'add_service_to_cart': {
       const { itemName, quantity = 1 } = args;
       
+      // Check closing time BEFORE adding items
+      const conversationManager = require('../conversationManager');
+      const openStatus = await conversationManager.isOpenNow(business.id, branchId);
+      
+      let warningMessage = '';
+      
+      // Build warning message based on closing status
+      if (!openStatus.isOpen) {
+        warningMessage = `\n\n⚠️ Note: We're currently closed (${openStatus.reason}). `;
+        if (business.allow_scheduled_orders) {
+          warningMessage += `You can schedule this order for when we're open.`;
+        } else {
+          warningMessage += `Please check back during our opening hours.`;
+        }
+      } else if (openStatus.minutesUntilLastOrder !== null && openStatus.minutesUntilLastOrder <= 30) {
+        warningMessage = `\n\n⚠️ Note: Last order time is in ${openStatus.minutesUntilLastOrder} minutes (${openStatus.lastOrderTime}). Please complete your order soon!`;
+      }
+      
       // Check current cart first to see if it has items
       const currentCart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
       const hasExistingItems = currentCart.items && currentCart.items.length > 0;
@@ -183,19 +201,10 @@ async function executeCartFunction(functionName, args, context) {
         item = items[0];
       }
       
-      // If cart has existing items, return a message asking if they want to replace or add
-      if (hasExistingItems) {
-        const cartSummary = cartManager.getCartSummary(currentCart);
-        return {
-          success: false,
-          needsConfirmation: true,
-          error: `You already have items in your cart:\n${cartSummary}\n\nDo you want to:\n1. Add ${quantity}x ${item.name} to your existing order, or\n2. Replace your cart with ${quantity}x ${item.name}?\n\nPlease reply with "add" or "replace".`,
-          item: { itemId: item.id, name: item.name, price: parseFloat(item.price), quantity: parseInt(quantity) },
-          cart: currentCart
-        };
-      }
+      // Just add to cart directly - no confirmation needed
+      // Users can clear cart explicitly if they want to start over
       
-      // Add item to cart first
+      // Add item to cart
       const cart = await cartManager.addItemToCart(
         business.id,
         branchId,
@@ -215,7 +224,9 @@ async function executeCartFunction(functionName, args, context) {
         itemName: item.name, 
         quantity,
         cartId: cart.id,
-        isOnlyScheduled: item.is_schedulable
+        isOnlyScheduled: item.is_schedulable,
+        isOpen: openStatus.isOpen,
+        minutesUntilLastOrder: openStatus.minutesUntilLastOrder
       });
       
       // Check if item is "only scheduled" (is_schedulable = true means ONLY scheduled, not direct order)
@@ -223,24 +234,15 @@ async function executeCartFunction(functionName, args, context) {
         // Item can only be scheduled, inform customer
         return {
           success: true,
-          message: `Added ${quantity}x ${item.name} to your ongoing order. Note: This item can only be scheduled for a future time. Please use the scheduling function to set a date and time before confirming your order.`,
+          message: `Added ${quantity}x ${item.name} to your ongoing order. Note: This item can only be scheduled for a future time. Please use the scheduling function to set a date and time before confirming your order.${warningMessage}`,
           cart: cart,
           requiresScheduling: true
         };
       }
       
-      // Check if approaching last order time and warn user
-      const { isOpenNow } = require('../conversationManager');
-      const openStatus = await isOpenNow(business.id, branchId);
-      let warningMessage = '';
-      
-      if (openStatus.minutesUntilLastOrder !== null && openStatus.minutesUntilLastOrder <= 30) {
-        warningMessage = `\n⚠️ Please note: Last order time is in ${openStatus.minutesUntilLastOrder} minutes (${openStatus.lastOrderTime}). Please confirm your order quickly!`;
-      }
-      
       return {
         success: true,
-        message: `Added ${quantity}x ${item.name} to your ongoing order${warningMessage}`,
+        message: `Added ${quantity}x ${item.name} to your ongoing order ($${parseFloat(item.price * quantity).toFixed(2)})${warningMessage}`,
         cart: cart
       };
     }
@@ -402,7 +404,7 @@ async function executeCartFunction(functionName, args, context) {
     
     case 'get_cart': {
       const cart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
-      const summary = cartManager.getCartSummary(cart);
+      const summary = cartManager.getDetailedCartSummary(cart);
       
       return {
         success: true,

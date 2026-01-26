@@ -530,16 +530,29 @@ async function executeOrderFunction(functionName, args, context) {
     case 'cancel_accepted_order': {
       const { orderId } = args;
       
-      // Get customer's accepted scheduled orders (only scheduled orders can be cancelled)
+      // Get customer's accepted scheduled orders with cancellation policy info
+      // Join with order_items, items, and users to get cancelable_before_hours
       const acceptedScheduledOrders = await queryMySQL(
-        `SELECT id, scheduled_for, subtotal, total, delivery_type, status
-         FROM orders
-         WHERE customer_phone_number = ?
-           AND business_id = ?
-           AND status = 'accepted'
-           AND scheduled_for IS NOT NULL
-           AND scheduled_for > NOW()
-         ORDER BY scheduled_for ASC`,
+        `SELECT DISTINCT 
+           o.id, 
+           o.scheduled_for, 
+           o.subtotal, 
+           o.total, 
+           o.delivery_type, 
+           o.status,
+           MAX(i.cancelable_before_hours) as item_cancelable_hours,
+           u.default_cancelable_before_hours as business_cancelable_hours
+         FROM orders o
+         LEFT JOIN order_items oi ON o.id = oi.order_id
+         LEFT JOIN items i ON oi.item_id = i.id
+         LEFT JOIN users u ON o.business_id = u.id
+         WHERE o.customer_phone_number = ?
+           AND o.business_id = ?
+           AND o.status = 'accepted'
+           AND o.scheduled_for IS NOT NULL
+           AND o.scheduled_for > NOW()
+         GROUP BY o.id, o.scheduled_for, o.subtotal, o.total, o.delivery_type, o.status, u.default_cancelable_before_hours
+         ORDER BY o.scheduled_for ASC`,
         [customerPhoneNumber, business.id]
       );
       
@@ -550,7 +563,7 @@ async function executeOrderFunction(functionName, args, context) {
         };
       }
       
-      // If no orderId provided, list their orders
+      // If no orderId provided, list their orders with cancellation status
       if (!orderId) {
         let ordersList = '📅 **Your Accepted Scheduled Orders:**\n\n';
         for (const order of acceptedScheduledOrders) {
@@ -558,14 +571,20 @@ async function executeOrderFunction(functionName, args, context) {
           const hoursUntil = (orderDate - new Date()) / (1000 * 60 * 60);
           const orderNumber = order.id.substring(0, 8).toUpperCase();
           
+          // Determine cancellation deadline (item-level or business-level)
+          const cancelableBeforeHours = order.item_cancelable_hours ?? 
+                                        order.business_cancelable_hours ?? 
+                                        2;
+          
           ordersList += `**Order #${orderNumber}**\n`;
           ordersList += `  Scheduled for: ${orderDate.toLocaleString()}\n`;
           ordersList += `  Total: $${parseFloat(order.total).toFixed(2)}\n`;
           ordersList += `  Type: ${order.delivery_type}\n`;
-          if (hoursUntil < 2) {
-            ordersList += `  ⚠️ Cannot cancel (less than 2 hours remaining)\n`;
+          
+          if (hoursUntil < cancelableBeforeHours) {
+            ordersList += `  ⚠️ Cannot cancel (less than ${cancelableBeforeHours} hours remaining)\n`;
           } else {
-            ordersList += `  ✅ Can be cancelled\n`;
+            ordersList += `  ✅ Can be cancelled (deadline: ${cancelableBeforeHours} hours before)\n`;
           }
           ordersList += '\n';
         }
@@ -592,13 +611,16 @@ async function executeOrderFunction(functionName, args, context) {
         };
       }
       
-      // Check if more than 2 hours remaining
+      // Check cancellation deadline based on item-level or business-level policy
       const hoursUntil = (new Date(order.scheduled_for) - new Date()) / (1000 * 60 * 60);
+      const cancelableBeforeHours = order.item_cancelable_hours ?? 
+                                    order.business_cancelable_hours ?? 
+                                    2;
       
-      if (hoursUntil < 2) {
+      if (hoursUntil < cancelableBeforeHours) {
         return {
           success: false,
-          error: `Cannot cancel this order. It's scheduled in less than 2 hours. Please contact us directly if you need to cancel.`
+          error: `Cannot cancel this order. Cancellation deadline is ${cancelableBeforeHours} hours before scheduled time. Please contact us directly if you need to cancel.`
         };
       }
       
@@ -627,7 +649,8 @@ async function executeOrderFunction(functionName, args, context) {
           orderId: order.id,
           customerPhoneNumber,
           businessId: business.id,
-          scheduledFor: order.scheduled_for
+          scheduledFor: order.scheduled_for,
+          cancelableBeforeHours
         });
         
         const orderNumber = order.id.substring(0, 8).toUpperCase();

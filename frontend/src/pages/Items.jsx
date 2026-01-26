@@ -33,6 +33,7 @@ export default function Items() {
     itemType: 'good',
     isSchedulable: false,
     minScheduleHours: 0,
+    cancelableBeforeHours: null,
     availableFrom: '',
     availableTo: '',
     daysAvailable: [],
@@ -145,6 +146,9 @@ export default function Items() {
       // Scheduling fields
       formDataToSend.append('isSchedulable', formData.isSchedulable ? 'true' : 'false')
       formDataToSend.append('minScheduleHours', formData.minScheduleHours.toString())
+      if (formData.cancelableBeforeHours !== null && formData.cancelableBeforeHours !== '') {
+        formDataToSend.append('cancelableBeforeHours', formData.cancelableBeforeHours.toString())
+      }
       
       // Availability fields
       if (formData.availableFrom) formDataToSend.append('availableFrom', formData.availableFrom)
@@ -232,6 +236,7 @@ export default function Items() {
       itemType: itemType,
       isSchedulable: item.is_schedulable !== undefined ? item.is_schedulable : false,
       minScheduleHours: item.min_schedule_hours !== undefined ? item.min_schedule_hours : 0,
+      cancelableBeforeHours: item.cancelable_before_hours !== undefined ? item.cancelable_before_hours : null,
       availableFrom: item.available_from || '',
       availableTo: item.available_to || '',
       daysAvailable: (() => {
@@ -268,6 +273,7 @@ export default function Items() {
       itemType: 'good',
       isSchedulable: false,
       minScheduleHours: 0,
+      cancelableBeforeHours: null,
       availableFrom: '',
       availableTo: '',
       daysAvailable: [],
@@ -732,29 +738,57 @@ export default function Items() {
                   </div>
                   
                   {formData.isSchedulable && (
-                    <div>
-                      <label className="label">Minimum Schedule Hours</label>
-                      <input
-                        type="text"
-                        className="input"
-                        placeholder="0 for immediate, or hours in advance"
-                        value={formData.minScheduleHours}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          // Allow numbers and empty string
-                          if (value === '' || /^\d+$/.test(value)) {
-                            const numValue = value === '' ? 0 : parseInt(value, 10);
-                            if (numValue >= 0 && numValue <= 168) {
-                              setFormData({ ...formData, minScheduleHours: numValue });
+                    <>
+                      <div>
+                        <label className="label">Minimum Schedule Hours</label>
+                        <input
+                          type="text"
+                          className="input"
+                          placeholder="0 for immediate, or hours in advance"
+                          value={formData.minScheduleHours}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Allow numbers and empty string
+                            if (value === '' || /^\d+$/.test(value)) {
+                              const numValue = value === '' ? 0 : parseInt(value, 10);
+                              if (numValue >= 0 && numValue <= 168) {
+                                setFormData({ ...formData, minScheduleHours: numValue });
+                              }
                             }
-                          }
-                        }}
-                        onWheel={(e) => e.target.blur()}
-                      />
-                      <p className="text-sm text-gray-500 mt-1">
-                        Minimum hours in advance required for scheduling (0 = can order immediately or schedule, 2+ = must schedule ahead)
-                      </p>
-                    </div>
+                          }}
+                          onWheel={(e) => e.target.blur()}
+                        />
+                        <p className="text-sm text-gray-500 mt-1">
+                          Minimum hours in advance required for scheduling (0 = can order immediately or schedule, 2+ = must schedule ahead)
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <label className="label">Cancellation Deadline (hours before)</label>
+                        <input
+                          type="text"
+                          className="input"
+                          placeholder="Leave empty to use business default (2 hours)"
+                          value={formData.cancelableBeforeHours === null ? '' : formData.cancelableBeforeHours}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Allow numbers and empty string
+                            if (value === '') {
+                              setFormData({ ...formData, cancelableBeforeHours: null });
+                            } else if (/^\d+$/.test(value)) {
+                              const numValue = parseInt(value, 10);
+                              if (numValue >= 0 && numValue <= 168) {
+                                setFormData({ ...formData, cancelableBeforeHours: numValue });
+                              }
+                            }
+                          }}
+                          onWheel={(e) => e.target.blur()}
+                        />
+                        <p className="text-sm text-gray-500 mt-1">
+                          Hours before scheduled time that customers can cancel. Leave empty to use business default (2 hours).
+                        </p>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>

@@ -15,7 +15,7 @@ function getDeliveryFunctionDefinitions() {
       type: 'function',
       function: {
         name: 'update_delivery_type',
-        description: 'Set the delivery type for the order. Use this when customer chooses takeaway, delivery, or on-site/dine-in.',
+        description: 'Change the delivery type for the ongoing order. Use when customer changes their mind about delivery method (e.g., "actually, I want takeaway" or "change to delivery"). Previous address is kept if switching away from delivery (customer might change back).',
         parameters: {
           type: 'object',
           properties: {
@@ -110,14 +110,20 @@ async function executeDeliveryFunction(functionName, args, context) {
   switch (functionName) {
     case 'update_delivery_type': {
       const { deliveryType } = args;
+      
+      // Get current cart to check existing data
+      const currentCart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
+      
       const updateData = { delivery_type: deliveryType };
       
-      // Set delivery price if delivery - use business delivery_price if available, otherwise 0
-      if (deliveryType === 'delivery') {
-        updateData.delivery_price = parseFloat(business.delivery_price || 0);
+      // Set/clear delivery price based on type
+      if (deliveryType === 'delivery' && business.delivery_price) {
+        updateData.delivery_price = parseFloat(business.delivery_price);
       } else {
         updateData.delivery_price = 0;
       }
+      
+      // Keep address saved (don't clear when switching types - customer might change back)
       
       const cart = await cartManager.updateCart(
         business.id,
@@ -126,14 +132,30 @@ async function executeDeliveryFunction(functionName, args, context) {
         updateData
       );
       
-      logger.info('Delivery type updated via function call', { deliveryType, cartId: cart.id, deliveryPrice: updateData.delivery_price });
+      logger.info('Delivery type updated via function call', { 
+        deliveryType, 
+        cartId: cart.id, 
+        deliveryPrice: updateData.delivery_price,
+        addressKept: !!currentCart.location_address 
+      });
       
       const typeName = deliveryType === 'delivery' ? 'Delivery' : 
-                       deliveryType === 'takeaway' ? 'Takeaway' : 'On-site';
+                       deliveryType === 'takeaway' ? 'Takeaway' : 'On-site (Dine-in)';
+      
+      let message = `Delivery type updated to: ${typeName}.`;
+      
+      // Add helpful next steps based on delivery type
+      if (deliveryType === 'delivery' && !cart.location_address) {
+        message += ` Please provide your delivery address.`;
+      } else if (deliveryType === 'on_site') {
+        message += ` Please provide your preferred date and time for dining in.`;
+      } else if (deliveryType === 'takeaway') {
+        message += ` Please provide your preferred pickup time.`;
+      }
       
       return {
         success: true,
-        message: `Delivery type set to: ${typeName}${deliveryType === 'delivery' ? '. Please provide your delivery address.' : ''}`,
+        message,
         cart: cart
       };
     }

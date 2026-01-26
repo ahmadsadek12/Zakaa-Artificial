@@ -815,6 +815,78 @@ function getCartSummary(cart) {
   return summary;
 }
 
+/**
+ * Get detailed cart summary with all modifiable fields clearly shown
+ * Used for comprehensive cart display when customer wants to review/modify order
+ */
+function getDetailedCartSummary(cart) {
+  if (!cart || !cart.items || cart.items.length === 0) {
+    return 'Your cart is empty.';
+  }
+  
+  let summary = '🛒 **Your Current Order:**\n\n';
+  
+  // Items with details
+  for (const item of cart.items) {
+    summary += `• ${item.quantity}x ${item.name} - $${parseFloat(item.price * item.quantity).toFixed(2)}`;
+    
+    // Add item-level notes if present
+    if (item.notes) {
+      summary += `\n  📝 ${item.notes}`;
+    }
+    
+    // Add booking details for rental items
+    if (item.booking_date && item.booking_start_time) {
+      const bookingDate = new Date(item.booking_date).toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric' 
+      });
+      const startTime = item.booking_start_time.substring(0, 5); // HH:MM
+      const endTime = item.booking_end_time ? item.booking_end_time.substring(0, 5) : '';
+      summary += `\n  📅 ${bookingDate} at ${startTime}${endTime ? ` - ${endTime}` : ''}`;
+    }
+    
+    summary += '\n';
+  }
+  
+  summary += `\n**Subtotal:** $${parseFloat(cart.subtotal).toFixed(2)}\n`;
+  
+  // Delivery details
+  if (cart.delivery_type) {
+    const deliveryTypeName = cart.delivery_type === 'delivery' ? 'Delivery' : 
+                             cart.delivery_type === 'takeaway' ? 'Takeaway (Pickup)' : 
+                             'On-site (Dine-in)';
+    summary += `**Delivery Type:** ${deliveryTypeName}\n`;
+  } else {
+    summary += `**Delivery Type:** Not selected yet\n`;
+  }
+  
+  if (cart.delivery_type === 'delivery') {
+    summary += `**Delivery Fee:** $${parseFloat(cart.delivery_price || 0).toFixed(2)}\n`;
+    if (cart.location_address) {
+      summary += `**Delivery Address:** ${cart.location_address}\n`;
+    } else {
+      summary += `**Delivery Address:** ⚠️ Not provided yet\n`;
+    }
+  }
+  
+  // Schedule
+  if (cart.scheduled_for) {
+    const scheduledDate = new Date(cart.scheduled_for);
+    summary += `**Scheduled For:** ${scheduledDate.toLocaleString()}\n`;
+  }
+  
+  // Order notes (special instructions)
+  if (cart.notes && cart.notes.trim().length > 0 && cart.notes !== '__cart__') {
+    summary += `**Special Instructions:** ${cart.notes}\n`;
+  }
+  
+  summary += `\n**Total:** $${parseFloat(cart.total).toFixed(2)}`;
+  
+  return summary;
+}
+
 module.exports = {
   getCart,
   updateCart,
@@ -824,5 +896,6 @@ module.exports = {
   clearCart,
   confirmCart,
   completeCart,
-  getCartSummary
+  getCartSummary,
+  getDetailedCartSummary
 };
