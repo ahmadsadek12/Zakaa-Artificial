@@ -383,6 +383,7 @@ async function executeCartFunction(functionName, args, context) {
         return {
           success: false,
           available: false,
+          error: `Sorry, we don't have "${itemName}" available. Would you like to see our menu?`,
           message: `Sorry, we don't have "${itemName}" available. Would you like to see our menu?`
         };
       }
