@@ -384,18 +384,31 @@ export default function Calendar() {
       setLoadingOrderDetails(true)
       try {
         const token = localStorage.getItem('token')
-        const response = await axios.get(`${API_URL}/api/orders/${event.resource.id}`, {
+        const orderId = event.resource.id || event.id
+        if (!orderId) {
+          console.error('No order ID found in event:', event)
+          setOrderDetails(null)
+          return
+        }
+        const response = await axios.get(`${API_URL}/api/orders/${orderId}`, {
           headers: { Authorization: `Bearer ${token}` }
         })
-        setOrderDetails(response.data.data.order)
-        if (response.data.data.order.scheduled_for) {
-          const scheduledDate = new Date(response.data.data.order.scheduled_for)
-          setNewScheduledDate(scheduledDate.toISOString().split('T')[0])
-          setNewScheduledTime(scheduledDate.toTimeString().slice(0, 5))
+        if (response.data && response.data.data && response.data.data.order) {
+          setOrderDetails(response.data.data.order)
+          if (response.data.data.order.scheduled_for) {
+            const scheduledDate = new Date(response.data.data.order.scheduled_for)
+            setNewScheduledDate(scheduledDate.toISOString().split('T')[0])
+            setNewScheduledTime(scheduledDate.toTimeString().slice(0, 5))
+          }
+        } else {
+          console.error('Invalid response structure:', response.data)
+          setOrderDetails(null)
         }
       } catch (error) {
         console.error('Error fetching order details:', error)
+        console.error('Error response:', error.response?.data)
         setOrderDetails(null)
+        alert(error.response?.data?.error?.message || 'Failed to load order details')
       } finally {
         setLoadingOrderDetails(false)
       }
@@ -542,58 +555,6 @@ export default function Calendar() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Calendar</h1>
-          <p className="text-gray-600 mt-2">View and manage reservations and scheduled orders</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex gap-2">
-            <button
-              onClick={() => setCurrentView(Views.MONTH)}
-              className={`px-3 py-1 rounded ${currentView === Views.MONTH ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-            >
-              Month
-            </button>
-            <button
-              onClick={() => setCurrentView(Views.WEEK)}
-              className={`px-3 py-1 rounded ${currentView === Views.WEEK ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-            >
-              Week
-            </button>
-            <button
-              onClick={() => setCurrentView(Views.DAY)}
-              className={`px-3 py-1 rounded ${currentView === Views.DAY ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-            >
-              Day
-            </button>
-          </div>
-          <button
-            onClick={() => setCurrentDate(new Date())}
-            className="btn btn-secondary"
-          >
-            Today
-          </button>
-          {googleCalendarStatus.connected && (
-            <button
-              onClick={handleSyncToGoogle}
-              disabled={syncing}
-              className="btn btn-primary flex items-center gap-2"
-              title="Sync events to Google Calendar"
-            >
-              {syncing ? (
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-              ) : (
-                <>
-                  <RefreshCw size={18} />
-                  Sync to Google
-                </>
-              )}
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* Legend */}
       <div className="card">
         <div className="flex items-center gap-6 text-sm">
