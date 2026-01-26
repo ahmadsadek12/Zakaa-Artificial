@@ -2,7 +2,6 @@
 // Sends reminders to customers on the day of their reservation when restaurant opens
 
 const { queryMySQL } = require('../config/database');
-const { sendWhatsAppMessage } = require('../services/whatsapp/whatsappService');
 const { sendMessage: sendTelegramMessage } = require('../services/telegram/telegramMessageSender');
 const logger = require('../utils/logger');
 
@@ -77,11 +76,13 @@ See you soon! ✨`;
         if (reservation.platform === 'telegram') {
           const chatId = reservation.customer_phone_number.replace('telegram:', '');
           await sendTelegramMessage({ chatId, message });
-        } else if (reservation.platform === 'whatsapp') {
-          await sendWhatsAppMessage(reservation.customer_phone_number, message);
         } else {
-          // Default to WhatsApp
-          await sendWhatsAppMessage(reservation.customer_phone_number, message);
+          // WhatsApp reminders not yet implemented
+          logger.info('Skipping reminder for non-Telegram platform', {
+            platform: reservation.platform,
+            reservationId: reservation.id
+          });
+          continue;
         }
         
         // Mark reminder as sent
