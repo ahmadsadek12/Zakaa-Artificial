@@ -690,12 +690,18 @@ export default function Items() {
                   <div>
                     <label className="label">Quantity {activeTab === 'good' ? '(Optional)' : '(Max Simultaneous Bookings)'}</label>
                     <input
-                      type="number"
-                      min="1"
+                      type="text"
                       className="input"
                       placeholder={activeTab === 'good' ? 'Leave empty for unlimited' : 'e.g., 4 (max 4 bookings at same time)'}
                       value={formData.quantity}
-                      onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Allow numbers and empty string
+                        if (value === '' || /^\d+$/.test(value)) {
+                          setFormData({ ...formData, quantity: value });
+                        }
+                      }}
+                      onWheel={(e) => e.target.blur()}
                     />
                     <p className="text-sm text-gray-500 mt-1">
                       {activeTab === 'good' 
