@@ -28,7 +28,7 @@ async function findAll() {
  * Find business addon status
  */
 async function findBusinessAddon(businessId, addonKey) {
-  const [addons] = await queryMySQL(
+  const addons = await queryMySQL(
     `SELECT ba.*, a.addon_key, a.name, a.default_price
      FROM business_addons ba
      INNER JOIN addons a ON ba.addon_id = a.id
