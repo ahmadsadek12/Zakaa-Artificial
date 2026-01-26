@@ -3,7 +3,7 @@
 
 const { queryMySQL } = require('../config/database');
 const { sendWhatsAppMessage } = require('../services/whatsapp/whatsappService');
-const { sendTelegramMessage } = require('../services/telegram/telegramService');
+const { sendMessage: sendTelegramMessage } = require('../services/telegram/telegramMessageSender');
 const logger = require('../utils/logger');
 
 /**
@@ -76,7 +76,7 @@ See you soon! ✨`;
         // Send based on platform
         if (reservation.platform === 'telegram') {
           const chatId = reservation.customer_phone_number.replace('telegram:', '');
-          await sendTelegramMessage(chatId, message);
+          await sendTelegramMessage({ chatId, message });
         } else if (reservation.platform === 'whatsapp') {
           await sendWhatsAppMessage(reservation.customer_phone_number, message);
         } else {

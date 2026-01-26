@@ -9,8 +9,7 @@ COMMENT 'Whether a reminder message has been sent for this reservation';
 
 -- Add index for querying reservations that need reminders
 CREATE INDEX idx_reservations_reminder 
-ON reservations(reservation_date, status, reminder_sent) 
-WHERE reservation_type = 'table';
+ON reservations(reservation_date, status, reminder_sent);
 
 -- Set existing reservations as reminder_sent = false
 UPDATE reservations 
