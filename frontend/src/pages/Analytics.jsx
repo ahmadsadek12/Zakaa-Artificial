@@ -573,7 +573,7 @@ export default function Analytics() {
 
       {/* Overview Cards - Order/Sales Analytics */}
       {selectedAnalyticsType === 'order' && (
-        <div id="overview" className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div id="overview" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className="card">
           <div className="flex items-center justify-between">
             <div>
@@ -1363,29 +1363,7 @@ export default function Analytics() {
             </div>
           )}
 
-          {/* Response Time */}
-          {responseTime && (
-            <div className="card">
-              <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
-                <Clock size={24} />
-                Response Time
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600 mb-1">First Response</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {responseTime.first_response_ms ? (responseTime.first_response_ms / 1000).toFixed(2) : 0}s
-                  </p>
-                </div>
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600 mb-1">Overall Average</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {responseTime.overall_avg_ms ? (responseTime.overall_avg_ms / 1000).toFixed(2) : 0}s
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Response Time - Removed per user request */}
 
           {/* Resolution & Conversion Rates */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1854,14 +1832,6 @@ export default function Analytics() {
                 <div className="bg-green-50 p-4 rounded-lg">
                   <p className="text-sm text-gray-600 mb-1">Requests Handled</p>
                   <p className="text-lg font-bold text-gray-900">{freeMetrics.requests_handled || 0}</p>
-                </div>
-                <div className="bg-purple-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600 mb-1">Avg Response Time</p>
-                  <p className="text-lg font-bold text-gray-900">
-                    {freeMetrics.avg_response_time_ms 
-                      ? (freeMetrics.avg_response_time_ms / 1000).toFixed(2) 
-                      : 0}s
-                  </p>
                 </div>
               </div>
             </div>
