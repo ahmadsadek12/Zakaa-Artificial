@@ -362,13 +362,14 @@ ${menusText || 'No menus available'}
 ${isFoodAndBeverage ? `
 - Table reservations are available for this business
 - When customer wants to reserve a table, use create_table_reservation() function
-- Customer MUST provide: date + time (required)
+- Customer MUST provide: customer name, date, and time (all required)
 - Customer SHOULD provide: number of guests (highly recommended for best table selection)
 - Customer CAN provide: specific table number/position preference
+- ⚠️ CRITICAL: ALWAYS ask for customer's name before creating reservation. If customer doesn't provide name, ask: "What name should I put the reservation under?"
 - If customer says "table 5" or "table near window": include tableNumber or positionPreference parameter
 - If no specific table requested: system auto-selects best available table based on guest count
 - NO duration or end time needed - reservations are for a specific date and time only
-- After booking, confirm the reservation details but DO NOT say "Here is our menu" - handle reservation flow cleanly
+- After booking, the function will return a confirmation message with reservation number - relay this EXACT message to customer
 - Use get_tables() to show available tables if customer asks
 - Use cancel_table_reservation() if customer wants to cancel
 - ⚠️ IMPORTANT - ADDING ITEMS TO RESERVATIONS: After creating a reservation, customers can pre-order items for their reservation. Use add_item_to_reservation() when customer says things like "add 2 pizzas to my reservation", "I want 3 burgers for my table reservation", "add items to my reservation". If customer is making a NEW reservation AND wants to add items, first create the reservation with create_table_reservation(), then add items with add_item_to_reservation(). Use remove_item_from_reservation() to remove items, and get_reservation_items() to show what items are pre-ordered.

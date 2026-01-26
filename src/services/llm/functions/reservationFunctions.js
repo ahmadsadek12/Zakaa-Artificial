@@ -34,7 +34,7 @@ function getReservationFunctionDefinitions() {
       type: 'function',
       function: {
         name: 'create_table_reservation',
-        description: 'Create a table reservation. Use when customer wants to reserve a table. If customer specifies a table number/position (e.g., "table 5", "terrace table"), include it. Otherwise, system auto-selects best table based on guest count.',
+        description: 'Create a table reservation. Use when customer wants to reserve a table. If customer specifies a table number/position (e.g., "table 5", "terrace table"), include it. Otherwise, system auto-selects best table based on guest count. IMPORTANT: Always ask for customer name before creating reservation.',
         parameters: {
           type: 'object',
           properties: {
@@ -52,7 +52,7 @@ function getReservationFunctionDefinitions() {
             },
             customerName: {
               type: 'string',
-              description: 'Customer name (optional, will use phone number if not provided)'
+              description: 'Customer name (REQUIRED - ask customer for their name if not provided)'
             },
             notes: {
               type: 'string',
@@ -67,7 +67,7 @@ function getReservationFunctionDefinitions() {
               description: 'Position preference: "terrace", "inside", "window", "near bar", "quiet corner" (helps auto-select table if no specific table requested)'
             }
           },
-          required: ['reservationDate', 'reservationTime']
+          required: ['reservationDate', 'reservationTime', 'customerName']
         }
       }
     },
@@ -304,6 +304,13 @@ async function executeReservationFunction(functionName, args, context) {
         };
       }
       
+      if (!customerName) {
+        return {
+          success: false,
+          error: 'Customer name is required for table reservations. Please provide your name.'
+        };
+      }
+      
       try {
         let selectedTable = null;
         
@@ -380,12 +387,15 @@ async function executeReservationFunction(functionName, args, context) {
         });
         
         const tableDisplayName = selectedTable.table_number || selectedTable.number || 'selected table';
+        const reservationNumber = reservation.id.substring(0, 8).toUpperCase();
         
         return {
           success: true,
-          message: `Table reservation confirmed for ${reservationDate} at ${reservationTime} at ${tableDisplayName}.`,
+          message: `✅ Your table reservation has been confirmed!\n\n📋 Reservation #${reservationNumber}\n👤 Name: ${customerName}\n📅 Date: ${reservationDate}\n⏰ Time: ${reservationTime}\n🪑 Table: ${tableDisplayName}\n${numberOfGuests ? `👥 Guests: ${numberOfGuests}\n` : ''}\nWe look forward to seeing you!`,
           reservation: {
             id: reservation.id,
+            reservation_number: reservationNumber,
+            customer_name: customerName,
             table_number: tableDisplayName,
             reservation_date: reservationDate,
             reservation_time: reservationTime,
