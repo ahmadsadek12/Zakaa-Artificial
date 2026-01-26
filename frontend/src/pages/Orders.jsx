@@ -875,12 +875,17 @@ export default function Orders() {
                             <label className="text-sm text-gray-600 mb-1 block">Set Delivery Price</label>
                             <div className="flex gap-2">
                               <input
-                                type="number"
-                                step="0.01"
-                                min="0"
+                                type="text"
                                 className="input flex-1"
                                 value={deliveryPriceInput}
-                                onChange={(e) => setDeliveryPriceInput(e.target.value)}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  // Allow numbers, decimal point, and empty string
+                                  if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                                    setDeliveryPriceInput(value);
+                                  }
+                                }}
+                                onWheel={(e) => e.target.blur()}
                                 placeholder="0.00"
                               />
                               <button

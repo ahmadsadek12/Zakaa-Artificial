@@ -621,24 +621,36 @@ export default function Items() {
                     <div>
                       <label className="label">Price *</label>
                       <input
-                        type="number"
-                        step="0.01"
-                        min="0"
+                        type="text"
                         className="input"
                         value={formData.price}
-                        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          // Allow numbers, decimal point, and empty string
+                          if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                            setFormData({ ...formData, price: value });
+                          }
+                        }}
+                        onWheel={(e) => e.target.blur()}
+                        placeholder="0.00"
                         required
                       />
                     </div>
                     <div>
                       <label className="label">Cost</label>
                       <input
-                        type="number"
-                        step="0.01"
-                        min="0"
+                        type="text"
                         className="input"
                         value={formData.cost}
-                        onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          // Allow numbers, decimal point, and empty string
+                          if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                            setFormData({ ...formData, cost: value });
+                          }
+                        }}
+                        onWheel={(e) => e.target.blur()}
+                        placeholder="0.00"
                       />
                     </div>
                   </div>
@@ -652,11 +664,17 @@ export default function Items() {
                   <div>
                     <label className="label">Reservation Time Limit (minutes)</label>
                     <input
-                      type="number"
-                      min="1"
+                      type="text"
                       className="input"
                       value={formData.durationMinutes}
-                      onChange={(e) => setFormData({ ...formData, durationMinutes: e.target.value })}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Allow numbers and empty string
+                        if (value === '' || /^\d+$/.test(value)) {
+                          setFormData({ ...formData, durationMinutes: value });
+                        }
+                      }}
+                      onWheel={(e) => e.target.blur()}
                       placeholder="e.g., 60 (how long the reservation lasts)"
                     />
                     <p className="text-sm text-gray-500 mt-1">
@@ -711,13 +729,21 @@ export default function Items() {
                     <div>
                       <label className="label">Minimum Schedule Hours</label>
                       <input
-                        type="number"
-                        min="0"
-                        max="168"
+                        type="text"
                         className="input"
                         placeholder="0 for immediate, or hours in advance"
                         value={formData.minScheduleHours}
-                        onChange={(e) => setFormData({ ...formData, minScheduleHours: parseInt(e.target.value) || 0 })}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          // Allow numbers and empty string
+                          if (value === '' || /^\d+$/.test(value)) {
+                            const numValue = value === '' ? 0 : parseInt(value, 10);
+                            if (numValue >= 0 && numValue <= 168) {
+                              setFormData({ ...formData, minScheduleHours: numValue });
+                            }
+                          }
+                        }}
+                        onWheel={(e) => e.target.blur()}
                       />
                       <p className="text-sm text-gray-500 mt-1">
                         Minimum hours in advance required for scheduling (0 = can order immediately or schedule, 2+ = must schedule ahead)

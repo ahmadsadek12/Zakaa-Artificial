@@ -926,12 +926,17 @@ export default function Settings() {
                 <div className="md:col-span-2">
                   <label className="label">Delivery Price</label>
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0"
+                    type="text"
                     className="input"
                     value={formData.deliveryPrice}
-                    onChange={(e) => setFormData({ ...formData, deliveryPrice: e.target.value })}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Allow numbers, decimal point, and empty string
+                      if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                        setFormData({ ...formData, deliveryPrice: value });
+                      }
+                    }}
+                    onWheel={(e) => e.target.blur()}
                     placeholder="0.00"
                   />
                   <p className="text-sm text-gray-500 mt-1">
