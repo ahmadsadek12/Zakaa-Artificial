@@ -94,7 +94,6 @@ export default function TableReservations() {
       setItemForm({ itemId: '', quantity: 1, notes: '' })
       fetchReservationDetails(selectedReservation.id)
       fetchData()
-      alert('Item added to reservation successfully')
     } catch (error) {
       console.error('Error adding item to reservation:', error)
       console.error('Error response:', error.response?.data)
@@ -116,7 +115,6 @@ export default function TableReservations() {
       })
       fetchReservationDetails(selectedReservation.id)
       fetchData()
-      alert('Item removed from reservation')
     } catch (error) {
       console.error('Error removing item from reservation:', error)
       alert(error.response?.data?.error?.message || 'Failed to remove item')
