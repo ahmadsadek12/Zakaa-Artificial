@@ -201,7 +201,7 @@ async function checkTableReservationsEligible(businessId) {
     }
     
     // Check business type
-    const [business] = await queryMySQL(
+    const business = await queryMySQL(
       `SELECT business_type FROM users WHERE id = ? AND user_type = 'business'`,
       [businessId]
     );
