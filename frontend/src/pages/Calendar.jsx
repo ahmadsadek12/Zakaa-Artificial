@@ -693,10 +693,21 @@ export default function Calendar() {
                           {orderDetails.status}
                         </span>
                       </div>
-                      <div>
-                        <label className="text-sm text-gray-600">Delivery Type</label>
-                        <p className="capitalize">{orderDetails.delivery_type || 'pickup'}</p>
-                      </div>
+                      {/* Only show Delivery Type for F&B businesses or if order contains goods (not services) */}
+                      {(() => {
+                        const isFoodAndBeverage = user?.business_type === 'f & b'
+                        const hasServiceItems = orderDetails.items?.some(item => item.item_type === 'service')
+                        const shouldShowDeliveryType = isFoodAndBeverage || !hasServiceItems
+                        
+                        if (!shouldShowDeliveryType) return null
+                        
+                        return (
+                          <div>
+                            <label className="text-sm text-gray-600">Delivery Type</label>
+                            <p className="capitalize">{orderDetails.delivery_type || 'pickup'}</p>
+                          </div>
+                        )
+                      })()}
                       {orderDetails.scheduled_for && (
                         <div className="col-span-2">
                           <label className="text-sm text-gray-600 flex items-center gap-2">

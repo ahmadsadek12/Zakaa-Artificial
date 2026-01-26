@@ -447,13 +447,24 @@ export default function Dashboard() {
                           {orderDetails.status}
                         </span>
                       </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Delivery Type</p>
-                        <p className="text-base font-medium text-gray-900 capitalize flex items-center gap-2">
-                          <MapPin size={16} />
-                          {orderDetails.delivery_type?.replace('_', ' ')}
-                        </p>
-                      </div>
+                      {/* Only show Delivery Type for F&B businesses or if order contains goods (not services) */}
+                      {(() => {
+                        const isFoodAndBeverage = user?.business_type === 'f & b'
+                        const hasServiceItems = orderDetails.items?.some(item => item.item_type === 'service')
+                        const shouldShowDeliveryType = isFoodAndBeverage || !hasServiceItems
+                        
+                        if (!shouldShowDeliveryType) return null
+                        
+                        return (
+                          <div>
+                            <p className="text-sm text-gray-600">Delivery Type</p>
+                            <p className="text-base font-medium text-gray-900 capitalize flex items-center gap-2">
+                              <MapPin size={16} />
+                              {orderDetails.delivery_type?.replace('_', ' ')}
+                            </p>
+                          </div>
+                        )
+                      })()}
                       <div>
                         <p className="text-sm text-gray-600">Payment Method</p>
                         <p className="text-base font-medium text-gray-900 capitalize flex items-center gap-2">

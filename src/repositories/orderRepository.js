@@ -110,7 +110,7 @@ async function find(filters = {}) {
  */
 async function getOrderItems(orderId) {
   return await queryMySQL(`
-    SELECT oi.*, i.name, i.description
+    SELECT oi.*, i.name, i.description, i.item_type
     FROM order_items oi
     LEFT JOIN items i ON oi.item_id = i.id
     WHERE oi.order_id = ?
