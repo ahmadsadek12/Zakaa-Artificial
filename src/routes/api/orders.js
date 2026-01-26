@@ -631,4 +631,200 @@ router.post('/:id/cancel-scheduled', requireOwnership('orders'), asyncHandler(as
   }
 }));
 
+/**
+ * Remove item from order
+ * DELETE /api/orders/:id/items/:itemId
+ */
+router.delete('/:id/items/:itemId', requireOwnership('orders'), asyncHandler(async (req, res) => {
+  const { getMySQLConnection } = require('../../config/database');
+  const connection = await getMySQLConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    // Get order
+    const [orders] = await connection.query(
+      `SELECT * FROM orders WHERE id = ? AND business_id = ?`,
+      [req.params.id, req.businessId]
+    );
+    
+    if (!orders || orders.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Order not found' }
+      });
+    }
+    
+    const order = orders[0];
+    
+    // Cannot modify completed or cancelled orders
+    if (order.status === 'completed' || order.status === 'cancelled') {
+      await connection.rollback();
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Cannot modify completed or cancelled orders' }
+      });
+    }
+    
+    // Get the order item
+    const [orderItems] = await connection.query(
+      `SELECT * FROM order_items WHERE id = ? AND order_id = ?`,
+      [req.params.itemId, req.params.id]
+    );
+    
+    if (!orderItems || orderItems.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Order item not found' }
+      });
+    }
+    
+    const orderItem = orderItems[0];
+    
+    // Delete the order item
+    await connection.query(
+      `DELETE FROM order_items WHERE id = ? AND order_id = ?`,
+      [req.params.itemId, req.params.id]
+    );
+    
+    // Recalculate order totals
+    const [remainingItems] = await connection.query(
+      `SELECT SUM(price_at_time * quantity) as subtotal FROM order_items WHERE order_id = ?`,
+      [req.params.id]
+    );
+    
+    const newSubtotal = remainingItems[0]?.subtotal || 0;
+    const newTotal = parseFloat(newSubtotal) + parseFloat(order.delivery_price || 0);
+    
+    // Update order totals
+    await connection.query(
+      `UPDATE orders SET subtotal = ?, total = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [newSubtotal, newTotal, req.params.id]
+    );
+    
+    // If no items left, cancel the order
+    const [itemCount] = await connection.query(
+      `SELECT COUNT(*) as count FROM order_items WHERE order_id = ?`,
+      [req.params.id]
+    );
+    
+    if (itemCount[0].count === 0) {
+      await connection.query(
+        `UPDATE orders SET status = 'cancelled', cancelled_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [req.params.id]
+      );
+    }
+    
+    await connection.commit();
+    
+    // Get updated order
+    const updatedOrder = await orderRepository.findById(req.params.id, req.businessId);
+    const items = await orderRepository.getOrderItems(req.params.id);
+    
+    res.json({
+      success: true,
+      data: { 
+        order: { ...updatedOrder, items },
+        message: itemCount[0].count === 0 ? 'Item removed. Order cancelled as it has no items.' : 'Item removed successfully'
+      }
+    });
+  } catch (error) {
+    await connection.rollback();
+    logger.error('Error removing item from order', { error: error.message, orderId: req.params.id, itemId: req.params.itemId });
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to remove item from order', details: error.message }
+    });
+  } finally {
+    connection.release();
+  }
+}));
+
+/**
+ * Update scheduled date for order
+ * PUT /api/orders/:id/scheduled-date
+ */
+router.put('/:id/scheduled-date', requireOwnership('orders'), [
+  body('scheduledFor').isISO8601().withMessage('Valid scheduled date is required')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Validation failed', errors: errors.array() }
+    });
+  }
+  
+  const { getMySQLConnection } = require('../../config/database');
+  const connection = await getMySQLConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    // Get order
+    const [orders] = await connection.query(
+      `SELECT * FROM orders WHERE id = ? AND business_id = ?`,
+      [req.params.id, req.businessId]
+    );
+    
+    if (!orders || orders.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Order not found' }
+      });
+    }
+    
+    const order = orders[0];
+    
+    // Cannot modify completed or cancelled orders
+    if (order.status === 'completed' || order.status === 'cancelled') {
+      await connection.rollback();
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Cannot modify scheduled date for completed or cancelled orders' }
+      });
+    }
+    
+    const scheduledFor = new Date(req.body.scheduledFor);
+    
+    // Validate scheduled date is in the future
+    if (scheduledFor <= new Date()) {
+      await connection.rollback();
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Scheduled date must be in the future' }
+      });
+    }
+    
+    // Update scheduled date
+    await connection.query(
+      `UPDATE orders SET scheduled_for = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [scheduledFor, req.params.id]
+    );
+    
+    await connection.commit();
+    
+    // Get updated order
+    const updatedOrder = await orderRepository.findById(req.params.id, req.businessId);
+    
+    res.json({
+      success: true,
+      data: { order: updatedOrder },
+      message: 'Scheduled date updated successfully'
+    });
+  } catch (error) {
+    await connection.rollback();
+    logger.error('Error updating scheduled date', { error: error.message, orderId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to update scheduled date', details: error.message }
+    });
+  } finally {
+    connection.release();
+  }
+}));
+
 module.exports = router;

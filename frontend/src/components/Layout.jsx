@@ -136,7 +136,7 @@ export default function Layout({ children }) {
                   {user?.business_name || user?.businessName || user?.email}
                 </p>
                 <p className="text-xs text-gray-500 truncate capitalize">
-                  {user?.userType === 'admin' ? 'Admin' : user?.subscription_type === 'premium' ? 'Premium' : 'Standard'}
+                  {user?.userType === 'admin' ? 'Admin' : 'Business'}
                 </p>
               </div>
             </div>
@@ -164,11 +164,6 @@ export default function Layout({ children }) {
             </button>
             <div className="flex-1" />
             <div className="flex items-center gap-4">
-              {user?.subscription_type === 'premium' && (
-                <span className="px-3 py-1 bg-gradient-to-r from-yellow-400 to-yellow-600 text-white text-xs font-semibold rounded-full">
-                  PREMIUM
-                </span>
-              )}
             </div>
           </div>
         </header>

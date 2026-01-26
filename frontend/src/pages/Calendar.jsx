@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import { Calendar as CalendarIcon, Clock, Users, MapPin, Phone, Plus, Edit, Trash2, CheckCircle, RefreshCw } from 'lucide-react'
+import { Calendar as CalendarIcon, Clock, Users, MapPin, Phone, Plus, Edit, Trash2, CheckCircle, RefreshCw, X, Calendar as CalendarInput } from 'lucide-react'
 import { Calendar as BigCalendar, momentLocalizer, Views } from 'react-big-calendar'
 import moment from 'moment'
 import { format } from 'date-fns'
@@ -33,6 +33,11 @@ export default function Calendar() {
   const [selectedSlot, setSelectedSlot] = useState(null)
   const [googleCalendarStatus, setGoogleCalendarStatus] = useState({ connected: false })
   const [syncing, setSyncing] = useState(false)
+  const [orderDetails, setOrderDetails] = useState(null)
+  const [loadingOrderDetails, setLoadingOrderDetails] = useState(false)
+  const [editingScheduledDate, setEditingScheduledDate] = useState(false)
+  const [newScheduledDate, setNewScheduledDate] = useState('')
+  const [newScheduledTime, setNewScheduledTime] = useState('')
   const [formData, setFormData] = useState({
     customerName: '',
     customerPhoneNumber: '',
@@ -370,9 +375,33 @@ export default function Calendar() {
     }
   }
 
-  const handleSelectEvent = (event) => {
+  const handleSelectEvent = async (event) => {
     setSelectedEvent(event)
     setShowEventModal(true)
+    
+    // If it's an order, fetch full details
+    if (event.resource.type === 'order') {
+      setLoadingOrderDetails(true)
+      try {
+        const token = localStorage.getItem('token')
+        const response = await axios.get(`${API_URL}/api/orders/${event.resource.id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        setOrderDetails(response.data.data.order)
+        if (response.data.data.order.scheduled_for) {
+          const scheduledDate = new Date(response.data.data.order.scheduled_for)
+          setNewScheduledDate(scheduledDate.toISOString().split('T')[0])
+          setNewScheduledTime(scheduledDate.toTimeString().slice(0, 5))
+        }
+      } catch (error) {
+        console.error('Error fetching order details:', error)
+        setOrderDetails(null)
+      } finally {
+        setLoadingOrderDetails(false)
+      }
+    } else {
+      setOrderDetails(null)
+    }
   }
 
   const handleCreateReservation = async () => {
@@ -609,11 +638,13 @@ export default function Calendar() {
       {/* Event Details Modal */}
       {showEventModal && selectedEvent && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 relative">
+          <div className={`bg-white rounded-xl ${selectedEvent.resource.type === 'order' ? 'max-w-2xl' : 'max-w-md'} w-full p-6 relative max-h-[90vh] overflow-y-auto`}>
             <button
               onClick={() => {
                 setShowEventModal(false)
                 setSelectedEvent(null)
+                setOrderDetails(null)
+                setEditingScheduledDate(false)
               }}
               className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-2xl font-bold z-10 bg-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-gray-100"
             >
@@ -672,25 +703,192 @@ export default function Calendar() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-3">
-                <div>
-                  <label className="text-sm text-gray-600">Customer</label>
-                  <p className="font-medium">{selectedEvent.resource.customer_name || selectedEvent.resource.customer_phone_number}</p>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600">Scheduled Time</label>
-                  <p>{format(selectedEvent.start, 'PPP p')}</p>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600">Total</label>
-                  <p className="font-medium">${selectedEvent.resource.total}</p>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600">Status</label>
-                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    {selectedEvent.resource.status}
-                  </span>
-                </div>
+              <div className="space-y-4">
+                {loadingOrderDetails ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+                  </div>
+                ) : orderDetails ? (
+                  <>
+                    {/* Order Info */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-sm text-gray-600">Customer</label>
+                        <p className="font-medium">{orderDetails.customer_name || orderDetails.customer_phone_number}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm text-gray-600">Phone</label>
+                        <p className="font-mono text-sm">{orderDetails.customer_phone_number}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm text-gray-600">Status</label>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          orderDetails.status === 'accepted' ? 'bg-blue-100 text-blue-800' :
+                          orderDetails.status === 'ongoing' ? 'bg-orange-100 text-orange-800' :
+                          orderDetails.status === 'completed' ? 'bg-green-100 text-green-800' :
+                          orderDetails.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {orderDetails.status}
+                        </span>
+                      </div>
+                      <div>
+                        <label className="text-sm text-gray-600">Delivery Type</label>
+                        <p className="capitalize">{orderDetails.delivery_type || 'pickup'}</p>
+                      </div>
+                      {orderDetails.scheduled_for && (
+                        <div className="col-span-2">
+                          <label className="text-sm text-gray-600 flex items-center gap-2">
+                            Scheduled Time
+                            {!editingScheduledDate && orderDetails.status !== 'completed' && orderDetails.status !== 'cancelled' && (
+                              <button
+                                onClick={() => setEditingScheduledDate(true)}
+                                className="text-primary-600 hover:text-primary-700 text-xs"
+                              >
+                                <Edit size={14} />
+                              </button>
+                            )}
+                          </label>
+                          {editingScheduledDate ? (
+                            <div className="flex gap-2 mt-1">
+                              <input
+                                type="date"
+                                value={newScheduledDate}
+                                onChange={(e) => setNewScheduledDate(e.target.value)}
+                                className="input flex-1"
+                              />
+                              <input
+                                type="time"
+                                value={newScheduledTime}
+                                onChange={(e) => setNewScheduledTime(e.target.value)}
+                                className="input flex-1"
+                              />
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const token = localStorage.getItem('token')
+                                    const newDateTime = new Date(`${newScheduledDate}T${newScheduledTime}`)
+                                    await axios.put(
+                                      `${API_URL}/api/orders/${orderDetails.id}/scheduled-date`,
+                                      { scheduledFor: newDateTime.toISOString() },
+                                      { headers: { Authorization: `Bearer ${token}` } }
+                                    )
+                                    setEditingScheduledDate(false)
+                                    fetchScheduledData()
+                                    handleSelectEvent(selectedEvent) // Refresh order details
+                                  } catch (error) {
+                                    alert(error.response?.data?.error?.message || 'Failed to update scheduled date')
+                                  }
+                                }}
+                                className="btn btn-primary text-sm px-3"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingScheduledDate(false)
+                                  if (orderDetails.scheduled_for) {
+                                    const scheduledDate = new Date(orderDetails.scheduled_for)
+                                    setNewScheduledDate(scheduledDate.toISOString().split('T')[0])
+                                    setNewScheduledTime(scheduledDate.toTimeString().slice(0, 5))
+                                  }
+                                }}
+                                className="btn btn-secondary text-sm px-3"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <p>{format(new Date(orderDetails.scheduled_for), 'PPP p')}</p>
+                          )}
+                        </div>
+                      )}
+                      {orderDetails.location_address && (
+                        <div className="col-span-2">
+                          <label className="text-sm text-gray-600">Delivery Address</label>
+                          <p>{orderDetails.location_address}</p>
+                        </div>
+                      )}
+                      {orderDetails.notes && orderDetails.notes !== '__cart__' && (
+                        <div className="col-span-2">
+                          <label className="text-sm text-gray-600">Notes</label>
+                          <p>{orderDetails.notes}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Order Items */}
+                    <div className="border-t pt-4">
+                      <h3 className="font-semibold text-gray-900 mb-3">Order Items</h3>
+                      {orderDetails.items && orderDetails.items.length > 0 ? (
+                        <div className="space-y-2">
+                          {orderDetails.items.map((item, index) => (
+                            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                              <div className="flex-1">
+                                <p className="font-medium">{item.name_at_time || item.name}</p>
+                                <p className="text-sm text-gray-600">
+                                  ${parseFloat(item.price_at_time || item.price).toFixed(2)} × {item.quantity}
+                                </p>
+                                {item.notes && (
+                                  <p className="text-xs text-gray-500 mt-1">Note: {item.notes}</p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <p className="font-medium">
+                                  ${(parseFloat(item.price_at_time || item.price) * item.quantity).toFixed(2)}
+                                </p>
+                                {orderDetails.status !== 'completed' && orderDetails.status !== 'cancelled' && (
+                                  <button
+                                    onClick={async () => {
+                                      if (!confirm(`Remove "${item.name_at_time || item.name}" from order?`)) return
+                                      try {
+                                        const token = localStorage.getItem('token')
+                                        await axios.delete(
+                                          `${API_URL}/api/orders/${orderDetails.id}/items/${item.id}`,
+                                          { headers: { Authorization: `Bearer ${token}` } }
+                                        )
+                                        handleSelectEvent(selectedEvent) // Refresh order details
+                                        fetchScheduledData()
+                                      } catch (error) {
+                                        alert(error.response?.data?.error?.message || 'Failed to remove item')
+                                      }
+                                    }}
+                                    className="text-red-600 hover:text-red-700"
+                                    title="Remove item"
+                                  >
+                                    <X size={18} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-gray-500 text-sm">No items in this order</p>
+                      )}
+                    </div>
+
+                    {/* Order Totals */}
+                    <div className="border-t pt-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-gray-600">Subtotal</span>
+                        <span className="font-medium">${parseFloat(orderDetails.subtotal || 0).toFixed(2)}</span>
+                      </div>
+                      {orderDetails.delivery_price > 0 && (
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-gray-600">Delivery</span>
+                          <span className="font-medium">${parseFloat(orderDetails.delivery_price || 0).toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center pt-2 border-t">
+                        <span className="font-semibold text-gray-900">Total</span>
+                        <span className="font-bold text-lg text-gray-900">${parseFloat(orderDetails.total || 0).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-gray-500">Failed to load order details</p>
+                )}
               </div>
             )}
 
@@ -699,33 +897,63 @@ export default function Calendar() {
                 onClick={() => {
                   setShowEventModal(false)
                   setSelectedEvent(null)
+                  setOrderDetails(null)
+                  setEditingScheduledDate(false)
                 }}
                 className="flex-1 btn btn-secondary"
               >
                 Close
               </button>
-              {selectedEvent.resource.type === 'order' && (
-                <button
-                  onClick={async () => {
-                    try {
-                      const token = localStorage.getItem('token')
-                      await axios.put(
-                        `${API_URL}/api/orders/${selectedEvent.resource.id}/status`,
-                        { status: 'completed' },
-                        { headers: { Authorization: `Bearer ${token}` } }
-                      )
-                      setShowEventModal(false)
-                      fetchScheduledData()
-                      alert('Order marked as completed')
-                    } catch (error) {
-                      alert('Failed to update order')
-                    }
-                  }}
-                  className="flex-1 btn btn-primary flex items-center justify-center gap-2"
-                >
-                  <CheckCircle size={16} />
-                  <span>Mark Completed</span>
-                </button>
+              {selectedEvent.resource.type === 'order' && orderDetails && orderDetails.status !== 'completed' && orderDetails.status !== 'cancelled' && (
+                <>
+                  <button
+                    onClick={async () => {
+                      if (!confirm('Are you sure you want to cancel this order?')) return
+                      try {
+                        const token = localStorage.getItem('token')
+                        await axios.post(
+                          `${API_URL}/api/orders/${orderDetails.id}/cancel`,
+                          {},
+                          { headers: { Authorization: `Bearer ${token}` } }
+                        )
+                        setShowEventModal(false)
+                        setSelectedEvent(null)
+                        setOrderDetails(null)
+                        fetchScheduledData()
+                      } catch (error) {
+                        alert(error.response?.data?.error?.message || 'Failed to cancel order')
+                      }
+                    }}
+                    className="btn btn-secondary flex items-center justify-center gap-2"
+                  >
+                    <Trash2 size={16} />
+                    <span>Cancel</span>
+                  </button>
+                  {orderDetails.status === 'accepted' && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const token = localStorage.getItem('token')
+                          await axios.put(
+                            `${API_URL}/api/orders/${orderDetails.id}/status`,
+                            { status: 'completed' },
+                            { headers: { Authorization: `Bearer ${token}` } }
+                          )
+                          setShowEventModal(false)
+                          setSelectedEvent(null)
+                          setOrderDetails(null)
+                          fetchScheduledData()
+                        } catch (error) {
+                          alert(error.response?.data?.error?.message || 'Failed to update order')
+                        }
+                      }}
+                      className="btn btn-primary flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle size={16} />
+                      <span>Complete</span>
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
