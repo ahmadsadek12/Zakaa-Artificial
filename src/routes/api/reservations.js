@@ -221,7 +221,7 @@ router.get('/:id',
       }
       
       const businessUserId = req.isBranchUser ? req.userId : req.businessId;
-      const reservation = await reservationRepository.findById(req.params.id, businessUserId);
+      const reservation = await reservationRepository.findByIdWithItems(req.params.id, businessUserId);
       
       if (!reservation) {
         return res.status(404).json({
@@ -385,6 +385,98 @@ router.delete('/:id',
       res.status(500).json({
         success: false,
         error: { message: 'Failed to cancel reservation', details: error.message }
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/reservations/:id/items - Add item to reservation
+ */
+router.post('/:id/items',
+  authenticate,
+  tenantIsolation,
+  addonGuard('table_reservations'),
+  param('id').isUUID().withMessage('Invalid reservation ID'),
+  body('itemId').isUUID().withMessage('Valid item ID is required'),
+  body('quantity').optional().isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
+  body('notes').optional().isString(),
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, error: { message: 'Validation failed', details: errors.array() } });
+      }
+      
+      const businessUserId = req.isBranchUser ? req.userId : req.businessId;
+      
+      // Verify reservation exists
+      const reservation = await reservationRepository.findById(req.params.id, businessUserId);
+      if (!reservation) {
+        return res.status(404).json({
+          success: false,
+          error: { message: 'Reservation not found' }
+        });
+      }
+      
+      const items = await reservationRepository.addItemToReservation(req.params.id, {
+        itemId: req.body.itemId,
+        quantity: req.body.quantity || 1,
+        notes: req.body.notes || null
+      });
+      
+      res.json({
+        success: true,
+        data: { items }
+      });
+    } catch (error) {
+      console.error('Error adding item to reservation:', error);
+      res.status(500).json({
+        success: false,
+        error: { message: 'Failed to add item to reservation', details: error.message }
+      });
+    }
+  }
+);
+
+/**
+ * DELETE /api/reservations/:id/items/:itemId - Remove item from reservation
+ */
+router.delete('/:id/items/:itemId',
+  authenticate,
+  tenantIsolation,
+  addonGuard('table_reservations'),
+  param('id').isUUID().withMessage('Invalid reservation ID'),
+  param('itemId').isUUID().withMessage('Invalid item ID'),
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, error: { message: 'Validation failed', details: errors.array() } });
+      }
+      
+      const businessUserId = req.isBranchUser ? req.userId : req.businessId;
+      
+      // Verify reservation exists
+      const reservation = await reservationRepository.findById(req.params.id, businessUserId);
+      if (!reservation) {
+        return res.status(404).json({
+          success: false,
+          error: { message: 'Reservation not found' }
+        });
+      }
+      
+      const items = await reservationRepository.removeItemFromReservation(req.params.id, req.params.itemId);
+      
+      res.json({
+        success: true,
+        data: { items }
+      });
+    } catch (error) {
+      console.error('Error removing item from reservation:', error);
+      res.status(500).json({
+        success: false,
+        error: { message: 'Failed to remove item from reservation', details: error.message }
       });
     }
   }

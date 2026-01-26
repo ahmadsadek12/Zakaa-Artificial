@@ -136,7 +136,35 @@ async function findByBusiness(businessUserId, filters = {}) {
     sql += ` LIMIT ${limit}`;
   }
   
-  return await queryMySQL(sql, params);
+  const reservations = await queryMySQL(sql, params);
+  
+  // Fetch items for each reservation
+  if (reservations.length > 0) {
+    const reservationIds = reservations.map(r => r.id);
+    if (reservationIds.length > 0) {
+      const placeholders = reservationIds.map(() => '?').join(',');
+      const items = await queryMySQL(
+        `SELECT * FROM reservation_items WHERE reservation_id IN (${placeholders})`,
+        reservationIds
+      );
+      
+      // Group items by reservation_id
+      const itemsByReservation = {};
+      items.forEach(item => {
+        if (!itemsByReservation[item.reservation_id]) {
+          itemsByReservation[item.reservation_id] = [];
+        }
+        itemsByReservation[item.reservation_id].push(item);
+      });
+      
+      // Attach items to reservations
+      reservations.forEach(reservation => {
+        reservation.items = itemsByReservation[reservation.id] || [];
+      });
+    }
+  }
+  
+  return reservations;
 }
 
 /**

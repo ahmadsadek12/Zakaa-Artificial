@@ -19,6 +19,10 @@ export default function TableReservations() {
   const [showReservationModal, setShowReservationModal] = useState(false)
   const [editingTable, setEditingTable] = useState(null)
   const [selectedReservation, setSelectedReservation] = useState(null)
+  const [reservationDetails, setReservationDetails] = useState(null)
+  const [items, setItems] = useState([])
+  const [showAddItemModal, setShowAddItemModal] = useState(false)
+  const [itemForm, setItemForm] = useState({ itemId: '', quantity: 1, notes: '' })
   const [tableForm, setTableForm] = useState({
     table_number: '',
     min_seats: 2,
@@ -39,7 +43,74 @@ export default function TableReservations() {
 
   useEffect(() => {
     fetchData()
+    fetchItems()
   }, [selectedDate, activeTab])
+
+  const fetchItems = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await axios.get(`${API_URL}/api/items`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setItems(res.data.data.items || [])
+    } catch (error) {
+      console.error('Error fetching items:', error)
+    }
+  }
+
+  const fetchReservationDetails = async (reservationId) => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await axios.get(`${API_URL}/api/reservations/${reservationId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setReservationDetails(res.data.data)
+    } catch (error) {
+      console.error('Error fetching reservation details:', error)
+    }
+  }
+
+  const handleAddItemToReservation = async () => {
+    if (!selectedReservation || !itemForm.itemId) {
+      alert('Please select an item')
+      return
+    }
+    try {
+      const token = localStorage.getItem('token')
+      await axios.post(`${API_URL}/api/reservations/${selectedReservation.id}/items`, {
+        itemId: itemForm.itemId,
+        quantity: parseInt(itemForm.quantity) || 1,
+        notes: itemForm.notes || null
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setShowAddItemModal(false)
+      setItemForm({ itemId: '', quantity: 1, notes: '' })
+      fetchReservationDetails(selectedReservation.id)
+      fetchData()
+      alert('Item added to reservation successfully')
+    } catch (error) {
+      console.error('Error adding item to reservation:', error)
+      alert(error.response?.data?.error?.message || 'Failed to add item to reservation')
+    }
+  }
+
+  const handleRemoveItemFromReservation = async (itemId) => {
+    if (!selectedReservation) return
+    if (!confirm('Remove this item from the reservation?')) return
+    try {
+      const token = localStorage.getItem('token')
+      await axios.delete(`${API_URL}/api/reservations/${selectedReservation.id}/items/${itemId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      fetchReservationDetails(selectedReservation.id)
+      fetchData()
+      alert('Item removed from reservation')
+    } catch (error) {
+      console.error('Error removing item from reservation:', error)
+      alert(error.response?.data?.error?.message || 'Failed to remove item')
+    }
+  }
 
   const fetchData = async () => {
     try {
@@ -460,7 +531,11 @@ export default function TableReservations() {
               return (
                 <div
                   key={reservation.id}
-                  className="border rounded-lg p-4 bg-white hover:shadow-md transition-shadow"
+                  className="border rounded-lg p-4 bg-white hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => {
+                    setSelectedReservation(reservation)
+                    fetchReservationDetails(reservation.id)
+                  }}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -514,6 +589,20 @@ export default function TableReservations() {
                       
                       {reservation.notes && (
                         <p className="text-sm text-gray-600 mt-2">{reservation.notes}</p>
+                      )}
+                      
+                      {/* Reservation Items Preview */}
+                      {reservation.items && reservation.items.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <p className="text-xs font-semibold text-gray-700 mb-1">Pre-ordered Items ({reservation.items.length}):</p>
+                          <p className="text-xs text-gray-600">
+                            {reservation.items.slice(0, 2).map(item => `${item.quantity}x ${item.name_at_time}`).join(', ')}
+                            {reservation.items.length > 2 && ` +${reservation.items.length - 2} more`}
+                          </p>
+                          <p className="text-xs font-semibold text-gray-900 mt-1">
+                            Total: ${reservation.items.reduce((sum, item) => sum + (parseFloat(item.price_at_time) * item.quantity), 0).toFixed(2)}
+                          </p>
+                        </div>
                       )}
                     </div>
 
@@ -923,6 +1012,190 @@ export default function TableReservations() {
                   Create Reservation
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reservation Details Modal */}
+      {selectedReservation && reservationDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+            <div className="flex-shrink-0 p-6 pb-4 border-b border-gray-200">
+              <button
+                onClick={() => {
+                  setSelectedReservation(null)
+                  setReservationDetails(null)
+                }}
+                className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-2xl font-bold z-10 bg-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-gray-100"
+              >
+                ×
+              </button>
+              <h2 className="text-xl font-bold text-gray-900 pr-8">Reservation Details</h2>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Customer Name</p>
+                    <p className="font-semibold">{reservationDetails.customer_name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Phone</p>
+                    <p className="font-semibold font-mono">{reservationDetails.customer_phone_number}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Date</p>
+                    <p className="font-semibold">{format(new Date(reservationDetails.reservation_date), 'MMM d, yyyy')}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Time</p>
+                    <p className="font-semibold">{reservationDetails.reservation_time}</p>
+                  </div>
+                  {reservationDetails.number_of_guests && (
+                    <div>
+                      <p className="text-sm text-gray-600">Guests</p>
+                      <p className="font-semibold">{reservationDetails.number_of_guests}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm text-gray-600">Status</p>
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      reservationDetails.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                      reservationDetails.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      reservationDetails.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {reservationDetails.status}
+                    </span>
+                  </div>
+                </div>
+                
+                {reservationDetails.notes && (
+                  <div>
+                    <p className="text-sm text-gray-600">Notes</p>
+                    <p className="text-gray-900">{reservationDetails.notes}</p>
+                  </div>
+                )}
+
+                {/* Reservation Items */}
+                <div className="border-t pt-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold">Pre-ordered Items</h3>
+                    {reservationDetails.status === 'confirmed' && (
+                      <button
+                        onClick={() => setShowAddItemModal(true)}
+                        className="btn btn-primary text-sm flex items-center gap-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Item
+                      </button>
+                    )}
+                  </div>
+                  
+                  {reservationDetails.items && reservationDetails.items.length > 0 ? (
+                    <div className="space-y-2">
+                      {reservationDetails.items.map((item, idx) => (
+                        <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                          <div className="flex-1">
+                            <p className="font-medium">{item.quantity}x {item.name_at_time}</p>
+                            {item.notes && <p className="text-sm text-gray-600">{item.notes}</p>}
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <p className="font-semibold">${(parseFloat(item.price_at_time) * item.quantity).toFixed(2)}</p>
+                            {reservationDetails.status === 'confirmed' && (
+                              <button
+                                onClick={() => handleRemoveItemFromReservation(item.item_id)}
+                                className="text-red-600 hover:text-red-800"
+                                title="Remove item"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      <div className="flex justify-between items-center pt-2 border-t font-semibold">
+                        <span>Total:</span>
+                        <span>${reservationDetails.items.reduce((sum, item) => sum + (parseFloat(item.price_at_time) * item.quantity), 0).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-sm">No items added yet</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Item Modal */}
+      {showAddItemModal && selectedReservation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Add Item to Reservation</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="label">Item *</label>
+                <select
+                  className="input"
+                  value={itemForm.itemId}
+                  onChange={(e) => setItemForm({ ...itemForm, itemId: e.target.value })}
+                  required
+                >
+                  <option value="">Select an item</option>
+                  {items.filter(i => i.availability === 'available' || i.availability_status === 'available').map(item => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} - ${item.price}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="label">Quantity *</label>
+                <input
+                  type="number"
+                  className="input"
+                  min="1"
+                  value={itemForm.quantity}
+                  onChange={(e) => setItemForm({ ...itemForm, quantity: parseInt(e.target.value) || 1 })}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="label">Notes (optional)</label>
+                <textarea
+                  className="input"
+                  rows="3"
+                  value={itemForm.notes}
+                  onChange={(e) => setItemForm({ ...itemForm, notes: e.target.value })}
+                  placeholder="Special instructions or modifications"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowAddItemModal(false)
+                  setItemForm({ itemId: '', quantity: 1, notes: '' })
+                }}
+                className="btn btn-secondary flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddItemToReservation}
+                className="btn btn-primary flex-1"
+                disabled={!itemForm.itemId}
+              >
+                Add Item
+              </button>
             </div>
           </div>
         </div>
