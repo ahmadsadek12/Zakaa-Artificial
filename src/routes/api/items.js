@@ -320,7 +320,7 @@ router.post('/', upload.single('itemImage'), handleMulterError, [
     preparationTimeMinutes: preparationTimeMinutes ? parseInt(preparationTimeMinutes) : null,
     durationMinutes: durationMinutes ? parseInt(durationMinutes) : null,
     quantity: quantity && quantity !== '' ? parseInt(quantity, 10) : null,
-    isReusable: finalIsReusable !== undefined ? (finalIsReusable === true || finalIsReusable === 'true') : (itemType === 'service' ? true : false),
+    isReusable: isReusable !== undefined ? (isReusable === true || isReusable === 'true') : (itemType === 'service' ? true : false),
     availableFrom: availableFrom || null,
     availableTo: availableTo || null,
     daysAvailable: daysAvailable || null,
