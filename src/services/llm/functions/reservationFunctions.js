@@ -224,6 +224,11 @@ async function checkTableReservationsEligible(businessId) {
     
     // Check if addon is active
     const isActive = await addonRepository.isAddonActive(businessId, 'table_reservations');
+    logger.info('Table reservations addon check', { 
+      businessId, 
+      isActive,
+      addonKey: 'table_reservations'
+    });
     if (!isActive) {
       return { eligible: false, reason: 'Table reservations are not enabled for this business' };
     }
