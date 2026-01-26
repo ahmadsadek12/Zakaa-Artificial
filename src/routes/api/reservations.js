@@ -398,13 +398,15 @@ router.post('/:id/items',
   tenantIsolation,
   addonGuard('table_reservations'),
   param('id').isUUID().withMessage('Invalid reservation ID'),
-  body('itemId').isUUID().withMessage('Valid item ID is required'),
-  body('quantity').optional().isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
-  body('notes').optional().isString(),
+  body('itemId').notEmpty().withMessage('Item ID is required').isUUID().withMessage('Valid item ID is required'),
+  body('quantity').optional({ nullable: true, checkFalsy: true }).isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
+  body('notes').optional({ nullable: true }).isString().withMessage('Notes must be a string'),
   async (req, res) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        console.error('Validation errors:', errors.array());
+        console.error('Request body:', req.body);
         return res.status(400).json({ success: false, error: { message: 'Validation failed', details: errors.array() } });
       }
       

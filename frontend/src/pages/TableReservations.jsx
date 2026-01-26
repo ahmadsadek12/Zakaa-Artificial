@@ -77,11 +77,17 @@ export default function TableReservations() {
     }
     try {
       const token = localStorage.getItem('token')
-      await axios.post(`${API_URL}/api/reservations/${selectedReservation.id}/items`, {
+      const payload = {
         itemId: itemForm.itemId,
-        quantity: parseInt(itemForm.quantity) || 1,
-        notes: itemForm.notes || null
-      }, {
+        quantity: itemForm.quantity ? parseInt(itemForm.quantity) : 1
+      }
+      if (itemForm.notes && itemForm.notes.trim()) {
+        payload.notes = itemForm.notes.trim()
+      }
+      
+      console.log('Adding item to reservation:', payload)
+      
+      await axios.post(`${API_URL}/api/reservations/${selectedReservation.id}/items`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       })
       setShowAddItemModal(false)
@@ -91,7 +97,12 @@ export default function TableReservations() {
       alert('Item added to reservation successfully')
     } catch (error) {
       console.error('Error adding item to reservation:', error)
-      alert(error.response?.data?.error?.message || 'Failed to add item to reservation')
+      console.error('Error response:', error.response?.data)
+      const errorDetails = error.response?.data?.error?.details
+      const errorMessage = errorDetails && errorDetails.length > 0
+        ? errorDetails.map(e => e.msg || e.message).join(', ')
+        : error.response?.data?.error?.message || 'Failed to add item to reservation'
+      alert(`Error: ${errorMessage}`)
     }
   }
 
