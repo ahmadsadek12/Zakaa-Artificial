@@ -5,6 +5,7 @@ const logger = require('../../../utils/logger');
 const reservationRepository = require('../../../repositories/reservationRepository');
 const tableRepository = require('../../../repositories/tableRepository');
 const addonRepository = require('../../../repositories/addonRepository');
+const itemRepository = require('../../../repositories/itemRepository');
 const { queryMySQL } = require('../../../config/database');
 
 /**
@@ -81,6 +82,97 @@ function getReservationFunctionDefinitions() {
             reservationId: {
               type: 'string',
               description: 'Reservation ID to cancel (optional if date and time provided)'
+            },
+            reservationDate: {
+              type: 'string',
+              description: 'Reservation date in YYYY-MM-DD format (optional if reservationId provided)'
+            },
+            reservationTime: {
+              type: 'string',
+              description: 'Reservation time in HH:MM format (optional if reservationId provided)'
+            }
+          },
+          required: []
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'add_item_to_reservation',
+        description: 'Add items to an existing table reservation. Use this when customer wants to pre-order items for their reservation (e.g., "add 2 pizzas to my reservation", "I want 3 burgers for my table reservation"). Only use this if customer has an existing confirmed reservation. If customer is making a new reservation AND wants to add items, first create the reservation, then add items.',
+        parameters: {
+          type: 'object',
+          properties: {
+            reservationId: {
+              type: 'string',
+              description: 'Reservation ID (optional if date and time provided)'
+            },
+            reservationDate: {
+              type: 'string',
+              description: 'Reservation date in YYYY-MM-DD format (optional if reservationId provided)'
+            },
+            reservationTime: {
+              type: 'string',
+              description: 'Reservation time in HH:MM format (optional if reservationId provided)'
+            },
+            itemName: {
+              type: 'string',
+              description: 'Name of the item to add (e.g., "pizza", "burger", "trio")'
+            },
+            quantity: {
+              type: 'number',
+              description: 'Quantity of the item (default: 1). Parse from customer message - "3 pizzas" means quantity=3, itemName="pizza"'
+            },
+            notes: {
+              type: 'string',
+              description: 'Special notes or modifications for this item (optional)'
+            }
+          },
+          required: ['itemName']
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'remove_item_from_reservation',
+        description: 'Remove an item from a table reservation. Use this when customer wants to remove items they previously added to their reservation.',
+        parameters: {
+          type: 'object',
+          properties: {
+            reservationId: {
+              type: 'string',
+              description: 'Reservation ID (optional if date and time provided)'
+            },
+            reservationDate: {
+              type: 'string',
+              description: 'Reservation date in YYYY-MM-DD format (optional if reservationId provided)'
+            },
+            reservationTime: {
+              type: 'string',
+              description: 'Reservation time in HH:MM format (optional if reservationId provided)'
+            },
+            itemName: {
+              type: 'string',
+              description: 'Name of the item to remove'
+            }
+          },
+          required: ['itemName']
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'get_reservation_items',
+        description: 'Get all items added to a table reservation. Use this to show customer what items they have pre-ordered for their reservation.',
+        parameters: {
+          type: 'object',
+          properties: {
+            reservationId: {
+              type: 'string',
+              description: 'Reservation ID (optional if date and time provided)'
             },
             reservationDate: {
               type: 'string',
@@ -353,6 +445,269 @@ async function executeReservationFunction(functionName, args, context) {
         return {
           success: false,
           error: `Failed to cancel reservation: ${error.message}`
+        };
+      }
+    }
+    
+    case 'add_item_to_reservation': {
+      const { reservationId, reservationDate, reservationTime, itemName, quantity = 1, notes } = args;
+      
+      try {
+        // Find reservation
+        let reservation = null;
+        
+        if (reservationId) {
+          reservation = await reservationRepository.findById(reservationId, business.id);
+        } else if (reservationDate && reservationTime) {
+          const reservations = await reservationRepository.findByBusiness(business.id, {
+            reservationDate,
+            status: 'confirmed',
+            reservationType: 'table'
+          });
+          
+          reservation = reservations.find(r => 
+            r.reservation_time === reservationTime &&
+            r.customer_phone_number === customerPhoneNumber
+          );
+        } else {
+          // Find latest confirmed reservation for this customer
+          const reservations = await reservationRepository.findByBusiness(business.id, {
+            status: 'confirmed',
+            reservationType: 'table'
+          });
+          
+          reservation = reservations
+            .filter(r => r.customer_phone_number === customerPhoneNumber)
+            .sort((a, b) => {
+              const dateA = new Date(`${a.reservation_date} ${a.reservation_time}`);
+              const dateB = new Date(`${b.reservation_date} ${b.reservation_time}`);
+              return dateB - dateA; // Most recent first
+            })[0];
+        }
+        
+        if (!reservation) {
+          return {
+            success: false,
+            error: 'Reservation not found. Please provide reservation ID or date and time.'
+          };
+        }
+        
+        // Find item by name (fuzzy match)
+        const items = await itemRepository.findByBusiness(business.id, branch?.id || null);
+        const item = items.find(i => 
+          i.name.toLowerCase().includes(itemName.toLowerCase()) ||
+          itemName.toLowerCase().includes(i.name.toLowerCase())
+        );
+        
+        if (!item) {
+          return {
+            success: false,
+            error: `Item "${itemName}" not found. Would you like to see our menu?`
+          };
+        }
+        
+        // Check availability
+        if (item.availability !== 'available' && item.availability_status !== 'available') {
+          return {
+            success: false,
+            error: `Sorry, "${item.name}" is currently not available.`
+          };
+        }
+        
+        // Add item to reservation
+        await reservationRepository.addItemToReservation(reservation.id, {
+          itemId: item.id,
+          quantity: quantity,
+          notes: notes || null
+        });
+        
+        const reservationItems = await reservationRepository.getReservationItems(reservation.id);
+        const totalItems = reservationItems.reduce((sum, ri) => sum + ri.quantity, 0);
+        
+        return {
+          success: true,
+          message: `Added ${quantity}x ${item.name} to your reservation for ${reservation.reservation_date} at ${reservation.reservation_time}. You now have ${totalItems} item(s) pre-ordered.`,
+          reservation: {
+            id: reservation.id,
+            reservation_date: reservation.reservation_date,
+            reservation_time: reservation.reservation_time,
+            items: reservationItems.map(ri => ({
+              name: ri.name_at_time,
+              quantity: ri.quantity,
+              price: ri.price_at_time
+            }))
+          }
+        };
+      } catch (error) {
+        logger.error('Error adding item to reservation:', error);
+        return {
+          success: false,
+          error: `Failed to add item to reservation: ${error.message}`
+        };
+      }
+    }
+    
+    case 'remove_item_from_reservation': {
+      const { reservationId, reservationDate, reservationTime, itemName } = args;
+      
+      try {
+        // Find reservation
+        let reservation = null;
+        
+        if (reservationId) {
+          reservation = await reservationRepository.findById(reservationId, business.id);
+        } else if (reservationDate && reservationTime) {
+          const reservations = await reservationRepository.findByBusiness(business.id, {
+            reservationDate,
+            status: 'confirmed',
+            reservationType: 'table'
+          });
+          
+          reservation = reservations.find(r => 
+            r.reservation_time === reservationTime &&
+            r.customer_phone_number === customerPhoneNumber
+          );
+        } else {
+          // Find latest confirmed reservation for this customer
+          const reservations = await reservationRepository.findByBusiness(business.id, {
+            status: 'confirmed',
+            reservationType: 'table'
+          });
+          
+          reservation = reservations
+            .filter(r => r.customer_phone_number === customerPhoneNumber)
+            .sort((a, b) => {
+              const dateA = new Date(`${a.reservation_date} ${a.reservation_time}`);
+              const dateB = new Date(`${b.reservation_date} ${b.reservation_time}`);
+              return dateB - dateA; // Most recent first
+            })[0];
+        }
+        
+        if (!reservation) {
+          return {
+            success: false,
+            error: 'Reservation not found. Please provide reservation ID or date and time.'
+          };
+        }
+        
+        // Get reservation items
+        const reservationItems = await reservationRepository.getReservationItems(reservation.id);
+        
+        // Find item to remove
+        const itemToRemove = reservationItems.find(ri => 
+          ri.name_at_time.toLowerCase().includes(itemName.toLowerCase()) ||
+          itemName.toLowerCase().includes(ri.name_at_time.toLowerCase())
+        );
+        
+        if (!itemToRemove) {
+          const itemList = reservationItems.map(ri => `- ${ri.name_at_time} (${ri.quantity}x)`).join('\n');
+          return {
+            success: false,
+            error: `Item "${itemName}" not found in your reservation. Current items:\n${itemList || 'No items added yet.'}`
+          };
+        }
+        
+        // Remove item
+        await reservationRepository.removeItemFromReservation(reservation.id, itemToRemove.item_id);
+        
+        const updatedItems = await reservationRepository.getReservationItems(reservation.id);
+        
+        return {
+          success: true,
+          message: `Removed ${itemToRemove.name_at_time} from your reservation.`,
+          reservation: {
+            id: reservation.id,
+            reservation_date: reservation.reservation_date,
+            reservation_time: reservation.reservation_time,
+            items: updatedItems.map(ri => ({
+              name: ri.name_at_time,
+              quantity: ri.quantity,
+              price: ri.price_at_time
+            }))
+          }
+        };
+      } catch (error) {
+        logger.error('Error removing item from reservation:', error);
+        return {
+          success: false,
+          error: `Failed to remove item from reservation: ${error.message}`
+        };
+      }
+    }
+    
+    case 'get_reservation_items': {
+      const { reservationId, reservationDate, reservationTime } = args;
+      
+      try {
+        // Find reservation
+        let reservation = null;
+        
+        if (reservationId) {
+          reservation = await reservationRepository.findById(reservationId, business.id);
+        } else if (reservationDate && reservationTime) {
+          const reservations = await reservationRepository.findByBusiness(business.id, {
+            reservationDate,
+            status: 'confirmed',
+            reservationType: 'table'
+          });
+          
+          reservation = reservations.find(r => 
+            r.reservation_time === reservationTime &&
+            r.customer_phone_number === customerPhoneNumber
+          );
+        } else {
+          // Find latest confirmed reservation for this customer
+          const reservations = await reservationRepository.findByBusiness(business.id, {
+            status: 'confirmed',
+            reservationType: 'table'
+          });
+          
+          reservation = reservations
+            .filter(r => r.customer_phone_number === customerPhoneNumber)
+            .sort((a, b) => {
+              const dateA = new Date(`${a.reservation_date} ${a.reservation_time}`);
+              const dateB = new Date(`${b.reservation_date} ${b.reservation_time}`);
+              return dateB - dateA; // Most recent first
+            })[0];
+        }
+        
+        if (!reservation) {
+          return {
+            success: false,
+            error: 'Reservation not found. Please provide reservation ID or date and time.'
+          };
+        }
+        
+        const items = await reservationRepository.getReservationItems(reservation.id);
+        
+        if (items.length === 0) {
+          return {
+            success: true,
+            message: `Your reservation for ${reservation.reservation_date} at ${reservation.reservation_time} has no items added yet.`,
+            items: []
+          };
+        }
+        
+        const itemsList = items.map(ri => 
+          `${ri.quantity}x ${ri.name_at_time} - $${ri.price_at_time} each`
+        ).join('\n');
+        const total = items.reduce((sum, ri) => sum + (parseFloat(ri.price_at_time) * ri.quantity), 0);
+        
+        return {
+          success: true,
+          message: `Items for your reservation on ${reservation.reservation_date} at ${reservation.reservation_time}:\n${itemsList}\n\nTotal: $${total.toFixed(2)}`,
+          items: items.map(ri => ({
+            name: ri.name_at_time,
+            quantity: ri.quantity,
+            price: ri.price_at_time
+          })),
+          total: total
+        };
+      } catch (error) {
+        logger.error('Error getting reservation items:', error);
+        return {
+          success: false,
+          error: `Failed to get reservation items: ${error.message}`
         };
       }
     }

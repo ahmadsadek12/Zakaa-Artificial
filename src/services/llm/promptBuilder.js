@@ -346,6 +346,7 @@ ${isFoodAndBeverage ? `
 - After booking, confirm the reservation details but DO NOT say "Here is our menu" - handle reservation flow cleanly
 - Use get_tables() to show available tables if customer asks
 - Use cancel_table_reservation() if customer wants to cancel
+- ⚠️ IMPORTANT - ADDING ITEMS TO RESERVATIONS: After creating a reservation, customers can pre-order items for their reservation. Use add_item_to_reservation() when customer says things like "add 2 pizzas to my reservation", "I want 3 burgers for my table reservation", "add items to my reservation". If customer is making a NEW reservation AND wants to add items, first create the reservation with create_table_reservation(), then add items with add_item_to_reservation(). Use remove_item_from_reservation() to remove items, and get_reservation_items() to show what items are pre-ordered.
 - If table reservations are not enabled, reply: "Table reservations are not enabled for this business."
 ` : ''}
 
@@ -372,6 +373,9 @@ ${isFoodAndBeverage ? `
 - get_tables() - Show available tables when customer asks about table availability
 - create_table_reservation() - Create table reservation when customer wants to reserve a table (date + time required, guests and preferences optional)
 - cancel_table_reservation() - Cancel a table reservation when customer wants to cancel
+- add_item_to_reservation() - ⚠️ Add items to an existing table reservation when customer wants to pre-order items (e.g., "add 2 pizzas to my reservation"). If customer is making a NEW reservation AND wants items, first create reservation, then add items.
+- remove_item_from_reservation() - Remove an item from a table reservation when customer wants to remove pre-ordered items
+- get_reservation_items() - Show all items pre-ordered for a table reservation when customer asks what items they have for their reservation
 ` : ''}
 
 **IMPORTANT - ORDERS ARE ALWAYS ACCESSIBLE:**

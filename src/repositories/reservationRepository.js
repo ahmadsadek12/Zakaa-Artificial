@@ -542,6 +542,146 @@ async function deleteReservation(reservationId, businessUserId) {
   }
 }
 
+/**
+ * Get items for a reservation
+ */
+async function getReservationItems(reservationId) {
+  const items = await queryMySQL(
+    `SELECT ri.*, i.name as current_name, i.price as current_price
+     FROM reservation_items ri
+     LEFT JOIN items i ON ri.item_id = i.id
+     WHERE ri.reservation_id = ?
+     ORDER BY ri.created_at`,
+    [reservationId]
+  );
+  return items;
+}
+
+/**
+ * Add item to reservation
+ */
+async function addItemToReservation(reservationId, itemData) {
+  const connection = await getMySQLConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    // Verify reservation exists
+    const reservation = await findById(reservationId);
+    if (!reservation) {
+      throw new Error('Reservation not found');
+    }
+    
+    // Get item details
+    const [items] = await connection.query(
+      `SELECT id, name, price FROM items WHERE id = ?`,
+      [itemData.itemId]
+    );
+    
+    if (items.length === 0) {
+      throw new Error('Item not found');
+    }
+    
+    const item = items[0];
+    
+    // Check if item already exists in reservation
+    const [existingItems] = await connection.query(
+      `SELECT * FROM reservation_items 
+       WHERE reservation_id = ? AND item_id = ?`,
+      [reservationId, itemData.itemId]
+    );
+    
+    if (existingItems.length > 0) {
+      // Update quantity
+      const existingItem = existingItems[0];
+      const newQuantity = existingItem.quantity + (itemData.quantity || 1);
+      
+      await connection.query(
+        `UPDATE reservation_items 
+         SET quantity = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [newQuantity, existingItem.id]
+      );
+      
+      await connection.commit();
+      return await getReservationItems(reservationId);
+    }
+    
+    // Add new item
+    const reservationItemId = generateUUID();
+    await connection.query(
+      `INSERT INTO reservation_items (
+        id, reservation_id, item_id, quantity, price_at_time, name_at_time, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        reservationItemId,
+        reservationId,
+        itemData.itemId,
+        itemData.quantity || 1,
+        item.price,
+        item.name,
+        itemData.notes || null
+      ]
+    );
+    
+    await connection.commit();
+    return await getReservationItems(reservationId);
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Remove item from reservation
+ */
+async function removeItemFromReservation(reservationId, itemId) {
+  const connection = await getMySQLConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    // Verify reservation exists
+    const reservation = await findById(reservationId);
+    if (!reservation) {
+      throw new Error('Reservation not found');
+    }
+    
+    // Remove item
+    await connection.query(
+      `DELETE FROM reservation_items 
+       WHERE reservation_id = ? AND item_id = ?`,
+      [reservationId, itemId]
+    );
+    
+    await connection.commit();
+    return await getReservationItems(reservationId);
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Get reservation with items
+ */
+async function findByIdWithItems(reservationId, businessUserId = null) {
+  const reservation = await findById(reservationId, businessUserId);
+  if (!reservation) {
+    return null;
+  }
+  
+  const items = await getReservationItems(reservationId);
+  return {
+    ...reservation,
+    items: items
+  };
+}
+
 module.exports = {
   findById,
   findByBusiness,
@@ -551,5 +691,9 @@ module.exports = {
   create,
   update,
   updateStatus,
-  deleteReservation
+  deleteReservation,
+  getReservationItems,
+  addItemToReservation,
+  removeItemFromReservation,
+  findByIdWithItems
 };
