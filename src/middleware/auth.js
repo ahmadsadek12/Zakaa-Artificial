@@ -26,10 +26,9 @@ async function authenticate(req, res, next) {
       const decoded = jwt.verify(token, CONSTANTS.JWT_SECRET);
       
       // Fetch user from database to ensure they still exist and are active
-      // Include all fields needed for tenant isolation
+      // Select only core columns first, then try to get optional columns if they exist
       const users = await queryMySQL(
-        `SELECT id, user_type, email, is_active, deleted_at, 
-         parent_user_id, role_scope, employee_role, business_name, contact_phone_number
+        `SELECT id, user_type, email, is_active, deleted_at, parent_user_id
          FROM users WHERE id = ?`,
         [decoded.userId]
       );
@@ -57,6 +56,29 @@ async function authenticate(req, res, next) {
         });
       }
       
+      // Try to fetch optional columns if they exist (handle gracefully if they don't)
+      let roleScope = null;
+      let employeeRole = null;
+      let businessName = null;
+      let contactPhoneNumber = null;
+      
+      try {
+        const extendedUsers = await queryMySQL(
+          `SELECT role_scope, employee_role, business_name, contact_phone_number
+           FROM users WHERE id = ?`,
+          [decoded.userId]
+        );
+        if (extendedUsers && extendedUsers.length > 0) {
+          roleScope = extendedUsers[0].role_scope || null;
+          employeeRole = extendedUsers[0].employee_role || null;
+          businessName = extendedUsers[0].business_name || null;
+          contactPhoneNumber = extendedUsers[0].contact_phone_number || null;
+        }
+      } catch (columnError) {
+        // Columns don't exist - that's okay, use defaults
+        logger.debug('Optional user columns not found, using defaults', { userId: decoded.userId });
+      }
+      
       // Attach user to request with all fields needed for tenant isolation
       req.user = {
         id: user.id,
@@ -65,12 +87,12 @@ async function authenticate(req, res, next) {
         userRole: user.user_type, // Use user_type as user_role since column doesn't exist
         parentUserId: user.parent_user_id || null,
         parent_user_id: user.parent_user_id || null, // For backward compatibility
-        roleScope: user.role_scope || null,
-        role_scope: user.role_scope || null, // For backward compatibility
-        employeeRole: user.employee_role || null,
+        roleScope: roleScope,
+        role_scope: roleScope, // For backward compatibility
+        employeeRole: employeeRole,
         email: user.email,
-        businessName: user.business_name || null,
-        contactPhoneNumber: user.contact_phone_number || null
+        businessName: businessName,
+        contactPhoneNumber: contactPhoneNumber
       };
       
       next();
