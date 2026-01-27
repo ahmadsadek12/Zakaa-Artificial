@@ -76,7 +76,13 @@ async function authenticate(req, res, next) {
         }
       } catch (columnError) {
         // Columns don't exist - that's okay, use defaults
-        logger.debug('Optional user columns not found, using defaults', { userId: decoded.userId });
+        // Check if it's a "column doesn't exist" error
+        if (columnError.code === 'ER_BAD_FIELD_ERROR' || columnError.errno === 1054) {
+          logger.debug('Optional user columns not found, using defaults', { userId: decoded.userId });
+        } else {
+          // Re-throw if it's a different error
+          throw columnError;
+        }
       }
       
       // Attach user to request with all fields needed for tenant isolation
