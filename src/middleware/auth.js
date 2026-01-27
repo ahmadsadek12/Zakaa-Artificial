@@ -26,8 +26,11 @@ async function authenticate(req, res, next) {
       const decoded = jwt.verify(token, CONSTANTS.JWT_SECRET);
       
       // Fetch user from database to ensure they still exist and are active
+      // Include all fields needed for tenant isolation
       const users = await queryMySQL(
-        'SELECT id, user_type, email, is_active, deleted_at FROM users WHERE id = ?',
+        `SELECT id, user_type, email, is_active, deleted_at, 
+         parent_user_id, role_scope, employee_role, business_name, contact_phone_number
+         FROM users WHERE id = ?`,
         [decoded.userId]
       );
       
@@ -54,13 +57,20 @@ async function authenticate(req, res, next) {
         });
       }
       
-      // Attach user to request (user_type is sufficient for authorization)
+      // Attach user to request with all fields needed for tenant isolation
       req.user = {
         id: user.id,
         userType: user.user_type,
+        user_type: user.user_type, // For backward compatibility
         userRole: user.user_type, // Use user_type as user_role since column doesn't exist
-        parentUserId: null, // Not in schema
-        email: user.email
+        parentUserId: user.parent_user_id || null,
+        parent_user_id: user.parent_user_id || null, // For backward compatibility
+        roleScope: user.role_scope || null,
+        role_scope: user.role_scope || null, // For backward compatibility
+        employeeRole: user.employee_role || null,
+        email: user.email,
+        businessName: user.business_name || null,
+        contactPhoneNumber: user.contact_phone_number || null
       };
       
       next();
@@ -164,8 +174,12 @@ function verifyRefreshToken(token) {
   return jwt.verify(token, CONSTANTS.JWT_SECRET);
 }
 
+// Alias for backward compatibility
+const authenticateToken = authenticate;
+
 module.exports = {
   authenticate,
+  authenticateToken, // Alias for backward compatibility
   requireUserType,
   generateToken,
   generateRefreshToken,
