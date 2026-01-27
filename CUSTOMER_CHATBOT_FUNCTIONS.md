@@ -7,49 +7,74 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ## 📋 Menu & Items Functions
 
-### 1. `get_menu`
-**Description:** Get the complete menu with categories and items  
+### 1. `get_services` (also known as `get_menu_items`)
+**Description:** Get the complete menu with categories and items. Automatically handles PDFs, images, and text-based menus based on what's available.  
 **When to use:** Customer asks to see the menu, browse items, or what's available  
 **Example phrases:**
 - "Show me the menu"
 - "What do you have?"
 - "Can I see what you offer?"
+- "Menu please"
+- "Send menu"
 
-**Returns:** Full menu organized by categories with item names, descriptions, and prices
+**Returns:** 
+- If menu images exist: Returns menu images (highest priority)
+- If menu PDF exists: Returns menu PDF
+- If menu link exists: Returns menu link
+- Otherwise: Text-based menu with all items organized by categories
+
+**Note:** Bot will NOT call this for greetings or when customer is ordering items directly.
 
 ---
 
-### 2. `get_menu_items_by_category`
-**Description:** Get items from a specific category  
+### 2. `send_service_image` (also known as `send_item_image`)
+**Description:** Send an item image to the customer  
 **Parameters:**
-- `categoryName` (required): Name of the category
+- `itemName` (required): Name of the item
 
-**When to use:** Customer wants to browse a specific category  
+**When to use:** Customer asks to see a picture of an item  
 **Example phrases:**
-- "Show me your desserts"
-- "What pizzas do you have?"
-- "I want to see the drinks menu"
+- "Show me a picture of the burger"
+- "Can I see what the pizza looks like?"
+- "Send me an image of the pasta"
 
-**Returns:** All items in the requested category with details
+**Returns:** Item image URL if available, or error message if not found
 
 ---
 
-### 3. `search_items`
-**Description:** Search for items by name or keyword  
+### 3. `send_menu_pdf`
+**Description:** Send a menu PDF file to the customer  
 **Parameters:**
-- `query` (required): Search term
+- `menuName` (optional): Name of the menu (defaults to first available)
 
-**When to use:** Customer is looking for a specific item or type of item  
+**When to use:** Customer specifically asks for PDF format  
 **Example phrases:**
-- "Do you have cheesecake?"
-- "I'm looking for something with chocolate"
-- "Search for pasta"
+- "Send me the menu PDF"
+- "Download menu as PDF"
+- "Menu PDF file please"
 
-**Returns:** List of matching items with details
+**Returns:** Menu PDF URL if available, or falls back to menu images if PDF not available
+
+**Note:** Only use when customer explicitly asks for PDF. For general menu requests, use `get_services` instead.
 
 ---
 
-### 4. `check_item_availability`
+### 4. `send_menu_images` (also known as `send_menu_image`)
+**Description:** Send menu images to the customer  
+**Parameters:**
+- `menuName` (optional): Name of the menu (defaults to first available)
+
+**When to use:** Customer asks to see menu images or visual menu  
+**Example phrases:**
+- "Show me menu images"
+- "Can I see pictures of the menu?"
+- "Menu photos please"
+
+**Returns:** Array of menu image URLs
+
+---
+
+### 5. `check_item_availability`
 **Description:** Check if a specific item is available and get its details  
 **Parameters:**
 - `itemName` (required): Name of the item to check
@@ -155,7 +180,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ## 🚚 Delivery & Scheduling Functions
 
-### 10. `update_delivery_type`
+### 11. `update_delivery_type`
 **Description:** Change the delivery method  
 **Parameters:**
 - `deliveryType` (required): 'delivery', 'takeaway', or 'on_site'
@@ -176,7 +201,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ---
 
-### 11. `set_delivery_address`
+### 12. `set_delivery_address`
 **Description:** Set or update delivery address  
 **Parameters:**
 - `address` (required): Full delivery address
@@ -191,7 +216,35 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ---
 
-### 12. `set_scheduled_time`
+### 13. `set_google_maps_link`
+**Description:** Set Google Maps link for delivery location  
+**Parameters:**
+- `googleMapsLink` (required): Google Maps URL
+
+**When to use:** Customer provides a Google Maps link for their location  
+**Example phrases:**
+- "Here's my location: [Google Maps link]"
+- "My address on Google Maps: [link]"
+
+**Returns:** Confirmation that Google Maps link was saved
+
+---
+
+### 14. `set_carrier_phone_number`
+**Description:** Set carrier phone number for delivery tracking  
+**Parameters:**
+- `carrierPhoneNumber` (required): Phone number for delivery carrier
+
+**When to use:** Customer provides a phone number for delivery carrier  
+**Example phrases:**
+- "Call me at [number] for delivery"
+- "My delivery number is [number]"
+
+**Returns:** Confirmation that carrier phone number was saved
+
+---
+
+### 15. `set_scheduled_time`
 **Description:** Schedule the order for a specific date and time  
 **Parameters:**
 - `scheduledDate` (required): Date in YYYY-MM-DD format
@@ -212,7 +265,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ---
 
-### 13. `set_order_notes`
+### 16. `set_order_notes`
 **Description:** Add special instructions or notes to the order  
 **Parameters:**
 - `notes` (required): Order notes or instructions
@@ -229,7 +282,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ## ✅ Order Confirmation & Management
 
-### 14. `confirm_order`
+### 17. `confirm_order`
 **Description:** Finalize and submit the order  
 **When to use:** Customer is ready to place their order  
 **Example phrases:**
@@ -250,7 +303,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ---
 
-### 15. `get_my_orders`
+### 18. `get_my_orders`
 **Description:** View all customer's orders  
 **Parameters:**
 - `status` (optional): Filter by status ('pending', 'accepted', 'preparing', 'ready', 'completed', 'cancelled')
@@ -271,7 +324,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ---
 
-### 16. `cancel_scheduled_order`
+### 19. `cancel_scheduled_order`
 **Description:** Cancel an order that's scheduled for later  
 **Parameters:**
 - `orderId` (required): The order ID to cancel
@@ -295,7 +348,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ---
 
-### 17. `cancel_accepted_order`
+### 20. `cancel_accepted_order`
 **Description:** Request cancellation of an accepted/preparing order  
 **Parameters:**
 - `orderId` (required): The order ID to cancel
@@ -316,7 +369,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ## 🪑 Table Reservation Functions
 
-### 18. `get_tables`
+### 21. `get_tables`
 **Description:** View available tables  
 **Parameters:**
 - `reservationDate` (required): Date in YYYY-MM-DD
@@ -332,7 +385,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ---
 
-### 19. `create_table_reservation`
+### 22. `create_table_reservation`
 **Description:** Reserve a table  
 **Parameters:**
 - `reservationDate` (required): Date in YYYY-MM-DD
@@ -370,7 +423,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ---
 
-### 20. `cancel_table_reservation`
+### 23. `cancel_table_reservation`
 **Description:** Cancel a table reservation  
 **Parameters:**
 - `reservationId` (required): The reservation ID to cancel
@@ -384,7 +437,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ---
 
-### 21. `add_item_to_reservation`
+### 24. `add_item_to_reservation`
 **Description:** Pre-order items for the reservation (optional)  
 **Parameters:**
 - `reservationId` (required): The reservation ID
@@ -400,7 +453,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ---
 
-### 22. `remove_item_from_reservation`
+### 25. `remove_item_from_reservation`
 **Description:** Remove pre-ordered items from reservation  
 **Parameters:**
 - `reservationId` (required): The reservation ID
@@ -414,7 +467,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ---
 
-### 23. `get_reservation_items`
+### 26. `get_reservation_items`
 **Description:** View pre-ordered items for a reservation  
 **Parameters:**
 - `reservationId` (required): The reservation ID
@@ -428,9 +481,58 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ---
 
-## 🕐 Business Hours & Availability
+## 🕐 Business Hours & Availability Functions
 
-### 24. Opening Hours Check (Automatic)
+### 27. `get_opening_hours`
+**Description:** Get opening hours for the business  
+**When to use:** Customer asks about opening hours, when you're open, or business hours  
+**Example phrases:**
+- "What are your opening hours?"
+- "When are you open?"
+- "What time do you open and close?"
+
+**Returns:** Complete weekly schedule with opening/closing times for each day, including last order times if configured
+
+---
+
+### 28. `get_closing_time`
+**Description:** Check if restaurant is currently open or closed, and get closing time  
+**When to use:** Customer asks "are you open?", "are you closed?", "when do you close?", or any question about current status  
+**Example phrases:**
+- "Are you open?"
+- "Are you closed?"
+- "When do you close?"
+- "What time do you close today?"
+
+**Returns:** Current status (open/closed) and closing time for today, including last order time if configured
+
+---
+
+### 29. `get_next_opening_time`
+**Description:** Get the next time the business will be open  
+**When to use:** Customer asks "when are you open next?", "when do you open next?", or if currently closed and customer wants to know when they can order  
+**Example phrases:**
+- "When are you open next?"
+- "When do you open next?"
+- "What's the next opening time?"
+
+**Returns:** Next opening time (could be today if not yet open, or tomorrow/next available day)
+
+---
+
+### 30. `is_open_now`
+**Description:** Check if the business is currently open or closed  
+**When to use:** Customer asks "are you open?", "are you closed?", or wants to know current status  
+**Example phrases:**
+- "Are you open right now?"
+- "Are you currently open?"
+- "Is the restaurant open?"
+
+**Returns:** Boolean status (open/closed) with a friendly message
+
+---
+
+### Automatic Opening Hours Check
 **Description:** Automatically checks business hours before processing orders  
 **Business Rules:**
 - Bot knows current business hours
@@ -512,6 +614,56 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ---
 
+## 📊 Complete Function List Summary
+
+**Total Functions: 30**
+
+### Menu & Items (5 functions)
+1. `get_services` / `get_menu_items`
+2. `send_service_image` / `send_item_image`
+3. `send_menu_pdf`
+4. `send_menu_images` / `send_menu_image`
+5. `check_item_availability`
+
+### Cart Management (5 functions)
+6. `add_service_to_cart`
+7. `remove_service_from_cart`
+8. `update_service_quantity`
+9. `get_cart`
+10. `clear_cart`
+
+### Delivery & Scheduling (5 functions)
+11. `update_delivery_type`
+12. `set_delivery_address`
+13. `set_google_maps_link`
+14. `set_carrier_phone_number`
+15. `set_scheduled_time`
+
+### Order Notes (1 function)
+16. `set_order_notes`
+
+### Order Management (4 functions)
+17. `confirm_order`
+18. `get_my_orders`
+19. `cancel_scheduled_order`
+20. `cancel_accepted_order`
+
+### Business Hours (4 functions)
+21. `get_opening_hours`
+22. `get_closing_time`
+23. `get_next_opening_time`
+24. `is_open_now`
+
+### Table Reservations (6 functions)
+25. `get_tables`
+26. `create_table_reservation`
+27. `cancel_table_reservation`
+28. `add_item_to_reservation`
+29. `remove_item_from_reservation`
+30. `get_reservation_items`
+
+---
+
 ## 📊 Feature Availability by Business Type
 
 | Feature | F&B | Retail | Service | Requires Addon |
@@ -520,6 +672,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 | Cart Management | ✅ | ✅ | ✅ | No |
 | Orders | ✅ | ✅ | ✅ | No |
 | Delivery | ✅ | ✅ | ✅ | No |
+| Business Hours | ✅ | ✅ | ✅ | No |
 | Table Reservations | ✅ | ❌ | ❌ | Yes (table_reservations) |
 | Pre-order for Reservations | ✅ | ❌ | ❌ | Yes (table_reservations) |
 
