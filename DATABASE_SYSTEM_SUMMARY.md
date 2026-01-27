@@ -32,6 +32,11 @@
 ### Core Tables
 
 #### 1. **users** (Multi-role table)
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `location_id` → `locations(id)` ON DELETE SET NULL
+  - `parent_user_id` → `users(id)` ON DELETE CASCADE (self-referential)
+- **Unique Constraints**: `email` (UNIQUE)
 - Stores: admins, businesses, branches, customers
 - Key fields:
   - `user_type`: ENUM('admin', 'business', 'branch', 'customer')
@@ -42,6 +47,13 @@
   - `whatsapp_phone_number`, `whatsapp_phone_number_id`, `whatsapp_access_token_encrypted`
 
 #### 2. **items**
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `business_id` → `users(id)` ON DELETE CASCADE
+  - `user_id` → `users(id)` ON DELETE CASCADE
+  - `branch_id` → `branches(id)` ON DELETE SET NULL (DEPRECATED)
+  - `menu_id` → `menus(id)` ON DELETE SET NULL
+  - `category_id` → `service_categories(id)` ON DELETE SET NULL
 - Stores: products, services, menu items
 - Key fields:
   - `item_type`: ENUM('service', 'good')
@@ -54,6 +66,14 @@
   - `category_id`: CHAR(36) - FK to service_categories
 
 #### 3. **orders**
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `customer_id` → `users(id)` ON DELETE RESTRICT
+  - `business_id` → `users(id)` ON DELETE RESTRICT
+  - `user_id` → `users(id)` ON DELETE RESTRICT
+  - `branch_id` → `branches(id)` ON DELETE RESTRICT (DEPRECATED)
+  - `delivery_address_location_id` → `locations(id)` ON DELETE SET NULL
+  - `carrier_id` → `carriers(id)` ON DELETE SET NULL
 - Stores: customer orders
 - Key fields:
   - `status`: ENUM('cart', 'accepted', 'delivering', 'completed', 'rejected')
@@ -66,6 +86,11 @@
   - `source_message_id`: VARCHAR(255)
 
 #### 4. **order_items**
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `order_id` → `orders(id)` ON DELETE CASCADE
+  - `item_id` → `items(id)` ON DELETE RESTRICT
+  - `duration_tier_id` → `item_duration_tiers(id)` ON DELETE SET NULL
 - Stores: items in each order (with price snapshots)
 - Key fields:
   - `price_at_time`: DECIMAL(10,2) - Price when ordered
@@ -73,7 +98,20 @@
   - `booking_date`, `booking_start_time`, `booking_end_time` - For rental items
   - `item_type`: VARCHAR (from items table join)
 
+#### 4a. **order_item_customizations**
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `order_item_id` → `order_items(id)` ON DELETE CASCADE
+  - `customization_id` → `service_customizations(id)` ON DELETE SET NULL
+- Stores: Customizations/addons selected for each order item
+- Key fields:
+  - `customization_name`: VARCHAR(255)
+  - `price_adjustment`: DECIMAL(10,2)
+
 #### 5. **menus**
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `business_id` → `users(id)` ON DELETE CASCADE
 - Stores: menu collections
 - Key fields:
   - `menu_image_urls`: JSON - Array of image URLs
@@ -82,6 +120,12 @@
   - `sort_order`: INT
 
 #### 6. **tables**
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `business_id` → `users(id)` ON DELETE CASCADE
+  - `owner_user_id` → `users(id)` ON DELETE CASCADE
+  - `user_id` → `users(id)` ON DELETE CASCADE (legacy)
+- **Unique Constraints**: `unique_owner_table_number` (owner_user_id, table_number)
 - Stores: Physical tables for F&B businesses
 - Key fields:
   - `business_id`: CHAR(36)
@@ -92,6 +136,12 @@
   - `is_active`: BOOLEAN
 
 #### 7. **reservations**
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `user_id` → `users(id)` ON DELETE SET NULL
+  - `business_user_id` → `users(id)` ON DELETE CASCADE
+  - `owner_user_id` → `users(id)` ON DELETE SET NULL
+  - `table_id` → `tables(id)` ON DELETE SET NULL
 - Stores: Table reservations and appointments
 - Key fields:
   - `reservation_type`: ENUM('table', 'appointment', 'other')
@@ -101,6 +151,10 @@
   - `completed_at`, `cancelled_at`: TIMESTAMP
 
 #### 8. **reservation_items**
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `reservation_id` → `reservations(id)` ON DELETE CASCADE
+  - `item_id` → `items(id)` ON DELETE RESTRICT
 - Stores: Items pre-ordered with reservations
 - Key fields:
   - `reservation_id`: CHAR(36) - FK to reservations
@@ -112,6 +166,8 @@
 ### Add-on System Tables
 
 #### 9. **addons**
+- **Primary Key**: `id` (CHAR(36))
+- **Unique Constraints**: `addon_key` (UNIQUE)
 - Stores: Available add-ons
 - Key fields:
   - `addon_key`: VARCHAR(50) UNIQUE - e.g., 'base_bot', 'analytics_free', 'table_reservations'
@@ -120,6 +176,11 @@
   - `is_active`: BOOLEAN
 
 #### 10. **business_addons**
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `business_id` → `users(id)` ON DELETE CASCADE
+  - `addon_id` → `addons(id)` ON DELETE CASCADE
+- **Unique Constraints**: `uniq_business_addon` (business_id, addon_id)
 - Stores: Business add-on activations
 - Key fields:
   - `business_id`: CHAR(36) - FK to users
@@ -131,6 +192,12 @@
 ### Analytics & Tracking Tables
 
 #### 11. **carriers**
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `user_id` → `users(id)` ON DELETE CASCADE
+  - `business_id` → `users(id)` ON DELETE CASCADE
+  - `branch_id` → `users(id)` ON DELETE CASCADE
+- **Unique Constraints**: `unique_carrier_per_user` (user_id, deleted_at)
 - Stores: Delivery carriers
 - Key fields:
   - `user_id`: CHAR(36) - Business or branch
@@ -140,6 +207,9 @@
   - `is_active`: BOOLEAN
 
 #### 12. **service_categories**
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `business_id` → `users(id)` ON DELETE CASCADE
 - Stores: Item/service categories
 - Key fields:
   - `business_id`: CHAR(36)
@@ -148,6 +218,9 @@
   - `is_active`: BOOLEAN
 
 #### 13. **service_customizations**
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `item_id` → `items(id)` ON DELETE CASCADE
 - Stores: Item customization options
 - Key fields:
   - `item_id`: CHAR(36) - FK to items
@@ -156,6 +229,9 @@
   - `is_active`: BOOLEAN
 
 #### 14. **order_status_history**
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `order_id` → `orders(id)` ON DELETE CASCADE
 - Stores: Order status change history
 - Key fields:
   - `order_id`: CHAR(36)
@@ -166,29 +242,34 @@
 ### Supporting Tables
 
 #### 15. **locations**
+- **Primary Key**: `id` (CHAR(36))
 - Stores: Address information
 - Key fields:
   - `city`, `street`, `building`, `floor`: VARCHAR
   - `notes`: TEXT
 
 #### 16. **opening_hours**
+- **Primary Key**: `id` (CHAR(36))
+- **Unique Constraints**: `unique_owner_day` (owner_type, owner_id, day_of_week)
 - Stores: Business/branch opening hours
 - Key fields:
   - `owner_type`: ENUM('business', 'branch')
-  - `owner_id`: CHAR(36)
+  - `owner_id`: CHAR(36) (references users.id, but no FK constraint)
   - `day_of_week`: ENUM('monday', ..., 'sunday')
   - `open_time`, `close_time`: TIME
   - `is_closed`: BOOLEAN
 
 #### 17. **policies**
+- **Primary Key**: `id` (CHAR(36))
 - Stores: Business policies
 - Key fields:
   - `owner_type`: ENUM('business', 'branch')
-  - `owner_id`: CHAR(36)
+  - `owner_id`: CHAR(36) (references users.id, but no FK constraint)
   - `policy_type`: ENUM('delivery', 'refund', 'cancellation', 'custom')
   - `title`, `description`: VARCHAR/TEXT
 
 #### 18. **subscriptions**
+- **Primary Key**: `id` (CHAR(36))
 - Stores: Subscription plans
 - Key fields:
   - `name`: VARCHAR(255)
@@ -197,6 +278,10 @@
   - `sale`: DECIMAL(5,2) - Sale percentage
 
 #### 19. **user_subscriptions**
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `user_id` → `users(id)` ON DELETE CASCADE
+  - `subscription_id` → `subscriptions(id)` ON DELETE RESTRICT
 - Stores: User-subscription relationships (many-to-many)
 - Key fields:
   - `user_id`: CHAR(36)
@@ -205,6 +290,10 @@
   - `started_at`, `ends_at`: TIMESTAMP
 
 #### 20. **bot_integrations**
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `owner_id` → `users(id)` ON DELETE CASCADE
+- **Unique Constraints**: `uniq_owner_platform` (owner_type, owner_id, platform)
 - Stores: Bot platform integrations
 - Key fields:
   - `owner_type`: ENUM('business', 'branch')
@@ -216,12 +305,18 @@
   - `phone_number`, `phone_number_id`, `page_id`, `app_id`: VARCHAR
 
 #### 21. **item_ingredients**
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `item_id` → `items(id)` ON DELETE CASCADE
 - Stores: Item ingredients (optional normalization)
 - Key fields:
   - `item_id`: CHAR(36)
   - `ingredient_name`: VARCHAR(255)
 
 #### 22. **item_duration_tiers**
+- **Primary Key**: `id` (CHAR(36))
+- **Foreign Keys**:
+  - `item_id` → `items(id)` ON DELETE CASCADE
 - Stores: Time-based pricing tiers for rental items
 - Key fields:
   - `item_id`: CHAR(36)
