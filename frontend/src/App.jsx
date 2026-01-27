@@ -15,6 +15,8 @@ import Analytics from './pages/Analytics'
 import Addons from './pages/Addons'
 import AddonsManagement from './pages/AddonsManagement'
 import TableReservations from './pages/TableReservations'
+import Tickets from './pages/Tickets'
+import ChatSessions from './pages/ChatSessions'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminBusinesses from './pages/admin/AdminBusinesses'
 import AdminBusinessDetail from './pages/admin/AdminBusinessDetail'
@@ -39,6 +41,8 @@ function App() {
           <Route path="/calendar" element={<PrivateRoute><Calendar /></PrivateRoute>} />
           <Route path="/analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
           <Route path="/table-reservations" element={<PrivateRoute><TableReservations /></PrivateRoute>} />
+          <Route path="/tickets" element={<PrivateRoute><Tickets /></PrivateRoute>} />
+          <Route path="/chat-sessions" element={<PrivateRoute><ChatSessions /></PrivateRoute>} />
           <Route path="/addons" element={<PrivateRoute><Addons /></PrivateRoute>} />
           <Route path="/addons-management" element={<PrivateRoute><AddonsManagement /></PrivateRoute>} />
           <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />

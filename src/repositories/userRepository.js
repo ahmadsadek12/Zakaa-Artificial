@@ -436,7 +436,11 @@ async function createBranch(parentUserId, branchData) {
  */
 async function isBranch(userId) {
   const users = await queryMySQL(
-    `SELECT id FROM users WHERE id = ? AND user_type = 'branch' AND is_active = true AND deleted_at IS NULL`,
+    `SELECT id FROM users 
+     WHERE id = ? 
+       AND (role_scope = 'branch_operator' OR user_type = 'branch')
+       AND is_active = true 
+       AND deleted_at IS NULL`,
     [userId]
   );
   return users && users.length > 0;
@@ -447,7 +451,11 @@ async function isBranch(userId) {
  */
 async function getParentBusiness(userId) {
   const users = await queryMySQL(
-    `SELECT parent_user_id FROM users WHERE id = ? AND user_type = 'branch' AND is_active = true AND deleted_at IS NULL`,
+    `SELECT parent_user_id FROM users 
+     WHERE id = ? 
+       AND (role_scope = 'branch_operator' OR user_type = 'branch')
+       AND is_active = true 
+       AND deleted_at IS NULL`,
     [userId]
   );
   if (!users || users.length === 0 || !users[0].parent_user_id) {
@@ -494,6 +502,54 @@ async function updateContractFile(businessId, contractFileUrl) {
   return await findById(businessId);
 }
 
+/**
+ * Check if user is an employee
+ * @param {string} userId - User ID
+ * @returns {Promise<boolean>} True if user is an employee
+ */
+async function isEmployee(userId) {
+  const users = await queryMySQL(
+    `SELECT id FROM users 
+     WHERE id = ? 
+       AND (role_scope = 'employee' OR (employee_role IS NOT NULL AND parent_user_id IS NOT NULL))
+       AND is_active = true 
+       AND deleted_at IS NULL`,
+    [userId]
+  );
+  return users && users.length > 0;
+}
+
+/**
+ * Get employee's parent business ID
+ * @param {string} employeeId - Employee user ID
+ * @returns {Promise<string|null>} Parent business ID or null
+ */
+async function getEmployeeBusinessId(employeeId) {
+  const users = await queryMySQL(
+    `SELECT parent_user_id FROM users 
+     WHERE id = ? 
+       AND (role_scope = 'employee' OR (employee_role IS NOT NULL AND parent_user_id IS NOT NULL))
+       AND is_active = true 
+       AND deleted_at IS NULL`,
+    [employeeId]
+  );
+  if (!users || users.length === 0 || !users[0].parent_user_id) {
+    return null;
+  }
+  return users[0].parent_user_id;
+}
+
+/**
+ * Check if employee can access a business
+ * @param {string} employeeId - Employee user ID
+ * @param {string} businessId - Business ID to check
+ * @returns {Promise<boolean>} True if employee can access the business
+ */
+async function canEmployeeAccessBusiness(employeeId, businessId) {
+  const employeeBusinessId = await getEmployeeBusinessId(employeeId);
+  return employeeBusinessId === businessId;
+}
+
 module.exports = {
   findById,
   findByEmail,
@@ -511,5 +567,8 @@ module.exports = {
   isBranch,
   getParentBusiness,
   updateContractStatus,
-  updateContractFile
+  updateContractFile,
+  isEmployee,
+  getEmployeeBusinessId,
+  canEmployeeAccessBusiness
 };

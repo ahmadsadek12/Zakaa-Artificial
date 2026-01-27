@@ -16,7 +16,9 @@ import {
   Shield,
   Building2,
   Settings2,
-  Table
+  Table,
+  MessageSquare,
+  MessageCircle
 } from 'lucide-react'
 import { useState } from 'react'
 import { getTerminology, getNavTerminology } from '../utils/terminology'
@@ -55,6 +57,8 @@ export default function Layout({ children }) {
     { path: '/calendar', icon: Calendar, label: 'Calendar' },
     { path: '/analytics', icon: BarChart3, label: 'Insights' },
     { path: '/table-reservations', icon: Table, label: 'Table Reservations' },
+    { path: '/tickets', icon: MessageSquare, label: 'Support Tickets' },
+    { path: '/chat-sessions', icon: MessageCircle, label: 'Chat Sessions' },
     { path: '/settings', icon: Settings, label: 'Settings' },
   ]
 

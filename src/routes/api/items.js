@@ -202,8 +202,10 @@ router.post('/', upload.single('itemImage'), handleMulterError, [
   // Get business type for conditional validation
   const { queryMySQL } = require('../../config/database');
   const [businessUsers] = await queryMySQL(
-    'SELECT business_type FROM users WHERE id = ? AND user_type = ?',
-    [req.businessId, 'business']
+    `SELECT business_type FROM users 
+     WHERE id = ? 
+       AND (role_scope = 'business_owner' OR user_type = 'business')`,
+    [req.businessId]
   );
   const businessType = businessUsers && businessUsers.length > 0 
     ? businessUsers[0].business_type?.toLowerCase() 
@@ -381,8 +383,10 @@ router.put('/:id', requireOwnership('items'), upload.single('itemImage'), handle
   // Get business type for conditional validation
   const { queryMySQL } = require('../../config/database');
   const [businessUsers] = await queryMySQL(
-    'SELECT business_type FROM users WHERE id = ? AND user_type = ?',
-    [req.businessId, 'business']
+    `SELECT business_type FROM users 
+     WHERE id = ? 
+       AND (role_scope = 'business_owner' OR user_type = 'business')`,
+    [req.businessId]
   );
   const businessType = businessUsers && businessUsers.length > 0 
     ? businessUsers[0].business_type?.toLowerCase() 

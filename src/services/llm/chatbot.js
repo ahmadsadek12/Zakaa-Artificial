@@ -12,6 +12,8 @@ const orderService = require('../order/orderService');
 const { getMongoCollection } = require('../../config/database');
 const { getAvailableFunctions, executeFunction } = require('./chatbotFunctions');
 const rateLimiter = require('../../utils/rateLimiter');
+const sessionManager = require('./sessionManager');
+const botActionLogger = require('./botActionLogger');
 
 // Create OpenAI client - will be reinitialized if API key changes
 let openai = new OpenAI({
@@ -235,6 +237,20 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
       reinitializeOpenAIClient();
     }
     
+    // Get or create chat session
+    const platform = customerPhoneNumber.startsWith('telegram:') ? 'telegram' : 
+                     customerPhoneNumber.startsWith('instagram:') ? 'instagram' :
+                     customerPhoneNumber.startsWith('facebook:') ? 'facebook' : 'whatsapp';
+    let session = await sessionManager.getOrCreateSession(
+      business.id,
+      customerPhoneNumber,
+      platform,
+      'support' // Default mode, will be updated based on delivery type
+    );
+    
+    // Log intent detection
+    await botActionLogger.logIntent(session.id, 'message_received', 1.0);
+    
     // Get conversation history first to check if this is first message
     // Pass current message to detect if customer requested fresh start
     const messageHistory = await getConversationHistory(
@@ -394,7 +410,7 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
     let orderId = null;
     
     // Handle function calls (can be multiple)
-    const context = { business, branch, customerPhoneNumber, language };
+    const context = { business, branch, customerPhoneNumber, language, session };
     
     // Keep processing until we get a final text response (max 5 iterations to prevent infinite loops)
     let iterations = 0;
@@ -419,6 +435,9 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
           // Execute the function
           const result = await executeFunction(functionName, functionArgs, context);
           
+          // Log function call
+          await botActionLogger.logFunctionCall(session.id, functionName, functionArgs, result);
+          
           // Handle confirm_order specially
           if (functionName === 'confirm_order' && result.success && result.readyToConfirm) {
             // Process order creation
@@ -437,12 +456,79 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
               orderId = orderResult.orderId;
               result.orderNumber = orderResult.orderNumber || orderId.substring(0, 8).toUpperCase();
               result.message = `Order confirmed! Your order #${result.orderNumber} has been placed.`;
+              
+              // Lock session after order confirmation
+              await sessionManager.lockSession(session.id);
+              
+              // Update session step
+              await sessionManager.updateSessionStep(session.id, 'order_confirmed', {
+                orderId: orderId,
+                orderNumber: result.orderNumber
+              });
             }
           }
           
           // Update cart if function modified it
           if (result.cart) {
             updatedCart = result.cart;
+          }
+          
+          // Update session step and draft payload based on function called
+          let newStep = session.step || 'start';
+          let draftPayload = {};
+          
+          // Try to parse existing draft_payload
+          if (session.draft_payload) {
+            try {
+              draftPayload = typeof session.draft_payload === 'string'
+                ? JSON.parse(session.draft_payload)
+                : session.draft_payload;
+            } catch (e) {
+              draftPayload = {};
+            }
+          }
+          
+          // Update step and payload based on function
+          if (functionName === 'detect_intent_and_set_mode') {
+            newStep = 'intent_detected';
+          } else if (functionName === 'switch_conversation_mode') {
+            newStep = 'mode_switched';
+          } else if (functionName === 'add_service_to_cart') {
+            newStep = 'collecting_items';
+            if (updatedCart) draftPayload.cart = updatedCart;
+          } else if (functionName === 'set_delivery_address') {
+            newStep = 'awaiting_address';
+            if (updatedCart) draftPayload.cart = updatedCart;
+          } else if (functionName === 'set_scheduled_time') {
+            newStep = 'scheduled';
+            if (updatedCart) draftPayload.cart = updatedCart;
+          } else if (functionName === 'update_delivery_type') {
+            newStep = 'selecting_delivery_type';
+            if (updatedCart) draftPayload.cart = updatedCart;
+          } else if (functionName === 'set_order_notes') {
+            newStep = 'adding_notes';
+            if (updatedCart) draftPayload.cart = updatedCart;
+          } else if (functionName === 'create_table_reservation') {
+            newStep = 'reservation_created';
+            if (result.reservation) draftPayload.reservation = result.reservation;
+          } else if (functionName === 'create_support_ticket') {
+            newStep = 'ticket_created';
+            if (result.ticket) draftPayload.ticket = result.ticket;
+          } else if (functionName === 'request_human_assistance') {
+            newStep = 'handover_to_employee';
+          } else if (updatedCart) {
+            // For other cart-modifying functions, update cart in payload
+            draftPayload.cart = updatedCart;
+          }
+          
+          // Update session step and draft payload
+          if (newStep !== session.step || Object.keys(draftPayload).length > 0) {
+            await sessionManager.updateSessionStep(session.id, newStep, draftPayload);
+          }
+          
+          // Log validation failures
+          if (!result.success && result.error) {
+            await botActionLogger.logValidationFailure(session.id, functionName, result.error);
           }
           
           // Track image URLs from function results

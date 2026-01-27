@@ -202,7 +202,9 @@ async function checkTableReservationsEligible(businessId) {
     
     // Check business type
     const business = await queryMySQL(
-      `SELECT business_type FROM users WHERE id = ? AND user_type = 'business'`,
+      `SELECT business_type FROM users 
+       WHERE id = ? 
+         AND (role_scope = 'business_owner' OR user_type = 'business')`,
       [businessId]
     );
     
@@ -302,17 +304,29 @@ async function executeReservationFunction(functionName, args, context) {
     case 'create_table_reservation': {
       const { reservationDate, reservationTime, numberOfGuests, customerName, notes, tableNumber, positionPreference } = args;
       
+      const validationErrors = [];
+      
       if (!reservationDate || !reservationTime) {
-        return {
-          success: false,
-          error: 'Reservation date and time are required.'
-        };
+        validationErrors.push({
+          field: 'reservationDateTime',
+          message: 'Reservation date and time are required.',
+          code: 'MISSING_DATE_TIME'
+        });
       }
       
       if (!customerName) {
+        validationErrors.push({
+          field: 'customerName',
+          message: 'Customer name is required for table reservations. Please provide your name.',
+          code: 'MISSING_CUSTOMER_NAME'
+        });
+      }
+      
+      if (validationErrors.length > 0) {
         return {
           success: false,
-          error: 'Customer name is required for table reservations. Please provide your name.'
+          error: validationErrors.map(e => e.message).join(' '),
+          validationErrors: validationErrors
         };
       }
       

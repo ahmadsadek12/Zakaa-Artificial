@@ -194,7 +194,12 @@ async function executeCartFunction(functionName, args, context) {
         if (items.length === 0) {
           return {
             success: false,
-            error: `Item "${itemName}" not found. Please check the menu for available items.`
+            error: `Item "${itemName}" not found. Please check the menu for available items.`,
+            validationErrors: [{
+              field: 'itemName',
+              message: `Item "${itemName}" not found. Please check the menu for available items.`,
+              code: 'ITEM_NOT_FOUND'
+            }]
           };
         }
         
@@ -254,7 +259,12 @@ async function executeCartFunction(functionName, args, context) {
       if (!cart.items || cart.items.length === 0) {
         return {
           success: false,
-          error: `Your cart is empty. There's nothing to remove.`
+          error: `Your cart is empty. There's nothing to remove.`,
+          validationErrors: [{
+            field: 'cart',
+            message: 'Your cart is empty. There\'s nothing to remove.',
+            code: 'EMPTY_CART'
+          }]
         };
       }
       

@@ -106,7 +106,9 @@ router.get('/google/oauth/callback', asyncHandler(async (req, res) => {
     const businessId = state || req.businessId;
     
     // Verify business ID matches authenticated user
-    if (businessId !== req.businessId && req.user.user_type !== CONSTANTS.USER_TYPES.ADMIN) {
+    const roleScope = req.user?.roleScope || req.user?.role_scope;
+    const userType = req.user?.userType || req.user?.user_type;
+    if (businessId !== req.businessId && roleScope !== 'platform_admin' && userType !== CONSTANTS.USER_TYPES.ADMIN) {
       return res.status(403).json({
         success: false,
         error: { message: 'Unauthorized' }

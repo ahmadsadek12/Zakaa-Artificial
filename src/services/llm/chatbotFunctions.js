@@ -12,6 +12,9 @@ const menuFunctions = require('./functions/menuFunctions');
 const businessHoursFunctions = require('./functions/businessHoursFunctions');
 const reservationFunctions = require('./functions/reservationFunctions');
 const orderNotesFunction = require('./functions/orderNotesFunction');
+const sessionFunctions = require('./functions/sessionFunctions');
+const supportFunctions = require('./functions/supportFunctions');
+const validationFunctions = require('./functions/validationFunctions');
 
 /**
  * Get available functions/tools for OpenAI
@@ -19,13 +22,16 @@ const orderNotesFunction = require('./functions/orderNotesFunction');
  */
 function getAvailableFunctions() {
   return [
+    ...sessionFunctions.getSessionFunctionDefinitions(),
     ...cartFunctions.getCartFunctionDefinitions(),
     ...deliveryFunctions.getDeliveryFunctionDefinitions(),
     ...orderFunctions.getOrderFunctionDefinitions(),
     ...menuFunctions.getMenuFunctionDefinitions(),
     ...businessHoursFunctions.getBusinessHoursFunctionDefinitions(),
     ...reservationFunctions.getReservationFunctionDefinitions(),
-    ...orderNotesFunction.getOrderNotesFunctionDefinitions()
+    ...orderNotesFunction.getOrderNotesFunctionDefinitions(),
+    ...supportFunctions.getSupportFunctionDefinitions(),
+    ...validationFunctions.getValidationFunctionDefinitions()
   ];
 }
 
@@ -39,14 +45,19 @@ async function executeFunction(functionName, args, context) {
   try {
     // Try each module handler in order
     // Each handler returns null if it doesn't handle the function (including aliases)
+    // Session functions first (for mode/intent detection)
+    // Validation functions before execution functions
     const handlers = [
+      sessionFunctions.executeSessionFunction,
+      validationFunctions.executeValidationFunction,
       cartFunctions.executeCartFunction,
       orderFunctions.executeOrderFunction,
       deliveryFunctions.executeDeliveryFunction,
       menuFunctions.executeMenuFunction,
       businessHoursFunctions.executeBusinessHoursFunction,
       reservationFunctions.executeReservationFunction,
-      orderNotesFunction.executeOrderNotesFunction
+      orderNotesFunction.executeOrderNotesFunction,
+      supportFunctions.executeSupportFunction
     ];
     
     for (const handler of handlers) {

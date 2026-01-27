@@ -396,6 +396,18 @@ async function processChatbotResponse({
           // Determine order source (check if customerPhoneNumber is telegram: format)
           const orderSource = customerPhoneNumber.startsWith('telegram:') ? 'telegram' : 'whatsapp';
           
+          // Calculate bot confidence score (simple heuristic)
+          // Higher confidence if: delivery type set, address provided (if delivery), scheduled time set (if needed)
+          let confidenceScore = 0.5; // Base confidence
+          if (cart.delivery_type) confidenceScore += 0.2;
+          if (cart.delivery_type === 'delivery' && (cart.location_address || cart.notes?.includes('Delivery Address:'))) {
+            confidenceScore += 0.2;
+          }
+          if (cart.scheduled_for || !cart.scheduled_for) confidenceScore += 0.1; // Either scheduled or immediate is fine
+          confidenceScore = Math.min(confidenceScore, 1.0); // Cap at 1.0
+          
+          const requiresReview = confidenceScore < 0.7;
+          
           // Update order: remove cart marker (notes='__cart__'), set status='accepted'
           // Set all customer info and delivery details
           await connection.query(`
@@ -415,6 +427,9 @@ async function processChatbotResponse({
               scheduled_for = COALESCE(?, scheduled_for),
               delivery_type = COALESCE(?, delivery_type),
               delivery_price = COALESCE(?, delivery_price),
+              created_via = 'bot',
+              bot_confidence_score = ?,
+              requires_human_review = ?,
               updated_at = CURRENT_TIMESTAMP
             WHERE id = ? AND status = 'cart' AND (notes = '__cart__' OR notes LIKE '__cart__%')
           `, [
@@ -426,6 +441,8 @@ async function processChatbotResponse({
             cart.scheduled_for ? new Date(cart.scheduled_for) : null,
             cart.delivery_type || null, // Use cart delivery_type (which defaults based on business type)
             cart.delivery_price || 0,
+            confidenceScore,
+            requiresReview,
             cart.id
           ]);
           

@@ -485,7 +485,7 @@ async function resolveBusinessFromTelegram(businessId) {
     // Find the business by ID
     const business = await userRepository.findById(businessId);
     
-    if (business && business.user_type === 'business') {
+    if (business && (business.role_scope === 'business_owner' || business.user_type === 'business')) {
       logger.info('Resolved business from Telegram webhook', {
         businessId: business.id,
         businessName: business.business_name || business.email

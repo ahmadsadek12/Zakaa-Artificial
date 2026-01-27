@@ -20,7 +20,12 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
   if (!actualBranchId || actualBranchId === businessId) {
     try {
       const branches = await queryMySQL(
-        `SELECT id FROM users WHERE parent_user_id = ? AND user_type = 'branch' AND is_active = true AND deleted_at IS NULL LIMIT 1`,
+        `SELECT id FROM users 
+         WHERE parent_user_id = ? 
+           AND (role_scope = 'branch_operator' OR user_type = 'branch')
+           AND is_active = true 
+           AND deleted_at IS NULL 
+         LIMIT 1`,
         [businessId]
       );
       if (branches.length > 0) {
@@ -146,7 +151,12 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
     if (!insertBranchId || insertBranchId === businessId) {
       // Use connection.query instead of queryMySQL when inside a transaction
       const [branchUsers] = await connection.query(
-        `SELECT id FROM users WHERE parent_user_id = ? AND user_type = 'branch' AND is_active = true AND deleted_at IS NULL LIMIT 1`,
+        `SELECT id FROM users 
+         WHERE parent_user_id = ? 
+           AND (role_scope = 'branch_operator' OR user_type = 'branch')
+           AND is_active = true 
+           AND deleted_at IS NULL 
+         LIMIT 1`,
         [businessId]
       );
       if (branchUsers.length > 0) {

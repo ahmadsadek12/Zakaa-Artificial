@@ -319,15 +319,32 @@ async function create(reservationData) {
     }
   }
   
+  // Set party_size, start_time, end_time
+  const partySize = reservationData.partySize || reservationData.numberOfGuests || 1;
+  const startTime = reservationData.startTime || reservationData.reservationTime;
+  // Calculate end_time (default 2 hours if not provided)
+  let endTime = reservationData.endTime;
+  if (!endTime && startTime) {
+    // Add 2 hours to start_time
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const endHours = (hours + 2) % 24;
+    endTime = `${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+  }
+  
   // Prevent double-booking: check for existing confirmed reservation at same table/date/time
-  if (assignedTableId && reservationData.reservationDate && reservationData.reservationTime) {
-    const existing = await findByTableAndDateTime(
-      assignedTableId,
-      reservationData.reservationDate,
-      reservationData.reservationTime
-    );
+  if (assignedTableId && reservationData.reservationDate && startTime && endTime) {
+    // Check using new start_time and end_time fields
+    const existing = await queryMySQL(`
+      SELECT id FROM reservations
+      WHERE table_id = ?
+        AND reservation_date = ?
+        AND start_time = ?
+        AND end_time = ?
+        AND status != 'cancelled'
+      LIMIT 1
+    `, [assignedTableId, reservationData.reservationDate, startTime, endTime]);
     
-    if (existing) {
+    if (existing && existing.length > 0) {
       throw new Error('Table is already reserved at this date and time');
     }
   }
@@ -353,10 +370,12 @@ async function create(reservationData) {
       INSERT INTO reservations (
         id, user_id, business_user_id, owner_user_id, table_id, item_id,
         customer_phone_number, customer_name,
-        reservation_date, reservation_time, number_of_guests, notes, status,
+        reservation_date, reservation_time, number_of_guests, party_size,
+        start_time, end_time, notes, status,
         reservation_kind, reservation_type, start_at, source, platform,
-        min_seats_snapshot, max_seats_snapshot, position_snapshot
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        min_seats_snapshot, max_seats_snapshot, position_snapshot,
+        created_via, bot_confidence_score, requires_human_review
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       reservationId,
       reservationData.userId || null,
@@ -369,6 +388,9 @@ async function create(reservationData) {
       reservationData.reservationDate,
       reservationData.reservationTime,
       reservationData.numberOfGuests || null,
+      partySize,
+      startTime,
+      endTime,
       reservationData.notes || null,
       reservationData.status || 'confirmed',
       reservationData.reservationKind || 'table',
@@ -378,7 +400,10 @@ async function create(reservationData) {
       platform,
       minSeatsSnapshot,
       maxSeatsSnapshot,
-      positionSnapshot
+      positionSnapshot,
+      reservationData.createdVia || 'bot',
+      reservationData.botConfidenceScore || null,
+      reservationData.requiresHumanReview || false
     ]);
   } else {
     // Insert without item_id column
@@ -386,10 +411,12 @@ async function create(reservationData) {
       INSERT INTO reservations (
         id, user_id, business_user_id, owner_user_id, table_id,
         customer_phone_number, customer_name,
-        reservation_date, reservation_time, number_of_guests, notes, status,
+        reservation_date, reservation_time, number_of_guests, party_size,
+        start_time, end_time, notes, status,
         reservation_kind, reservation_type, start_at, source, platform,
-        min_seats_snapshot, max_seats_snapshot, position_snapshot
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        min_seats_snapshot, max_seats_snapshot, position_snapshot,
+        created_via, bot_confidence_score, requires_human_review
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       reservationId,
       reservationData.userId || null,
@@ -401,6 +428,9 @@ async function create(reservationData) {
       reservationData.reservationDate,
       reservationData.reservationTime,
       reservationData.numberOfGuests || null,
+      partySize,
+      startTime,
+      endTime,
       reservationData.notes || null,
       reservationData.status || 'confirmed',
       reservationData.reservationKind || 'table',
@@ -410,7 +440,10 @@ async function create(reservationData) {
       platform,
       minSeatsSnapshot,
       maxSeatsSnapshot,
-      positionSnapshot
+      positionSnapshot,
+      reservationData.createdVia || 'bot',
+      reservationData.botConfidenceScore || null,
+      reservationData.requiresHumanReview || false
     ]);
   }
   

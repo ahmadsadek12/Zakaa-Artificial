@@ -164,8 +164,9 @@ async function create(orderData) {
         language_used, order_source, delivery_type, status,
         subtotal, delivery_price, total, notes, scheduled_for,
         payment_method, payment_status, delivery_address_location_id, customer_name,
-        request_type, first_response_at, source_message_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        request_type, first_response_at, source_message_id,
+        linked_reservation_id, created_via, bot_confidence_score, requires_human_review
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       orderId,
       orderData.businessId,
@@ -187,7 +188,11 @@ async function create(orderData) {
       orderData.customerName || null,
       requestType,
       orderData.firstResponseAt || null,
-      orderData.sourceMessageId || null
+      orderData.sourceMessageId || null,
+      orderData.linkedReservationId || null,
+      orderData.createdVia || 'bot',
+      orderData.botConfidenceScore || null,
+      orderData.requiresHumanReview || false
     ]);
     
     // Create order items and increment times_ordered

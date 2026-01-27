@@ -98,16 +98,6 @@
   - `booking_date`, `booking_start_time`, `booking_end_time` - For rental items
   - `item_type`: VARCHAR (from items table join)
 
-#### 4a. **order_item_customizations**
-- **Primary Key**: `id` (CHAR(36))
-- **Foreign Keys**:
-  - `order_item_id` → `order_items(id)` ON DELETE CASCADE
-  - `customization_id` → `service_customizations(id)` ON DELETE SET NULL
-- Stores: Customizations/addons selected for each order item
-- Key fields:
-  - `customization_name`: VARCHAR(255)
-  - `price_adjustment`: DECIMAL(10,2)
-
 #### 5. **menus**
 - **Primary Key**: `id` (CHAR(36))
 - **Foreign Keys**:

@@ -11,27 +11,63 @@ const logger = require('../utils/logger');
  */
 async function tenantIsolation(req, res, next) {
   try {
+    // Check role_scope first, fallback to user_type for backward compatibility
+    const roleScope = req.user.roleScope || req.user.role_scope;
+    const userType = req.user.userType || req.user.user_type;
+    
     // Admins can access everything
-    if (req.user.userType === 'admin') {
+    if (roleScope === 'platform_admin' || userType === 'admin') {
       req.businessId = null; // Admins can access all businesses
       req.userId = null;
       req.isBusinessUser = false;
       req.isBranchUser = false;
+      req.isEmployee = false;
+      return next();
+    }
+    
+    // Employees - can only access their parent business data
+    if (roleScope === 'employee' || (req.user.employeeRole && req.user.parentUserId)) {
+      if (!req.user.parentUserId && !req.user.parent_user_id) {
+        return res.status(403).json({
+          success: false,
+          error: { message: 'Employee must be associated with a business' }
+        });
+      }
+      const parentId = req.user.parentUserId || req.user.parent_user_id;
+      req.businessId = parentId;
+      req.userId = req.user.id;
+      req.parentBusinessId = parentId;
+      req.isBusinessUser = false;
+      req.isBranchUser = false;
+      req.isEmployee = true;
       return next();
     }
     
     // Business users - can see their own data and their branches' data
-    if (req.user.userType === 'business') {
+    if (roleScope === 'business_owner' || userType === 'business') {
       req.businessId = req.user.id;
       req.userId = req.user.id; // For backward compatibility
       req.parentBusinessId = req.user.id; // For businesses, their own ID is also their parent ID
       req.isBusinessUser = true;
       req.isBranchUser = false;
+      req.isEmployee = false;
+      return next();
+    }
+    
+    // Branch operators
+    if (roleScope === 'branch_operator' || userType === 'branch') {
+      const parentId = req.user.parentUserId || req.user.parent_user_id || req.user.id;
+      req.businessId = parentId;
+      req.userId = req.user.id;
+      req.parentBusinessId = parentId;
+      req.isBusinessUser = false;
+      req.isBranchUser = true;
+      req.isEmployee = false;
       return next();
     }
     
     // Customers shouldn't access dashboard routes
-    if (req.user.userType === 'customer') {
+    if (roleScope === 'customer' || userType === 'customer') {
       return res.status(403).json({
         success: false,
         error: { message: 'Customers cannot access this resource' }
@@ -44,6 +80,7 @@ async function tenantIsolation(req, res, next) {
     req.parentBusinessId = req.user.id;
     req.isBusinessUser = true;
     req.isBranchUser = false;
+    req.isEmployee = false;
     
     next();
   } catch (error) {
@@ -139,7 +176,9 @@ async function verifyOwnership(tableName, resourceId, businessId, userId = null)
 function requireOwnership(tableName, paramName = 'id') {
   return async (req, res, next) => {
     // Admins bypass
-    if (req.user.userType === 'admin') {
+    const roleScope = req.user?.roleScope || req.user?.role_scope;
+    const userType = req.user?.userType || req.user?.user_type;
+    if (roleScope === 'platform_admin' || userType === 'admin') {
       return next();
     }
     

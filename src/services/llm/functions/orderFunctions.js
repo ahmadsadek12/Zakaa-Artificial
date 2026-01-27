@@ -81,25 +81,38 @@ async function executeOrderFunction(functionName, args, context) {
     case 'confirm_order': {
       const cart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
       
-      // Validate cart
+      // Validate cart with structured errors
+      const validationErrors = [];
+      
       if (!cart.items || cart.items.length === 0) {
-        return {
-          success: false,
-          error: 'Cannot confirm order: Your ongoing order is empty. Please add items first.'
-        };
+        validationErrors.push({
+          field: 'cart',
+          message: 'Your ongoing order is empty. Please add items first.',
+          code: 'EMPTY_CART'
+        });
       }
       
       if (!cart.delivery_type) {
-        return {
-          success: false,
-          error: 'Cannot confirm order: Please select delivery type (takeaway, delivery, or on-site).'
-        };
+        validationErrors.push({
+          field: 'delivery_type',
+          message: 'Please select delivery type (takeaway, delivery, or on-site).',
+          code: 'MISSING_DELIVERY_TYPE'
+        });
       }
       
       if (cart.delivery_type === 'delivery' && !cart.location_address && !cart.notes?.includes('Delivery Address:')) {
+        validationErrors.push({
+          field: 'address',
+          message: 'Please provide your delivery address first.',
+          code: 'MISSING_ADDRESS'
+        });
+      }
+      
+      if (validationErrors.length > 0) {
         return {
           success: false,
-          error: 'Cannot confirm order: Please provide your delivery address first.'
+          error: `Cannot confirm order: ${validationErrors.map(e => e.message).join(' ')}`,
+          validationErrors: validationErrors
         };
       }
       

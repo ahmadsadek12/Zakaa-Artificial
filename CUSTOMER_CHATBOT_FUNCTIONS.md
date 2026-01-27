@@ -481,9 +481,196 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ---
 
+## 🧠 Session Management Functions
+
+### 27. `detect_intent_and_set_mode`
+**Description:** Detect customer intent and set conversation mode  
+**Parameters:**
+- `mode` (required): 'delivery', 'takeaway', 'dine_in', or 'support'
+- `confidence` (optional): Confidence score 0-1
+
+**When to use:** At the start of conversations or when customer intent is unclear  
+**Example phrases:**
+- Customer says "I want to order" → mode: 'delivery' or 'takeaway'
+- Customer says "I need a table" → mode: 'dine_in'
+- Customer asks a question → mode: 'support'
+
+**Business Rules:**
+- Mode is set BEFORE any order or reservation exists
+- Mode determines conversation flow
+- Mode is separate from delivery_type (mode = intent, delivery_type = order preference)
+
+**Returns:** Mode confirmation with confidence score
+
+---
+
+### 28. `switch_conversation_mode`
+**Description:** Switch conversation to a different mode  
+**Parameters:**
+- `newMode` (required): New mode to switch to
+
+**When to use:** Customer changes intent mid-conversation  
+**Example phrases:**
+- Customer switches from ordering to asking questions
+- Customer changes from delivery to takeaway intent
+
+**Business Rules:**
+- Safely resets incompatible draft data
+- Updates session step to 'start' for new mode
+- Logs mode switch for analytics
+
+**Returns:** Mode switch confirmation
+
+---
+
+### 29. `resume_chat_session`
+**Description:** Resume a previous chat session  
+**Parameters:**
+- `sessionId` (optional): Session ID to resume (uses current if not provided)
+
+**When to use:** Customer references previous conversation or recovering from disconnect  
+**Example phrases:**
+- "Continue my order"
+- "What was I doing?"
+
+**Returns:** Session state with mode, step, and draft payload
+
+---
+
+## 🎟️ Support & Ticket Functions
+
+### 30. `create_support_ticket`
+**Description:** Create a new support ticket for tracking issues  
+**Parameters:**
+- `subject` (required): Brief subject/title
+- `message` (required): Initial message describing the issue
+- `orderId` (optional): Related order ID
+- `reservationId` (optional): Related reservation ID
+- `priority` (optional): 'low', 'medium', 'high', 'urgent'
+
+**When to use:** Customer has complaint, question, or issue requiring tracking  
+**Example phrases:**
+- "I have a complaint about my order"
+- "My order was wrong"
+- "I need help with my reservation"
+
+**Returns:** Ticket ID and confirmation message
+
+---
+
+### 31. `add_message_to_ticket`
+**Description:** Add a message to an existing support ticket  
+**Parameters:**
+- `ticketId` (required): Ticket ID
+- `message` (required): Message content
+
+**When to use:** Customer is responding to or updating an existing ticket  
+**Example phrases:**
+- "Update on ticket #12345"
+- "I have more information about my issue"
+
+**Returns:** Confirmation that message was added
+
+---
+
+### 32. `get_my_tickets`
+**Description:** Get all support tickets for the current customer  
+**When to use:** Customer asks about their support tickets  
+**Example phrases:**
+- "Show me my tickets"
+- "What's the status of my complaint?"
+- "Do I have any open tickets?"
+
+**Returns:** List of tickets with status, subject, and recent activity
+
+---
+
+### 33. `request_human_assistance`
+**Description:** Request human employee assistance  
+**Parameters:**
+- `reason` (required): Reason for requesting assistance
+
+**When to use:** Bot cannot help, customer asks for human, or issue is too complex  
+**Example phrases:**
+- "I want to talk to a person"
+- "Can I speak to someone?"
+- "This is too complicated"
+
+**Business Rules:**
+- Locks chat session
+- Creates support ticket automatically
+- Assigns to available employee (or marks unassigned)
+- Links session to ticket
+
+**Returns:** Confirmation with ticket number
+
+---
+
+## ✅ Validation Functions (Read-Only)
+
+### 34. `validate_cart_for_confirmation`
+**Description:** Validate cart before order confirmation (read-only, no data modification)  
+**When to use:** Before calling confirm_order() to check if order can be placed  
+**Example phrases:**
+- Bot automatically calls this before confirming orders
+
+**Returns:** 
+- `valid`: Boolean indicating if cart is valid
+- `validationErrors`: Array of structured errors (if any)
+- `warnings`: Array of warnings (if any)
+
+**Checks:**
+- Cart has items
+- Delivery type is set
+- Address provided (if delivery)
+- Business is open (or scheduled for open hours)
+
+---
+
+### 35. `validate_reservation_request`
+**Description:** Validate table reservation request (read-only)  
+**Parameters:**
+- `reservationDate` (required): Date in YYYY-MM-DD
+- `reservationTime` (required): Time in HH:MM
+- `numberOfGuests` (required): Number of guests
+
+**When to use:** Before calling create_table_reservation()  
+**Returns:**
+- `valid`: Boolean indicating if request is valid
+- `validationErrors`: Array of structured errors
+
+**Checks:**
+- Date/time format validity
+- Date/time not in past
+- Business hours for requested day
+- Table availability
+- Guest count validity
+
+---
+
+### 36. `validate_cancellation_eligibility`
+**Description:** Validate if order/reservation can be cancelled (read-only)  
+**Parameters:**
+- `orderId` (optional): Order ID to check
+- `reservationId` (optional): Reservation ID to check
+
+**When to use:** Before calling cancel functions  
+**Returns:**
+- `canCancel`: Boolean indicating eligibility
+- `hoursUntil`: Hours until scheduled time
+- `cancelableBeforeHours`: Cancellation deadline (hours)
+- `deadline`: Cancellation deadline timestamp (if too late)
+
+**Checks:**
+- Order/reservation status
+- Cancellation deadlines (item-level and business-level policies)
+- Time remaining before scheduled time
+
+---
+
 ## 🕐 Business Hours & Availability Functions
 
-### 27. `get_opening_hours`
+### 37. `get_opening_hours`
 **Description:** Get opening hours for the business  
 **When to use:** Customer asks about opening hours, when you're open, or business hours  
 **Example phrases:**
@@ -495,7 +682,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ---
 
-### 28. `get_closing_time`
+### 38. `get_closing_time`
 **Description:** Check if restaurant is currently open or closed, and get closing time  
 **When to use:** Customer asks "are you open?", "are you closed?", "when do you close?", or any question about current status  
 **Example phrases:**
@@ -508,7 +695,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ---
 
-### 29. `get_next_opening_time`
+### 39. `get_next_opening_time`
 **Description:** Get the next time the business will be open  
 **When to use:** Customer asks "when are you open next?", "when do you open next?", or if currently closed and customer wants to know when they can order  
 **Example phrases:**
@@ -520,7 +707,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ---
 
-### 30. `is_open_now`
+### 40. `is_open_now`
 **Description:** Check if the business is currently open or closed  
 **When to use:** Customer asks "are you open?", "are you closed?", or wants to know current status  
 **Example phrases:**
@@ -616,7 +803,7 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 ## 📊 Complete Function List Summary
 
-**Total Functions: 30**
+**Total Functions: 40**
 
 ### Menu & Items (4 functions)
 1. `get_services` / `get_menu_items`
@@ -661,6 +848,22 @@ This document lists all functions available to customers through the Zakaa AI ch
 28. `add_item_to_reservation`
 29. `remove_item_from_reservation`
 30. `get_reservation_items`
+
+### Session Management (3 functions)
+31. `detect_intent_and_set_mode`
+32. `switch_conversation_mode`
+33. `resume_chat_session`
+
+### Support & Tickets (4 functions)
+34. `create_support_ticket`
+35. `add_message_to_ticket`
+36. `get_my_tickets`
+37. `request_human_assistance`
+
+### Validation Functions (3 functions)
+38. `validate_cart_for_confirmation`
+39. `validate_reservation_request`
+40. `validate_cancellation_eligibility`
 
 ---
 

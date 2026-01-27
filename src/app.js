@@ -152,6 +152,8 @@ app.use('/api/policies', policyRoutes);
 app.use('/api/opening-hours', openingHoursRoutes);
 app.use('/api', durationTiersRoutes); // Handles /api/items/:itemId/duration-tiers and /api/duration-tiers/:id
 app.use('/api/orders', orderRoutes);
+app.use('/api/chat-sessions', require('./routes/api/chatSessions'));
+app.use('/api/tickets', require('./routes/api/tickets'));
 app.use('/api/carts', cartRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/tables', tableRoutes);
