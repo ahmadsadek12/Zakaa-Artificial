@@ -1,11 +1,12 @@
 import { useEffect, useState, useMemo } from 'react'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
-import { BarChart3, TrendingUp, DollarSign, ShoppingCart, Users, Package, Clock, Menu, X, Award, Star, Calendar, PieChart, MapPin, RefreshCw, MessageSquare } from 'lucide-react'
+import { BarChart3, TrendingUp, DollarSign, ShoppingCart, Users, Package, Clock, Menu, X, Award, Star, Calendar, PieChart, MapPin, RefreshCw, MessageSquare, Lock } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts'
 import { getNavTerminology } from '../utils/terminology'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const REQUIRED_ADDON_KEY = 'analytics_free' // Analytics add-on key
 
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1']
 
@@ -70,6 +71,8 @@ const fillMissingDays = (revenueData, startDate, endDate) => {
 export default function Analytics() {
   const { user } = useAuth()
   const navTerms = getNavTerminology()
+  const [addonActive, setAddonActive] = useState(true) // Default to true to avoid flicker
+  const [checkingAddon, setCheckingAddon] = useState(true)
   const [overview, setOverview] = useState(null)
   const [burgerMenuOpen, setBurgerMenuOpen] = useState(false)
   const [selectedAnalyticsType, setSelectedAnalyticsType] = useState('order') // Default: Order/Sales Analytics
@@ -127,8 +130,39 @@ export default function Analytics() {
   const [dateRange, setDateRange] = useState(getDefaultDateRange())
 
   useEffect(() => {
-    fetchAnalytics()
-  }, [dateRange])
+    checkAddonStatus()
+  }, [])
+
+  useEffect(() => {
+    if (addonActive) {
+      fetchAnalytics()
+    }
+  }, [dateRange, addonActive])
+
+  const checkAddonStatus = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        console.error('No token found in localStorage')
+        setAddonActive(false)
+        setCheckingAddon(false)
+        return
+      }
+      const headers = { Authorization: `Bearer ${token}` }
+      
+      const response = await axios.get(`${API_URL}/api/addons`, { headers })
+      const addons = response.data.data.addons || []
+      const requiredAddon = addons.find(a => a.addon_key === REQUIRED_ADDON_KEY)
+      
+      setAddonActive(requiredAddon?.isActive || false)
+    } catch (error) {
+      console.error('Error checking addon status:', error)
+      // If we can't check, assume it's active to avoid blocking access
+      setAddonActive(true)
+    } finally {
+      setCheckingAddon(false)
+    }
+  }
 
   const fetchAnalytics = async () => {
     try {
@@ -519,6 +553,45 @@ export default function Analytics() {
   }
   
   const processedRevenue = getProcessedRevenue()
+
+  if (checkingAddon) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    )
+  }
+
+  // If add-on is not active, show unlock button
+  if (!addonActive) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-6 max-w-md">
+          <div className="flex justify-center">
+            <div className="p-6 bg-gray-100 rounded-full">
+              <Lock size={64} className="text-gray-400" />
+            </div>
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Add-on Required</h2>
+            <p className="text-gray-600">
+              This feature requires an active add-on. Please unlock the add-on to access analytics.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              // Navigate to addons page or handle unlock logic
+              window.location.href = '/addons'
+            }}
+            className="btn btn-primary px-8 py-3 text-lg flex items-center gap-2 mx-auto"
+          >
+            <Lock size={20} />
+            Unlock Add-on
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
-import { UtensilsCrossed, Plus, Edit, Trash2, Power, PowerOff, Calendar, Users, MapPin, Phone, CheckCircle, XCircle, Clock, History, AlertCircle, Search } from 'lucide-react'
+import { UtensilsCrossed, Plus, Edit, Trash2, Power, PowerOff, Calendar, Users, MapPin, Phone, CheckCircle, XCircle, Clock, History, AlertCircle, Search, Lock } from 'lucide-react'
 import { format } from 'date-fns'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const REQUIRED_ADDON_KEY = 'table_reservations' // Table Reservations add-on key
 
 export default function TableReservations() {
   const { user } = useAuth()
+  const [addonActive, setAddonActive] = useState(true) // Default to true to avoid flicker
+  const [checkingAddon, setCheckingAddon] = useState(true)
   const [tables, setTables] = useState([])
   const [reservations, setReservations] = useState([])
   const [historyReservations, setHistoryReservations] = useState([])
@@ -42,9 +45,40 @@ export default function TableReservations() {
   })
 
   useEffect(() => {
-    fetchData()
-    fetchItems()
-  }, [selectedDate, activeTab])
+    checkAddonStatus()
+  }, [])
+
+  useEffect(() => {
+    if (addonActive) {
+      fetchData()
+      fetchItems()
+    }
+  }, [selectedDate, activeTab, addonActive])
+
+  const checkAddonStatus = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        console.error('No token found in localStorage')
+        setAddonActive(false)
+        setCheckingAddon(false)
+        return
+      }
+      const headers = { Authorization: `Bearer ${token}` }
+      
+      const response = await axios.get(`${API_URL}/api/addons`, { headers })
+      const addons = response.data.data.addons || []
+      const requiredAddon = addons.find(a => a.addon_key === REQUIRED_ADDON_KEY)
+      
+      setAddonActive(requiredAddon?.isActive || false)
+    } catch (error) {
+      console.error('Error checking addon status:', error)
+      // If we can't check, assume it's active to avoid blocking access
+      setAddonActive(true)
+    } finally {
+      setCheckingAddon(false)
+    }
+  }
 
   const fetchItems = async () => {
     try {
@@ -315,6 +349,45 @@ export default function TableReservations() {
       is_active: table.is_active !== false
     })
     setShowTableModal(true)
+  }
+
+  if (checkingAddon) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    )
+  }
+
+  // If add-on is not active, show unlock button
+  if (!addonActive) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-6 max-w-md">
+          <div className="flex justify-center">
+            <div className="p-6 bg-gray-100 rounded-full">
+              <Lock size={64} className="text-gray-400" />
+            </div>
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Add-on Required</h2>
+            <p className="text-gray-600">
+              This feature requires an active add-on. Please unlock the add-on to access table reservations.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              // Navigate to addons page or handle unlock logic
+              window.location.href = '/addons'
+            }}
+            className="btn btn-primary px-8 py-3 text-lg flex items-center gap-2 mx-auto"
+          >
+            <Lock size={20} />
+            Unlock Add-on
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (loading && tables.length === 0) {
