@@ -8,7 +8,7 @@ const sessionManager = require('../../services/llm/sessionManager');
 const botActionLogger = require('../../services/llm/botActionLogger');
 const { tenantIsolation, requireOwnership } = require('../../middleware/tenant');
 const { authenticateToken } = require('../../middleware/auth');
-const asyncHandler = require('../../utils/asyncHandler');
+const { asyncHandler } = require('../../middleware/errorHandler');
 const logger = require('../../utils/logger');
 
 // All routes require authentication and tenant isolation
