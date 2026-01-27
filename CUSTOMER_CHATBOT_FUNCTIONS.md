@@ -618,17 +618,17 @@ This document lists all functions available to customers through the Zakaa AI ch
 
 **Total Functions: 30**
 
-### Menu & Items (5 functions)
+### Menu & Items (4 functions)
 1. `get_services` / `get_menu_items`
 2. `send_service_image` / `send_item_image`
 3. `send_menu_pdf`
 4. `send_menu_images` / `send_menu_image`
-5. `check_item_availability`
 
-### Cart Management (5 functions)
-6. `add_service_to_cart`
-7. `remove_service_from_cart`
-8. `update_service_quantity`
+### Cart Management (6 functions)
+5. `add_service_to_cart`
+6. `remove_service_from_cart`
+7. `update_service_quantity`
+8. `check_item_availability`
 9. `get_cart`
 10. `clear_cart`
 
