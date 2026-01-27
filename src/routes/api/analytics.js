@@ -66,36 +66,56 @@ router.get('/basic-overview', [
   const { startDate, endDate } = req.query;
   const { queryMySQL } = require('../../config/database');
   
-  // Build date filter
+  // Build date filter - use created_at for order count, completed_at for revenue
   let dateFilter = '';
+  let revenueDateFilter = '';
   const params = [req.businessId];
+  const revenueParams = [req.businessId];
+  
   if (startDate) {
     dateFilter += ' AND created_at >= ?';
     params.push(startDate);
+    revenueDateFilter += ' AND completed_at >= ?';
+    revenueParams.push(startDate);
   }
   if (endDate) {
     dateFilter += ' AND created_at <= ?';
     params.push(endDate + ' 23:59:59');
+    revenueDateFilter += ' AND completed_at <= ?';
+    revenueParams.push(endDate + ' 23:59:59');
   }
   
   // Get basic stats from orders table
+  // Total orders: count all orders in date range (by created_at)
+  // Revenue: only count completed orders that were completed in date range (by completed_at)
   const stats = await queryMySQL(`
     SELECT 
       COUNT(*) as totalOrders,
       SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completedOrders,
-      SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelledOrders,
-      COALESCE(SUM(CASE WHEN status = 'completed' THEN total ELSE 0 END), 0) as totalRevenue,
-      COALESCE(AVG(CASE WHEN status = 'completed' THEN total ELSE NULL END), 0) as averageOrderValue
+      SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelledOrders
     FROM orders
     WHERE business_id = ? ${dateFilter}
   `, params);
   
+  // Get revenue separately - only count orders completed in the date range
+  const revenueStats = await queryMySQL(`
+    SELECT 
+      COALESCE(SUM(total), 0) as totalRevenue,
+      COALESCE(AVG(total), 0) as averageOrderValue,
+      COUNT(*) as completedCount
+    FROM orders
+    WHERE business_id = ? 
+      AND status = 'completed'
+      AND completed_at IS NOT NULL
+      ${revenueDateFilter}
+  `, revenueParams);
+  
   const overview = {
-    totalOrders: parseInt(stats[0]?.totalOrders || stats[0]?.totalOrders || 0),
+    totalOrders: parseInt(stats[0]?.totalOrders || 0),
     completedOrders: parseInt(stats[0]?.completedOrders || 0),
     cancelledOrders: parseInt(stats[0]?.cancelledOrders || 0),
-    totalRevenue: parseFloat(stats[0]?.totalRevenue || 0),
-    averageOrderValue: parseFloat(stats[0]?.averageOrderValue || 0)
+    totalRevenue: parseFloat(revenueStats[0]?.totalRevenue || 0),
+    averageOrderValue: parseFloat(revenueStats[0]?.averageOrderValue || 0)
   };
   
   res.json({
