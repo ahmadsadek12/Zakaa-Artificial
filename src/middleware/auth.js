@@ -56,34 +56,13 @@ async function authenticate(req, res, next) {
         });
       }
       
-      // Try to fetch optional columns if they exist (handle gracefully if they don't)
-      let roleScope = null;
-      let employeeRole = null;
-      let businessName = null;
-      let contactPhoneNumber = null;
-      
-      try {
-        const extendedUsers = await queryMySQL(
-          `SELECT role_scope, employee_role, business_name, contact_phone_number
-           FROM users WHERE id = ?`,
-          [decoded.userId]
-        );
-        if (extendedUsers && extendedUsers.length > 0) {
-          roleScope = extendedUsers[0].role_scope || null;
-          employeeRole = extendedUsers[0].employee_role || null;
-          businessName = extendedUsers[0].business_name || null;
-          contactPhoneNumber = extendedUsers[0].contact_phone_number || null;
-        }
-      } catch (columnError) {
-        // Columns don't exist - that's okay, use defaults
-        // Check if it's a "column doesn't exist" error
-        if (columnError.code === 'ER_BAD_FIELD_ERROR' || columnError.errno === 1054) {
-          logger.debug('Optional user columns not found, using defaults', { userId: decoded.userId });
-        } else {
-          // Re-throw if it's a different error
-          throw columnError;
-        }
-      }
+      // Optional columns - set to null by default (columns may not exist in database)
+      // These are only needed for advanced tenant isolation features
+      // If the columns don't exist, the tenant isolation middleware will use user_type as fallback
+      const roleScope = null;
+      const employeeRole = null;
+      const businessName = null;
+      const contactPhoneNumber = null;
       
       // Attach user to request with all fields needed for tenant isolation
       req.user = {
