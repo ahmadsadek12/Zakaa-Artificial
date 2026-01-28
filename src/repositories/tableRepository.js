@@ -275,6 +275,10 @@ async function findAvailableForSlot(ownerUserId, date, time, numberOfGuests = nu
     activeFilter = 'AND (t.reserved = false OR t.reserved IS NULL)';
   }
   
+  // Normalize time format (ensure HH:MM format, handle HH:MM:SS from database)
+  // If time is in HH:MM:SS format, truncate to HH:MM for comparison
+  const normalizedTime = time.length === 5 ? time : time.substring(0, 5);
+  
   let sql = `
     SELECT t.* 
     FROM tables t
@@ -285,12 +289,12 @@ async function findAvailableForSlot(ownerUserId, date, time, numberOfGuests = nu
       FROM reservations r 
       WHERE r.table_id IS NOT NULL
       AND r.reservation_date = ?
-      AND r.reservation_time = ?
+      AND TIME_FORMAT(r.reservation_time, '%H:%i') = ?
       AND r.status = 'confirmed'
       AND r.reservation_type = 'table'
     )
   `;
-  const params = [ownerUserId, date, time];
+  const params = [ownerUserId, date, normalizedTime];
   
   // Filter by guest count if provided
   if (numberOfGuests) {

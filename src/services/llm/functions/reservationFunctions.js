@@ -302,7 +302,7 @@ async function executeReservationFunction(functionName, args, context) {
     }
     
     case 'create_table_reservation': {
-      const { reservationDate, reservationTime, numberOfGuests, customerName, notes, tableNumber, positionPreference } = args;
+      let { reservationDate, reservationTime, numberOfGuests, customerName, notes, tableNumber, positionPreference } = args;
       
       const validationErrors = [];
       
@@ -312,6 +312,68 @@ async function executeReservationFunction(functionName, args, context) {
           message: 'Reservation date and time are required.',
           code: 'MISSING_DATE_TIME'
         });
+      }
+      
+      // Normalize time format - ensure HH:MM format
+      if (reservationTime) {
+        // Handle various time formats: "7", "7pm", "19:00", "19:00:00", etc.
+        const timeStr = reservationTime.toString().trim().toLowerCase();
+        
+        // If it's just a number (e.g., "7"), assume PM if >= 1 and < 12, otherwise assume 24-hour
+        if (/^\d+$/.test(timeStr)) {
+          const hour = parseInt(timeStr);
+          if (hour >= 1 && hour <= 11) {
+            // Assume PM for 1-11
+            reservationTime = `${String(hour + 12).padStart(2, '0')}:00`;
+          } else if (hour >= 12 && hour <= 23) {
+            // Already 24-hour format
+            reservationTime = `${String(hour).padStart(2, '0')}:00`;
+          } else {
+            validationErrors.push({
+              field: 'reservationTime',
+              message: 'Invalid time format. Please use HH:MM format (e.g., "19:00" for 7pm).',
+              code: 'INVALID_TIME_FORMAT'
+            });
+          }
+        } else if (timeStr.includes('pm') || timeStr.includes('p.m.')) {
+          // Handle "7pm", "7 pm", "7:00pm", etc.
+          const hourMatch = timeStr.match(/(\d+)/);
+          if (hourMatch) {
+            let hour = parseInt(hourMatch[1]);
+            const minuteMatch = timeStr.match(/:(\d+)/);
+            const minutes = minuteMatch ? parseInt(minuteMatch[1]) : 0;
+            
+            if (hour >= 1 && hour <= 11) {
+              hour += 12;
+            } else if (hour === 12) {
+              // 12pm stays 12
+            }
+            reservationTime = `${String(hour).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+          }
+        } else if (timeStr.includes('am') || timeStr.includes('a.m.')) {
+          // Handle "7am", "7 am", "7:00am", etc.
+          const hourMatch = timeStr.match(/(\d+)/);
+          if (hourMatch) {
+            let hour = parseInt(hourMatch[1]);
+            const minuteMatch = timeStr.match(/:(\d+)/);
+            const minutes = minuteMatch ? parseInt(minuteMatch[1]) : 0;
+            
+            if (hour === 12) {
+              hour = 0; // 12am = 00:00
+            }
+            reservationTime = `${String(hour).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+          }
+        } else if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(timeStr)) {
+          // Already in HH:MM or HH:MM:SS format, normalize to HH:MM
+          const parts = timeStr.split(':');
+          reservationTime = `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
+        } else {
+          validationErrors.push({
+            field: 'reservationTime',
+            message: 'Invalid time format. Please use HH:MM format (e.g., "19:00" for 7pm).',
+            code: 'INVALID_TIME_FORMAT'
+          });
+        }
       }
       
       if (!customerName) {
