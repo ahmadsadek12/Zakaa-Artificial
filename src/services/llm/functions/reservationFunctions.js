@@ -527,11 +527,14 @@ async function executeReservationFunction(functionName, args, context) {
         if (error.code === 'ER_BAD_FIELD_ERROR' || error.message?.includes('Unknown column')) {
           logger.error('Database schema error in reservation creation', {
             error: error.message,
-            code: error.code
+            code: error.code,
+            sqlState: error.sqlState,
+            sqlMessage: error.sqlMessage
           });
+          // Return a user-friendly error that doesn't trigger request_human_assistance
           return {
             success: false,
-            error: 'There was a database configuration issue. Please contact support.'
+            error: 'Sorry, I encountered a technical issue creating your reservation. Please try again in a moment, or try a different date/time.'
           };
         }
         
