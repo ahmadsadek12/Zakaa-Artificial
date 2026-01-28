@@ -386,44 +386,91 @@ async function create(reservationData) {
   }
   
   // Check which columns exist in the reservations table
-  // DEFAULT TO FALSE - only set to true if we can PROVE the column exists
+  // CRITICAL: DEFAULT TO FALSE - only set to true if we can PROVE the column exists
   let hasItemId = false;
   let hasStartTime = false;
   let hasEndTime = false;
   let hasPartySize = false;
   let hasCreatedVia = false;
   
+  // Force check each column individually to be absolutely sure
   try {
-    const columnCheck = await queryMySQL(`
-      SELECT COLUMN_NAME 
-      FROM information_schema.COLUMNS 
-      WHERE TABLE_SCHEMA = DATABASE() 
-        AND TABLE_NAME = 'reservations' 
-        AND COLUMN_NAME IN ('item_id', 'start_time', 'end_time', 'party_size', 'created_via')
-    `);
-    
-    // Extract column names - handle different result formats
-    let columnNames = [];
-    if (columnCheck && Array.isArray(columnCheck) && columnCheck.length > 0) {
-      columnNames = columnCheck.map(c => {
-        if (typeof c === 'string') return c.toLowerCase();
-        // Try different possible property names (case-insensitive)
-        const name = c.COLUMN_NAME || c.column_name || c['COLUMN_NAME'] || c['column_name'] || '';
-        return String(name).toLowerCase();
-      }).filter(name => name && name.length > 0);
+    // Check party_size
+    try {
+      const partySizeCheck = await queryMySQL(`
+        SELECT COLUMN_NAME 
+        FROM information_schema.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'reservations' 
+          AND COLUMN_NAME = 'party_size'
+        LIMIT 1
+      `);
+      hasPartySize = partySizeCheck && Array.isArray(partySizeCheck) && partySizeCheck.length > 0;
+    } catch (e) {
+      hasPartySize = false;
     }
     
-    // Only set to true if we found the column name in the results
-    // Use strict equality check after normalizing to lowercase
-    hasItemId = columnNames.includes('item_id');
-    hasStartTime = columnNames.includes('start_time');
-    hasEndTime = columnNames.includes('end_time');
-    hasPartySize = columnNames.includes('party_size');
-    hasCreatedVia = columnNames.includes('created_via');
+    // Check created_via
+    try {
+      const createdViaCheck = await queryMySQL(`
+        SELECT COLUMN_NAME 
+        FROM information_schema.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'reservations' 
+          AND COLUMN_NAME = 'created_via'
+        LIMIT 1
+      `);
+      hasCreatedVia = createdViaCheck && Array.isArray(createdViaCheck) && createdViaCheck.length > 0;
+    } catch (e) {
+      hasCreatedVia = false;
+    }
     
-    // Log for debugging
-    console.log('[RESERVATION] Column check:', {
-      foundColumns: columnNames,
+    // Check item_id
+    try {
+      const itemIdCheck = await queryMySQL(`
+        SELECT COLUMN_NAME 
+        FROM information_schema.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'reservations' 
+          AND COLUMN_NAME = 'item_id'
+        LIMIT 1
+      `);
+      hasItemId = itemIdCheck && Array.isArray(itemIdCheck) && itemIdCheck.length > 0;
+    } catch (e) {
+      hasItemId = false;
+    }
+    
+    // Check start_time
+    try {
+      const startTimeCheck = await queryMySQL(`
+        SELECT COLUMN_NAME 
+        FROM information_schema.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'reservations' 
+          AND COLUMN_NAME = 'start_time'
+        LIMIT 1
+      `);
+      hasStartTime = startTimeCheck && Array.isArray(startTimeCheck) && startTimeCheck.length > 0;
+    } catch (e) {
+      hasStartTime = false;
+    }
+    
+    // Check end_time
+    try {
+      const endTimeCheck = await queryMySQL(`
+        SELECT COLUMN_NAME 
+        FROM information_schema.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'reservations' 
+          AND COLUMN_NAME = 'end_time'
+        LIMIT 1
+      `);
+      hasEndTime = endTimeCheck && Array.isArray(endTimeCheck) && endTimeCheck.length > 0;
+    } catch (e) {
+      hasEndTime = false;
+    }
+    
+    console.log('[RESERVATION] Column existence check:', {
       hasPartySize,
       hasCreatedVia,
       hasItemId,
@@ -431,8 +478,8 @@ async function create(reservationData) {
       hasEndTime
     });
   } catch (err) {
-    // If check fails, assume columns don't exist (default to false)
-    console.error('[RESERVATION] Error checking columns:', err.message);
+    // If any check fails, assume columns don't exist (default to false)
+    console.error('[RESERVATION] Error in column check:', err.message);
     hasItemId = false;
     hasStartTime = false;
     hasEndTime = false;
