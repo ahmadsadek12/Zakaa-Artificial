@@ -385,103 +385,109 @@ async function create(reservationData) {
     }
   }
   
-  // Check if item_id column exists
+  // Check which columns exist in the reservations table
   let hasItemId = false;
+  let hasStartTime = false;
+  let hasEndTime = false;
   try {
     const columnCheck = await queryMySQL(`
       SELECT COLUMN_NAME 
       FROM information_schema.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
         AND TABLE_NAME = 'reservations' 
-        AND COLUMN_NAME = 'item_id'
+        AND COLUMN_NAME IN ('item_id', 'start_time', 'end_time')
     `);
-    hasItemId = columnCheck && columnCheck.length > 0;
+    if (columnCheck && columnCheck.length > 0) {
+      const columnNames = columnCheck.map(c => c.COLUMN_NAME || c.column_name);
+      hasItemId = columnNames.includes('item_id');
+      hasStartTime = columnNames.includes('start_time');
+      hasEndTime = columnNames.includes('end_time');
+    }
   } catch (err) {
+    // If check fails, assume columns don't exist
     hasItemId = false;
+    hasStartTime = false;
+    hasEndTime = false;
   }
   
   // Build INSERT statement based on available columns
+  const insertFields = [
+    'id', 'user_id', 'business_user_id', 'owner_user_id', 'table_id',
+    'customer_phone_number', 'customer_name',
+    'reservation_date', 'reservation_time', 'number_of_guests', 'party_size',
+    'notes', 'status',
+    'reservation_kind', 'reservation_type', 'source', 'platform',
+    'min_seats_snapshot', 'max_seats_snapshot', 'position_snapshot',
+    'created_via', 'bot_confidence_score', 'requires_human_review'
+  ];
+  const insertValues = [
+    reservationId,
+    reservationData.userId || null,
+    reservationData.businessUserId,
+    ownerUserId,
+    assignedTableId || null,
+    reservationData.customerPhoneNumber,
+    reservationData.customerName,
+    reservationData.reservationDate,
+    reservationData.reservationTime,
+    reservationData.numberOfGuests || null,
+    partySize,
+    reservationData.notes || null,
+    reservationData.status || 'confirmed',
+    reservationData.reservationKind || 'table',
+    reservationType,
+    reservationData.source || 'whatsapp',
+    platform,
+    minSeatsSnapshot,
+    maxSeatsSnapshot,
+    positionSnapshot,
+    reservationData.createdVia || 'bot',
+    reservationData.botConfidenceScore || null,
+    reservationData.requiresHumanReview || false
+  ];
+  
+  // Add optional columns if they exist
   if (hasItemId) {
-    await queryMySQL(`
-      INSERT INTO reservations (
-        id, user_id, business_user_id, owner_user_id, table_id, item_id,
-        customer_phone_number, customer_name,
-        reservation_date, reservation_time, number_of_guests, party_size,
-        start_time, end_time, notes, status,
-        reservation_kind, reservation_type, start_at, source, platform,
-        min_seats_snapshot, max_seats_snapshot, position_snapshot,
-        created_via, bot_confidence_score, requires_human_review
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      reservationId,
-      reservationData.userId || null,
-      reservationData.businessUserId,
-      ownerUserId,
-      assignedTableId || null,
-      reservationData.itemId || null,
-      reservationData.customerPhoneNumber,
-      reservationData.customerName,
-      reservationData.reservationDate,
-      reservationData.reservationTime,
-      reservationData.numberOfGuests || null,
-      partySize,
-      startTime,
-      endTime,
-      reservationData.notes || null,
-      reservationData.status || 'confirmed',
-      reservationData.reservationKind || 'table',
-      reservationType,
-      startAt || null,
-      reservationData.source || 'whatsapp',
-      platform,
-      minSeatsSnapshot,
-      maxSeatsSnapshot,
-      positionSnapshot,
-      reservationData.createdVia || 'bot',
-      reservationData.botConfidenceScore || null,
-      reservationData.requiresHumanReview || false
-    ]);
-  } else {
-    // Insert without item_id column
-    await queryMySQL(`
-      INSERT INTO reservations (
-        id, user_id, business_user_id, owner_user_id, table_id,
-        customer_phone_number, customer_name,
-        reservation_date, reservation_time, number_of_guests, party_size,
-        start_time, end_time, notes, status,
-        reservation_kind, reservation_type, start_at, source, platform,
-        min_seats_snapshot, max_seats_snapshot, position_snapshot,
-        created_via, bot_confidence_score, requires_human_review
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      reservationId,
-      reservationData.userId || null,
-      reservationData.businessUserId,
-      ownerUserId,
-      assignedTableId || null,
-      reservationData.customerPhoneNumber,
-      reservationData.customerName,
-      reservationData.reservationDate,
-      reservationData.reservationTime,
-      reservationData.numberOfGuests || null,
-      partySize,
-      startTime,
-      endTime,
-      reservationData.notes || null,
-      reservationData.status || 'confirmed',
-      reservationData.reservationKind || 'table',
-      reservationType,
-      startAt || null,
-      reservationData.source || 'whatsapp',
-      platform,
-      minSeatsSnapshot,
-      maxSeatsSnapshot,
-      positionSnapshot,
-      reservationData.createdVia || 'bot',
-      reservationData.botConfidenceScore || null,
-      reservationData.requiresHumanReview || false
-    ]);
+    insertFields.splice(5, 0, 'item_id');
+    insertValues.splice(5, 0, reservationData.itemId || null);
   }
+  
+  if (hasStartTime) {
+    insertFields.push('start_time');
+    insertValues.push(startTime);
+  }
+  
+  if (hasEndTime) {
+    insertFields.push('end_time');
+    insertValues.push(endTime);
+  }
+  
+  // Add start_at if it exists (check separately)
+  let hasStartAt = false;
+  try {
+    const startAtCheck = await queryMySQL(`
+      SELECT COLUMN_NAME 
+      FROM information_schema.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'reservations' 
+        AND COLUMN_NAME = 'start_at'
+    `);
+    hasStartAt = startAtCheck && startAtCheck.length > 0;
+  } catch (err) {
+    hasStartAt = false;
+  }
+  
+  if (hasStartAt) {
+    insertFields.push('start_at');
+    insertValues.push(startAt || null);
+  }
+  
+  // Build and execute INSERT
+  const placeholders = insertFields.map(() => '?').join(', ');
+  await queryMySQL(`
+    INSERT INTO reservations (${insertFields.join(', ')})
+    VALUES (${placeholders})
+  `, insertValues);
   
   return await findById(reservationId);
 }
