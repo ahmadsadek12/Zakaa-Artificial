@@ -1107,9 +1107,9 @@ export default function Analytics() {
               <XAxis dataKey="period" />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="order_count" fill="#000000">
+              <Bar dataKey="order_count" fill="#0ea5e9">
                 {timeBreakdown.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill="#000000" />
+                  <Cell key={`cell-${index}`} fill="#0ea5e9" />
                 ))}
               </Bar>
             </BarChart>
@@ -1134,9 +1134,9 @@ export default function Analytics() {
               <XAxis dataKey="status" />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="count" fill="#000000">
+              <Bar dataKey="count" fill="#0ea5e9">
                 {orderStatusBreakdown.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill="#000000" />
+                  <Cell key={`cell-${index}`} fill="#0ea5e9" />
                 ))}
               </Bar>
             </BarChart>
@@ -1164,9 +1164,9 @@ export default function Analytics() {
               />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="order_count" fill="#000000">
+              <Bar dataKey="order_count" fill="#0ea5e9">
                 {peakOrderingHours.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill="#000000" />
+                  <Cell key={`cell-${index}`} fill="#0ea5e9" />
                 ))}
               </Bar>
             </BarChart>
@@ -1191,9 +1191,9 @@ export default function Analytics() {
               <XAxis dataKey="type" />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="count" fill="#000000">
+              <Bar dataKey="count" fill="#0ea5e9">
                 {deliveryTypeSplit.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill="#000000" />
+                  <Cell key={`cell-${index}`} fill="#0ea5e9" />
                 ))}
               </Bar>
             </BarChart>
