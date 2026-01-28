@@ -386,11 +386,13 @@ async function create(reservationData) {
   }
   
   // Check which columns exist in the reservations table
+  // DEFAULT TO FALSE - only set to true if we can PROVE the column exists
   let hasItemId = false;
   let hasStartTime = false;
   let hasEndTime = false;
   let hasPartySize = false;
   let hasCreatedVia = false;
+  
   try {
     const columnCheck = await queryMySQL(`
       SELECT COLUMN_NAME 
@@ -400,70 +402,37 @@ async function create(reservationData) {
         AND COLUMN_NAME IN ('item_id', 'start_time', 'end_time', 'party_size', 'created_via')
     `);
     
-    const logger = require('../utils/logger');
-    console.log('[RESERVATION DEBUG] Column check results:', JSON.stringify({
-      columnCheckResult: columnCheck,
-      columnCheckLength: columnCheck?.length,
-      columnCheckType: typeof columnCheck,
-      isArray: Array.isArray(columnCheck)
-    }));
-    logger.info('Column check results', {
-      columnCheckResult: columnCheck,
-      columnCheckLength: columnCheck?.length,
-      columnCheckType: typeof columnCheck,
-      isArray: Array.isArray(columnCheck)
-    });
-    
+    // Extract column names - handle different result formats
+    let columnNames = [];
     if (columnCheck && Array.isArray(columnCheck) && columnCheck.length > 0) {
-      // Extract column names from result objects
-      const columnNames = columnCheck.map(c => {
+      columnNames = columnCheck.map(c => {
         if (typeof c === 'string') return c.toLowerCase();
-        // Try different possible property names
-        const name = c.COLUMN_NAME || c.column_name || (c[0] && typeof c[0] === 'string' ? c[0] : '');
-        return name.toLowerCase();
-      }).filter(Boolean);
-      
-      console.log('[RESERVATION DEBUG] Extracted column names:', columnNames);
-      logger.info('Extracted column names', { columnNames });
-      
-      hasItemId = columnNames.includes('item_id');
-      hasStartTime = columnNames.includes('start_time');
-      hasEndTime = columnNames.includes('end_time');
-      hasPartySize = columnNames.includes('party_size');
-      hasCreatedVia = columnNames.includes('created_via');
-      
-      console.log('[RESERVATION DEBUG] Column existence flags:', {
-        hasItemId,
-        hasStartTime,
-        hasEndTime,
-        hasPartySize,
-        hasCreatedVia
-      });
-      logger.info('Column existence flags', {
-        hasItemId,
-        hasStartTime,
-        hasEndTime,
-        hasPartySize,
-        hasCreatedVia
-      });
-    } else {
-      console.log('[RESERVATION DEBUG] No columns found or empty result:', {
-        columnCheck,
-        hasResult: !!columnCheck,
-        isArray: Array.isArray(columnCheck),
-        length: columnCheck?.length
-      });
-      logger.info('No columns found or empty result', {
-        columnCheck,
-        hasResult: !!columnCheck,
-        isArray: Array.isArray(columnCheck),
-        length: columnCheck?.length
-      });
+        // Try different possible property names (case-insensitive)
+        const name = c.COLUMN_NAME || c.column_name || c['COLUMN_NAME'] || c['column_name'] || '';
+        return String(name).toLowerCase();
+      }).filter(name => name && name.length > 0);
     }
+    
+    // Only set to true if we found the column name in the results
+    // Use strict equality check after normalizing to lowercase
+    hasItemId = columnNames.includes('item_id');
+    hasStartTime = columnNames.includes('start_time');
+    hasEndTime = columnNames.includes('end_time');
+    hasPartySize = columnNames.includes('party_size');
+    hasCreatedVia = columnNames.includes('created_via');
+    
+    // Log for debugging
+    console.log('[RESERVATION] Column check:', {
+      foundColumns: columnNames,
+      hasPartySize,
+      hasCreatedVia,
+      hasItemId,
+      hasStartTime,
+      hasEndTime
+    });
   } catch (err) {
-    // If check fails, assume columns don't exist
-    const logger = require('../utils/logger');
-    logger.error('Error checking columns', { error: err.message, stack: err.stack });
+    // If check fails, assume columns don't exist (default to false)
+    console.error('[RESERVATION] Error checking columns:', err.message);
     hasItemId = false;
     hasStartTime = false;
     hasEndTime = false;
@@ -559,24 +528,9 @@ async function create(reservationData) {
   const placeholders = insertFields.map(() => '?').join(', ');
   const insertSQL = `INSERT INTO reservations (${insertFields.join(', ')}) VALUES (${placeholders})`;
   
-  // Log column checks for debugging (remove in production if needed)
-  const logger = require('../utils/logger');
-  console.log('[RESERVATION DEBUG] Final column checks before INSERT:', {
-    hasPartySize,
-    hasCreatedVia,
-    hasItemId,
-    hasStartTime,
-    hasEndTime,
-    insertFields: insertFields.join(', ')
-  });
-  logger.info('Reservation column checks', {
-    hasPartySize,
-    hasCreatedVia,
-    hasItemId,
-    hasStartTime,
-    hasEndTime,
-    insertFields: insertFields.join(', ')
-  });
+  // Log final state before INSERT
+  console.log('[RESERVATION] Final INSERT fields:', insertFields.join(', '));
+  console.log('[RESERVATION] Column flags:', { hasPartySize, hasCreatedVia, hasItemId, hasStartTime, hasEndTime });
   
   await queryMySQL(insertSQL, insertValues);
   
