@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
-import { MessageCircleMore, Search, Calendar, User, ArrowLeft, Send, Inbox, Outbox } from 'lucide-react'
+import { MessageCircleDashed, Search, Calendar, User, ArrowLeft, Send, Inbox, Outbox } from 'lucide-react'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
@@ -153,7 +153,7 @@ export default function WhatsAppMessages() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-          <MessageCircleMore size={32} />
+          <MessageCircleDashed size={32} />
           WhatsApp Messages
         </h1>
         <p className="text-gray-600 mt-2">View and manage WhatsApp conversations</p>
@@ -228,7 +228,7 @@ export default function WhatsAppMessages() {
           </div>
         ) : filteredConversations.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
-            <MessageCircleMore size={48} className="mx-auto mb-4 text-gray-400" />
+            <MessageCircleDashed size={48} className="mx-auto mb-4 text-gray-400" />
             <p>No WhatsApp conversations found</p>
             <p className="text-sm mt-2">Try adjusting your filters or check back later</p>
           </div>
