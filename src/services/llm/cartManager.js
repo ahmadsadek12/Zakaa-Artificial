@@ -22,7 +22,7 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
       const branches = await queryMySQL(
         `SELECT id FROM users 
          WHERE parent_user_id = ? 
-           AND (role_scope = 'branch_operator' OR user_type = 'branch')
+           AND user_type = 'branch'
            AND is_active = true 
            AND deleted_at IS NULL 
          LIMIT 1`,
@@ -153,7 +153,7 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
       const [branchUsers] = await connection.query(
         `SELECT id FROM users 
          WHERE parent_user_id = ? 
-           AND (role_scope = 'branch_operator' OR user_type = 'branch')
+           AND user_type = 'branch'
            AND is_active = true 
            AND deleted_at IS NULL 
          LIMIT 1`,

@@ -204,7 +204,7 @@ async function checkTableReservationsEligible(businessId) {
     const business = await queryMySQL(
       `SELECT business_type FROM users 
        WHERE id = ? 
-         AND (role_scope = 'business_owner' OR user_type = 'business')`,
+         AND user_type = 'business'`,
       [businessId]
     );
     
