@@ -392,9 +392,9 @@ async function executeReservationFunction(functionName, args, context) {
         };
       }
       
+      let selectedTable = null;
+      
       try {
-        let selectedTable = null;
-        
         // If tableNumber provided, find that specific table
         if (tableNumber) {
           const tables = await tableRepository.findByBusiness(ownerUserId, business.id, false);
