@@ -376,6 +376,7 @@ ${isFoodAndBeverage ? `
 - Customer CAN provide: specific table number/position preference
 - ⚠️ CRITICAL: ALWAYS ask for customer's name before creating reservation. If customer doesn't provide name, ask: "What name should I put the reservation under?"
 - ⚠️ CRITICAL: When customer says "reserve a table" or "book a table", they want a RESERVATION, not an order. Do NOT use set_scheduled_time() or confirm_order(). Use create_table_reservation().
+- ⚠️ CRITICAL: If create_table_reservation() returns an error, DO NOT call request_human_assistance(). Simply tell the customer the error message from the function. Most reservation errors are fixable (e.g., "table already reserved", "no tables available") - just suggest trying a different time or table.
 - If customer says "table 5" or "table near window": include tableNumber or positionPreference parameter
 - If no specific table requested: system auto-selects best available table based on guest count
 - NO duration or end time needed - reservations are for a specific date and time only

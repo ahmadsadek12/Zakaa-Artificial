@@ -502,18 +502,55 @@ async function executeReservationFunction(functionName, args, context) {
           }
         };
       } catch (error) {
-        logger.error('Error creating table reservation:', error);
+        logger.error('Error creating table reservation:', {
+          error: error.message,
+          stack: error.stack,
+          code: error.code,
+          sqlState: error.sqlState,
+          sqlMessage: error.sqlMessage,
+          ownerUserId,
+          reservationDate,
+          reservationTime,
+          numberOfGuests,
+          customerName,
+          tableId: selectedTable?.id
+        });
         
-        if (error.message.includes('already reserved')) {
+        if (error.message.includes('already reserved') || error.message.includes('already reserved at this date and time')) {
           return {
             success: false,
             error: 'The selected table is already reserved at this date and time. Please choose a different time or table.'
           };
         }
         
+        // Check for database column errors
+        if (error.code === 'ER_BAD_FIELD_ERROR' || error.message?.includes('Unknown column')) {
+          logger.error('Database schema error in reservation creation', {
+            error: error.message,
+            code: error.code
+          });
+          return {
+            success: false,
+            error: 'There was a database configuration issue. Please contact support.'
+          };
+        }
+        
+        // Check for foreign key constraint errors
+        if (error.code === 'ER_NO_REFERENCED_ROW_2' || error.code === 'ER_ROW_IS_REFERENCED_2') {
+          logger.error('Foreign key constraint error in reservation creation', {
+            error: error.message,
+            code: error.code
+          });
+          return {
+            success: false,
+            error: 'The selected table is not available. Please try again or choose a different table.'
+          };
+        }
+        
+        // Return user-friendly error message
         return {
           success: false,
-          error: `Failed to create reservation: ${error.message}`
+          error: `Sorry, I couldn't create your reservation. ${error.message || 'Please try again or contact support if the issue persists.'}`
         };
       }
     }
