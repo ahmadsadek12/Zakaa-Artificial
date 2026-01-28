@@ -336,7 +336,11 @@ export default function Dashboard() {
                     <td className="py-3 px-4 text-sm text-gray-600">
                       {order.scheduled_for 
                         ? new Date(order.scheduled_for).toLocaleDateString() + ' ' + new Date(order.scheduled_for).toLocaleTimeString()
-                        : 'Not scheduled'}
+                        : order.delivery_type === 'delivery' 
+                          ? 'Delivery'
+                          : order.delivery_type 
+                            ? order.delivery_type.charAt(0).toUpperCase() + order.delivery_type.slice(1).replace('_', ' ')
+                            : 'Not scheduled'}
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-600">
                       {new Date(order.created_at).toLocaleDateString()}

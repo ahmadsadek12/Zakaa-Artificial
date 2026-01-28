@@ -410,7 +410,7 @@ async function processChatbotResponse({
           
           // Update order: remove cart marker (notes='__cart__'), set status='accepted'
           // Set all customer info and delivery details
-          await connection.query(`
+          const updateResult = await connection.query(`
             UPDATE orders 
             SET 
               status = 'accepted',
@@ -427,6 +427,10 @@ async function processChatbotResponse({
               scheduled_for = COALESCE(?, scheduled_for),
               delivery_type = COALESCE(?, delivery_type),
               delivery_price = COALESCE(?, delivery_price),
+              location_address = COALESCE(?, location_address),
+              location_latitude = COALESCE(?, location_latitude),
+              location_longitude = COALESCE(?, location_longitude),
+              location_name = COALESCE(?, location_name),
               created_via = 'bot',
               bot_confidence_score = ?,
               requires_human_review = ?,
@@ -441,10 +445,28 @@ async function processChatbotResponse({
             cart.scheduled_for ? new Date(cart.scheduled_for) : null,
             cart.delivery_type || null, // Use cart delivery_type (which defaults based on business type)
             cart.delivery_price || 0,
+            cart.location_address || null,
+            cart.location_latitude || null,
+            cart.location_longitude || null,
+            cart.location_name || null,
             confidenceScore,
             requiresReview,
             cart.id
           ]);
+          
+          // Check if update actually affected any rows
+          if (updateResult[0].affectedRows === 0) {
+            logger.warn('Order confirmation update affected 0 rows - order may have already been confirmed or cart may not exist', {
+              orderId: cart.id,
+              cartStatus: cart.status,
+              cartNotes: cart.notes
+            });
+            await connection.rollback();
+            return {
+              orderCreated: false,
+              error: 'Order could not be confirmed. The cart may have already been processed or does not exist.'
+            };
+          }
           
           // Create initial status history entry (order is now accepted)
           const { generateUUID } = require('../../utils/uuid');
