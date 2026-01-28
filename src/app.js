@@ -154,6 +154,7 @@ app.use('/api', durationTiersRoutes); // Handles /api/items/:itemId/duration-tie
 app.use('/api/orders', orderRoutes);
 app.use('/api/chat-sessions', require('./routes/api/chatSessions'));
 app.use('/api/tickets', require('./routes/api/tickets'));
+app.use('/api/whatsapp-messages', require('./routes/api/whatsapp-messages'));
 app.use('/api/carts', cartRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/tables', tableRoutes);

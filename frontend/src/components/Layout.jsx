@@ -18,7 +18,8 @@ import {
   Settings2,
   Table,
   MessageSquare,
-  MessageCircle
+  MessageCircle,
+  MessageCircleMore
 } from 'lucide-react'
 import { useState } from 'react'
 import { getTerminology, getNavTerminology } from '../utils/terminology'
@@ -59,6 +60,7 @@ export default function Layout({ children }) {
     { path: '/table-reservations', icon: Table, label: 'Table Reservations' },
     { path: '/tickets', icon: MessageSquare, label: 'Support Tickets' },
     { path: '/chat-sessions', icon: MessageCircle, label: 'Chat Sessions' },
+    { path: '/whatsapp-messages', icon: MessageCircleMore, label: 'WhatsApp Messages' },
     { path: '/settings', icon: Settings, label: 'Settings' },
   ]
 

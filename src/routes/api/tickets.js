@@ -20,6 +20,14 @@ router.use(tenantIsolation);
  */
 router.get('/', asyncHandler(async (req, res) => {
   const businessId = req.businessId;
+  
+  if (!businessId) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Business ID is required' }
+    });
+  }
+  
   const employeeId = req.isEmployee ? req.user.id : null;
   
   const filters = {
