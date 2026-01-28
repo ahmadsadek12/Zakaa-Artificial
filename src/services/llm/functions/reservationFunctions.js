@@ -501,20 +501,20 @@ async function executeReservationFunction(functionName, args, context) {
             number_of_guests: numberOfGuests || null
           }
         };
-      } catch (error) {
-        logger.error('Error creating table reservation:', {
-          error: error.message,
-          stack: error.stack,
-          code: error.code,
-          sqlState: error.sqlState,
-          sqlMessage: error.sqlMessage,
-          ownerUserId,
-          reservationDate,
-          reservationTime,
-          numberOfGuests,
-          customerName,
-          tableId: selectedTable?.id
-        });
+        } catch (error) {
+          logger.error('Error creating table reservation:', {
+            error: error.message,
+            stack: error.stack,
+            code: error.code,
+            sqlState: error.sqlState,
+            sqlMessage: error.sqlMessage,
+            ownerUserId,
+            reservationDate,
+            reservationTime,
+            numberOfGuests,
+            customerName,
+            tableId: selectedTable?.id || null
+          });
         
         if (error.message.includes('already reserved') || error.message.includes('already reserved at this date and time')) {
           return {

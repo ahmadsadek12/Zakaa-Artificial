@@ -389,32 +389,35 @@ async function create(reservationData) {
   let hasItemId = false;
   let hasStartTime = false;
   let hasEndTime = false;
+  let hasPartySize = false;
   try {
     const columnCheck = await queryMySQL(`
       SELECT COLUMN_NAME 
       FROM information_schema.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
         AND TABLE_NAME = 'reservations' 
-        AND COLUMN_NAME IN ('item_id', 'start_time', 'end_time')
+        AND COLUMN_NAME IN ('item_id', 'start_time', 'end_time', 'party_size')
     `);
     if (columnCheck && columnCheck.length > 0) {
       const columnNames = columnCheck.map(c => c.COLUMN_NAME || c.column_name);
       hasItemId = columnNames.includes('item_id');
       hasStartTime = columnNames.includes('start_time');
       hasEndTime = columnNames.includes('end_time');
+      hasPartySize = columnNames.includes('party_size');
     }
   } catch (err) {
     // If check fails, assume columns don't exist
     hasItemId = false;
     hasStartTime = false;
     hasEndTime = false;
+    hasPartySize = false;
   }
   
   // Build INSERT statement based on available columns
   const insertFields = [
     'id', 'user_id', 'business_user_id', 'owner_user_id', 'table_id',
     'customer_phone_number', 'customer_name',
-    'reservation_date', 'reservation_time', 'number_of_guests', 'party_size',
+    'reservation_date', 'reservation_time', 'number_of_guests',
     'notes', 'status',
     'reservation_kind', 'reservation_type', 'source', 'platform',
     'min_seats_snapshot', 'max_seats_snapshot', 'position_snapshot',
@@ -431,7 +434,6 @@ async function create(reservationData) {
     reservationData.reservationDate,
     reservationData.reservationTime,
     reservationData.numberOfGuests || null,
-    partySize,
     reservationData.notes || null,
     reservationData.status || 'confirmed',
     reservationData.reservationKind || 'table',
@@ -450,6 +452,13 @@ async function create(reservationData) {
   if (hasItemId) {
     insertFields.splice(5, 0, 'item_id');
     insertValues.splice(5, 0, reservationData.itemId || null);
+  }
+  
+  if (hasPartySize) {
+    // Insert party_size after number_of_guests
+    const guestsIndex = insertFields.indexOf('number_of_guests');
+    insertFields.splice(guestsIndex + 1, 0, 'party_size');
+    insertValues.splice(guestsIndex + 1, 0, partySize);
   }
   
   if (hasStartTime) {
