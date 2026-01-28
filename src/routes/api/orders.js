@@ -351,19 +351,33 @@ router.post('/', [
  * GET /api/orders/:id
  */
 router.get('/:id', requireOwnership('orders'), asyncHandler(async (req, res) => {
-  const order = await orderService.getOrderDetails(req.params.id, req.businessId);
-  
-  if (!order) {
-    return res.status(404).json({
+  try {
+    const order = await orderService.getOrderDetails(req.params.id, req.businessId);
+    
+    if (!order) {
+      logger.warn('Order not found', { orderId: req.params.id, businessId: req.businessId });
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Order not found' }
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: { order }
+    });
+  } catch (error) {
+    logger.error('Error fetching order details', { 
+      orderId: req.params.id, 
+      businessId: req.businessId,
+      error: error.message,
+      stack: error.stack
+    });
+    res.status(500).json({
       success: false,
-      error: { message: 'Order not found' }
+      error: { message: 'Failed to fetch order details', details: error.message }
     });
   }
-  
-  res.json({
-    success: true,
-    data: { order }
-  });
 }));
 
 /**
