@@ -19,48 +19,70 @@ router.use(tenantIsolation);
  * Business owners see all tickets, employees see only assigned tickets
  */
 router.get('/', asyncHandler(async (req, res) => {
-  const businessId = req.businessId;
-  
-  if (!businessId) {
-    return res.status(400).json({
+  try {
+    const businessId = req.businessId;
+    
+    if (!businessId) {
+      logger.error('Business ID missing in tickets route', {
+        userId: req.user?.id,
+        userType: req.user?.user_type,
+        isEmployee: req.isEmployee
+      });
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Business ID is required' }
+      });
+    }
+    
+    const employeeId = req.isEmployee ? req.user.id : null;
+    
+    const filters = {
+      status: req.query.status || null,
+      priority: req.query.priority || null,
+      unassigned: req.query.unassigned === 'true',
+      customerId: req.query.customerId || null,
+      limit: req.query.limit ? parseInt(req.query.limit) : 50
+    };
+    
+    // Employees can only see assigned tickets
+    if (employeeId) {
+      filters.assignedEmployeeId = employeeId;
+    }
+    
+    const tickets = await ticketRepository.getBusinessTickets(businessId, filters);
+    
+    // Get message counts for each ticket
+    const ticketsWithDetails = await Promise.all(
+      tickets.map(async (ticket) => {
+        try {
+          const messages = await ticketRepository.getTicketMessages(ticket.id);
+          return {
+            ...ticket,
+            messageCount: messages.length,
+            lastMessage: messages.length > 0 ? messages[messages.length - 1] : null
+          };
+        } catch (error) {
+          logger.error('Error getting messages for ticket', { ticketId: ticket.id, error: error.message });
+          return {
+            ...ticket,
+            messageCount: 0,
+            lastMessage: null
+          };
+        }
+      })
+    );
+    
+    res.json({
+      success: true,
+      data: ticketsWithDetails
+    });
+  } catch (error) {
+    logger.error('Error in GET /api/tickets:', error);
+    res.status(500).json({
       success: false,
-      error: { message: 'Business ID is required' }
+      error: { message: error.message || 'Failed to fetch tickets' }
     });
   }
-  
-  const employeeId = req.isEmployee ? req.user.id : null;
-  
-  const filters = {
-    status: req.query.status || null,
-    priority: req.query.priority || null,
-    unassigned: req.query.unassigned === 'true',
-    customerId: req.query.customerId || null,
-    limit: req.query.limit ? parseInt(req.query.limit) : 50
-  };
-  
-  // Employees can only see assigned tickets
-  if (employeeId) {
-    filters.assignedEmployeeId = employeeId;
-  }
-  
-  const tickets = await ticketRepository.getBusinessTickets(businessId, filters);
-  
-  // Get message counts for each ticket
-  const ticketsWithDetails = await Promise.all(
-    tickets.map(async (ticket) => {
-      const messages = await ticketRepository.getTicketMessages(ticket.id);
-      return {
-        ...ticket,
-        messageCount: messages.length,
-        lastMessage: messages.length > 0 ? messages[messages.length - 1] : null
-      };
-    })
-  );
-  
-  res.json({
-    success: true,
-    data: ticketsWithDetails
-  });
 }));
 
 /**

@@ -348,8 +348,8 @@ async function executeSupportFunction(functionName, args, context) {
       }
       
       try {
-        // Lock session
-        await sessionManager.lockSession(sessionId);
+        // Don't lock session or create chat session - user doesn't want chat sessions
+        // Just create the support ticket directly
         
         // Find available employee (or leave unassigned)
         // For now, we'll leave it unassigned - employees can pick it up from dashboard
@@ -369,8 +369,6 @@ async function executeSupportFunction(functionName, args, context) {
           initialMessageSenderType: 'system',
           initialMessageSenderId: null
         });
-        
-        // Don't assign to session or log handover - user doesn't want chat sessions
         
         logger.info('Human assistance requested', {
           sessionId,

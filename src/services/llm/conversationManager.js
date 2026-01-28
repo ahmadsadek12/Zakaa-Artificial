@@ -408,35 +408,36 @@ async function processChatbotResponse({
           
           const requiresReview = confidenceScore < 0.7;
           
-          // Update order: remove cart marker (notes='__cart__'), set status='accepted'
-          // Set all customer info and delivery details
-          const updateResult = await connection.query(`
-            UPDATE orders 
-            SET 
-              status = 'accepted',
-              whatsapp_user_id = COALESCE(?, whatsapp_user_id),
-              language_used = COALESCE(?, language_used),
-              order_source = ?,
-              customer_name = COALESCE(?, customer_name),
-              notes = CASE 
-                WHEN notes = '__cart__' THEN NULL 
-                WHEN notes LIKE '__cart__\nNOTES: %' THEN SUBSTRING(notes FROM LENGTH('__cart__\nNOTES: ') + 1)
-                WHEN notes LIKE '__cart__\r\nNOTES: %' THEN SUBSTRING(notes FROM LENGTH('__cart__\r\nNOTES: ') + 1)
-                ELSE COALESCE(?, notes) 
-              END,
-              scheduled_for = COALESCE(?, scheduled_for),
-              delivery_type = COALESCE(?, delivery_type),
-              delivery_price = COALESCE(?, delivery_price),
-              location_address = COALESCE(?, location_address),
-              location_latitude = COALESCE(?, location_latitude),
-              location_longitude = COALESCE(?, location_longitude),
-              location_name = COALESCE(?, location_name),
-              created_via = 'bot',
-              bot_confidence_score = ?,
-              requires_human_review = ?,
-              updated_at = CURRENT_TIMESTAMP
-            WHERE id = ? AND status IN ('cart', 'pending')
-          `, [
+           // Update order: remove cart marker (notes='__cart__'), set status='accepted'
+           // Set all customer info and delivery details
+           // Simply update by ID - no status check needed since we already validated the cart exists
+           const updateResult = await connection.query(`
+             UPDATE orders 
+             SET 
+               status = 'accepted',
+               whatsapp_user_id = COALESCE(?, whatsapp_user_id),
+               language_used = COALESCE(?, language_used),
+               order_source = ?,
+               customer_name = COALESCE(?, customer_name),
+               notes = CASE 
+                 WHEN notes = '__cart__' THEN NULL 
+                 WHEN notes LIKE '__cart__\nNOTES: %' THEN SUBSTRING(notes FROM LENGTH('__cart__\nNOTES: ') + 1)
+                 WHEN notes LIKE '__cart__\r\nNOTES: %' THEN SUBSTRING(notes FROM LENGTH('__cart__\r\nNOTES: ') + 1)
+                 ELSE COALESCE(?, notes) 
+               END,
+               scheduled_for = COALESCE(?, scheduled_for),
+               delivery_type = COALESCE(?, delivery_type),
+               delivery_price = COALESCE(?, delivery_price),
+               location_address = COALESCE(?, location_address),
+               location_latitude = COALESCE(?, location_latitude),
+               location_longitude = COALESCE(?, location_longitude),
+               location_name = COALESCE(?, location_name),
+               created_via = 'bot',
+               bot_confidence_score = ?,
+               requires_human_review = ?,
+               updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?
+           `, [
             customerPhoneNumber,
             language || 'english',
             orderSource,
