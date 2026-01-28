@@ -84,7 +84,7 @@ async function executeOrderFunction(functionName, args, context) {
       // Validate cart with structured errors
       const validationErrors = [];
       
-      if (!cart.items || cart.items.length === 0) {
+      if (!cart || !cart.items || cart.items.length === 0) {
         validationErrors.push({
           field: 'cart',
           message: 'Your ongoing order is empty. Please add items first.',

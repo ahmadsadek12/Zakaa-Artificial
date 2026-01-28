@@ -332,7 +332,7 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
       messages: messageHistory.map(m => ({ role: m.role, textPreview: m.text.substring(0, 50) }))
     });
     
-    // Get or create cart
+    // Get cart (don't auto-create - only create when customer adds items)
     const cart = await cartManager.getCart(
       business.id, 
       branch?.id || business.id, 

@@ -138,15 +138,24 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
     };
   }
   
-  // Create new cart (order with status 'pending' and notes='__cart__')
+  // Return null if no cart exists - don't auto-create
+  // Cart will be created only when customer actually adds items via addItemToCart()
+  return null;
+}
+
+/**
+ * Create a new cart (order with status 'cart' and notes='__cart__')
+ * Only call this when customer actually wants to order (adds items)
+ */
+async function createCart(businessId, branchId, customerPhoneNumber) {
   const orderId = generateUUID();
   const connection = await getMySQLConnection();
   
   try {
     await connection.beginTransaction();
     
-    // Find branch if not already found (actualBranchId from earlier query)
-    let insertBranchId = actualBranchId;
+    // Find branch if not already found
+    let insertBranchId = branchId;
     let insertUserId = businessId; // Default to businessId for user_id
     if (!insertBranchId || insertBranchId === businessId) {
       // Use connection.query instead of queryMySQL when inside a transaction
@@ -303,6 +312,11 @@ async function getCart(businessId, branchId, customerPhoneNumber) {
  */
 async function updateCart(businessId, branchId, customerPhoneNumber, updates) {
   const cart = await getCart(businessId, branchId, customerPhoneNumber);
+  
+  if (!cart) {
+    throw new Error('Cart does not exist. Cannot update empty cart.');
+  }
+  
   const connection = await getMySQLConnection();
   
   try {
@@ -424,7 +438,13 @@ async function updateCart(businessId, branchId, customerPhoneNumber, updates) {
  * Supports physical services (with stock) and time-based services (with booking)
  */
 async function addItemToCart(businessId, branchId, customerPhoneNumber, item) {
-  const cart = await getCart(businessId, branchId, customerPhoneNumber);
+  let cart = await getCart(businessId, branchId, customerPhoneNumber);
+  
+  // Create cart if it doesn't exist (only when customer actually adds items)
+  if (!cart) {
+    cart = await createCart(businessId, branchId, customerPhoneNumber);
+  }
+  
   const connection = await getMySQLConnection();
   
   try {
@@ -571,6 +591,11 @@ function addMinutesToTime(timeString, minutesToAdd) {
  */
 async function removeItemFromCart(businessId, branchId, customerPhoneNumber, itemId) {
   const cart = await getCart(businessId, branchId, customerPhoneNumber);
+  
+  if (!cart) {
+    throw new Error('Cart does not exist. Nothing to remove.');
+  }
+  
   const connection = await getMySQLConnection();
   
   try {
@@ -619,6 +644,11 @@ async function updateItemQuantity(businessId, branchId, customerPhoneNumber, ite
   }
   
   const cart = await getCart(businessId, branchId, customerPhoneNumber);
+  
+  if (!cart) {
+    throw new Error('Cart does not exist. Cannot update quantity.');
+  }
+  
   const connection = await getMySQLConnection();
   
   try {
@@ -663,6 +693,12 @@ async function updateItemQuantity(businessId, branchId, customerPhoneNumber, ite
  */
 async function clearCart(businessId, branchId, customerPhoneNumber) {
   const cart = await getCart(businessId, branchId, customerPhoneNumber);
+  
+  if (!cart) {
+    // Cart doesn't exist, nothing to clear
+    return;
+  }
+  
   const connection = await getMySQLConnection();
   
   try {
@@ -695,6 +731,11 @@ async function clearCart(businessId, branchId, customerPhoneNumber) {
  */
 async function confirmCart(businessId, branchId, customerPhoneNumber) {
   const cart = await getCart(businessId, branchId, customerPhoneNumber);
+  
+  if (!cart) {
+    throw new Error('Cart does not exist. Cannot confirm empty cart.');
+  }
+  
   const connection = await getMySQLConnection();
   
   try {
@@ -899,6 +940,7 @@ function getDetailedCartSummary(cart) {
 
 module.exports = {
   getCart,
+  createCart,
   updateCart,
   addItemToCart,
   removeItemFromCart,

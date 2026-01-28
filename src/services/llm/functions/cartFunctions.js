@@ -155,7 +155,7 @@ async function executeCartFunction(functionName, args, context) {
       
       // Check current cart first to see if it has items
       const currentCart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
-      const hasExistingItems = currentCart.items && currentCart.items.length > 0;
+      const hasExistingItems = currentCart && currentCart.items && currentCart.items.length > 0;
       
       // Check cache for menu items first to reduce DB queries
       const cacheKey = `menu_items_${business.id}`;
@@ -256,7 +256,7 @@ async function executeCartFunction(functionName, args, context) {
       const { itemName } = args;
       const cart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
       
-      if (!cart.items || cart.items.length === 0) {
+      if (!cart || !cart.items || cart.items.length === 0) {
         return {
           success: false,
           error: `Your cart is empty. There's nothing to remove.`,
@@ -307,7 +307,19 @@ async function executeCartFunction(functionName, args, context) {
       const { itemName, quantity } = args;
       const cart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
       
-      const cartItem = cart.items?.find(item => 
+      if (!cart || !cart.items || cart.items.length === 0) {
+        return {
+          success: false,
+          error: 'Your cart is empty. There\'s nothing to update.',
+          validationErrors: [{
+            field: 'cart',
+            message: 'Your cart is empty. There\'s nothing to update.',
+            code: 'EMPTY_CART'
+          }]
+        };
+      }
+      
+      const cartItem = cart.items.find(item => 
         item.name.toLowerCase().includes(itemName.toLowerCase()) ||
         itemName.toLowerCase().includes(item.name.toLowerCase())
       );

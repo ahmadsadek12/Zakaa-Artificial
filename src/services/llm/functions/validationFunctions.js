@@ -91,7 +91,7 @@ async function executeValidationFunction(functionName, args, context) {
         const cart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
         
         // Check if cart has items
-        if (!cart.items || cart.items.length === 0) {
+        if (!cart || !cart.items || cart.items.length === 0) {
           validationErrors.push({
             field: 'cart',
             message: 'Cart is empty. Please add items before confirming.',
@@ -99,8 +99,8 @@ async function executeValidationFunction(functionName, args, context) {
           });
         }
         
-        // Check if delivery type is set
-        if (!cart.delivery_type) {
+        // Check if delivery type is set (cart exists at this point)
+        if (cart && !cart.delivery_type) {
           validationErrors.push({
             field: 'delivery_type',
             message: 'Delivery type is not set. Please select delivery, takeaway, or dine-in.',
@@ -108,8 +108,8 @@ async function executeValidationFunction(functionName, args, context) {
           });
         }
         
-        // Check address if delivery
-        if (cart.delivery_type === 'delivery') {
+        // Check address if delivery (cart exists at this point)
+        if (cart && cart.delivery_type === 'delivery') {
           if (!cart.location_address) {
             validationErrors.push({
               field: 'address',
@@ -122,7 +122,7 @@ async function executeValidationFunction(functionName, args, context) {
         // Check if business is open
         const openStatus = await conversationManager.isOpenNow(business.id, branchId);
         
-        if (!cart.scheduled_for) {
+        if (cart && !cart.scheduled_for) {
           // Immediate order - check if business is open
           if (!openStatus.isOpen) {
             validationErrors.push({

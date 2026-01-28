@@ -254,11 +254,17 @@ async function executeDeliveryFunction(functionName, args, context) {
       // Get cart to check items
       const cart = await cartManager.getCart(business.id, branchId, customerPhoneNumber);
       
+      // If no cart exists, create one (customer is scheduling before adding items)
+      if (!cart) {
+        // Create empty cart for scheduling
+        cart = await cartManager.createCart(business.id, branchId, customerPhoneNumber);
+      }
+      
       // Check if cart has items that require scheduling
       let maxMinScheduleHours = 0;
       let schedulableItemsCount = 0;
       
-      if (cart.items && cart.items.length > 0) {
+      if (cart && cart.items && cart.items.length > 0) {
         for (const cartItem of cart.items) {
           // Fetch full item details to get scheduling info
           const [items] = await queryMySQL(
@@ -507,7 +513,7 @@ async function executeDeliveryFunction(functionName, args, context) {
           }
           
           // Count quantity in current cart
-          const cartItem = cart.items.find(ci => ci.item_id === scheduledItem.itemId);
+          const cartItem = cart && cart.items ? cart.items.find(ci => ci.item_id === scheduledItem.itemId) : null;
           const cartQuantity = parseInt(cartItem?.quantity || 1);
           
           // Check if adding this would exceed available quantity
