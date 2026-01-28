@@ -397,6 +397,7 @@ async function processChatbotResponse({
           const orderSource = customerPhoneNumber.startsWith('telegram:') ? 'telegram' : 'whatsapp';
           
           // SIMPLE UPDATE: Just change status from 'cart' to 'accepted'
+          // Only update columns that definitely exist in the orders table
           const updateResult = await connection.query(`
             UPDATE orders 
             SET 
@@ -417,7 +418,6 @@ async function processChatbotResponse({
               location_address = COALESCE(?, location_address),
               location_latitude = COALESCE(?, location_latitude),
               location_longitude = COALESCE(?, location_longitude),
-              created_via = COALESCE(?, created_via),
               updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
           `, [
@@ -431,7 +431,6 @@ async function processChatbotResponse({
             cart.location_address || null,
             cart.location_latitude || null,
             cart.location_longitude || null,
-            'bot',
             cart.id
           ]);
           
