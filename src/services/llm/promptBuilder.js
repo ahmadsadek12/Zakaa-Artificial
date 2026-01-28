@@ -175,7 +175,7 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
   }
   
   // Build cart summary if items exist
-  const cartSummary = cart.items && cart.items.length > 0 
+  const cartSummary = cart && cart.items && cart.items.length > 0 
     ? cartManager.getCartSummary(cart)
     : 'Ongoing order is empty';
   
