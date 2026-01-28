@@ -456,17 +456,44 @@ async function processChatbotResponse({
           
           // Check if update actually affected any rows
           if (updateResult[0].affectedRows === 0) {
-            logger.warn('Order confirmation update affected 0 rows - order may have already been confirmed or cart may not exist', {
+            // Check what the current state of the order is
+            const [currentOrder] = await connection.query(
+              'SELECT status, notes FROM orders WHERE id = ?',
+              [cart.id]
+            );
+            
+            logger.warn('Order confirmation update affected 0 rows', {
               orderId: cart.id,
+              expectedStatus: 'cart',
+              expectedNotes: '__cart__',
+              actualStatus: currentOrder[0]?.status,
+              actualNotes: currentOrder[0]?.notes,
               cartStatus: cart.status,
               cartNotes: cart.notes
             });
+            
             await connection.rollback();
+            
+            // If order is already accepted, that's actually fine - it means it was already confirmed
+            if (currentOrder[0]?.status === 'accepted') {
+              logger.info('Order was already confirmed', { orderId: cart.id });
+              return {
+                orderCreated: true,
+                orderId: cart.id,
+                orderNumber: cart.id.substring(0, 8).toUpperCase()
+              };
+            }
+            
             return {
               orderCreated: false,
               error: 'Order could not be confirmed. The cart may have already been processed or does not exist.'
             };
           }
+          
+          logger.info('Order confirmation update successful', {
+            orderId: cart.id,
+            affectedRows: updateResult[0].affectedRows
+          });
           
           // Create initial status history entry (order is now accepted)
           const { generateUUID } = require('../../utils/uuid');

@@ -441,6 +441,13 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
           // Handle confirm_order specially
           if (functionName === 'confirm_order' && result.success && result.readyToConfirm) {
             // Process order creation
+            logger.info('Processing order confirmation', {
+              cartId: result.cart?.id,
+              cartStatus: result.cart?.status,
+              cartNotes: result.cart?.notes,
+              deliveryType: result.cart?.delivery_type
+            });
+            
             const orderResult = await conversationManager.processChatbotResponse({
               business,
               branch,
@@ -457,6 +464,10 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
               result.orderNumber = orderResult.orderNumber || orderId.substring(0, 8).toUpperCase();
               result.message = `Order confirmed! Your order #${result.orderNumber} has been placed.`;
               
+              // Clear cart from result since order is now confirmed
+              result.cart = null;
+              updatedCart = null;
+              
               // Lock session after order confirmation
               await sessionManager.lockSession(session.id);
               
@@ -465,6 +476,18 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
                 orderId: orderId,
                 orderNumber: result.orderNumber
               });
+              
+              logger.info('Order confirmed successfully', {
+                orderId: orderId,
+                orderNumber: result.orderNumber
+              });
+            } else {
+              logger.error('Order confirmation failed', {
+                error: orderResult.error,
+                cartId: result.cart?.id
+              });
+              result.success = false;
+              result.error = orderResult.error || 'Failed to confirm order. Please try again.';
             }
           }
           
