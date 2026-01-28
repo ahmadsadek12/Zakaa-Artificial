@@ -408,9 +408,10 @@ async function processChatbotResponse({
           
           const requiresReview = confidenceScore < 0.7;
           
-          // First verify the cart exists and is in the correct state
+          // Refresh cart from database to ensure we have the latest state
           const [cartCheck] = await connection.query(`
-            SELECT id, status, notes, customer_phone_number, business_id
+            SELECT id, status, notes, customer_phone_number, business_id, delivery_type, 
+                   location_address, scheduled_for, delivery_price
             FROM orders 
             WHERE id = ?
           `, [cart.id]);
@@ -443,6 +444,43 @@ async function processChatbotResponse({
             return {
               orderCreated: false,
               error: 'Cart ownership verification failed. Please try again.'
+            };
+          }
+          
+          // Use fresh cart data from database instead of potentially stale cart object
+          const freshCart = {
+            ...cart,
+            status: existingOrder.status,
+            notes: existingOrder.notes,
+            delivery_type: existingOrder.delivery_type || cart.delivery_type,
+            location_address: existingOrder.location_address || cart.location_address,
+            scheduled_for: existingOrder.scheduled_for || cart.scheduled_for,
+            delivery_price: existingOrder.delivery_price || cart.delivery_price
+          };
+          
+          // Re-validate delivery type and address with fresh data
+          if (!freshCart.delivery_type) {
+            await connection.rollback();
+            logger.warn('Order confirmation failed: Delivery type not set', {
+              cartId: cart.id,
+              customerPhoneNumber
+            });
+            return {
+              orderCreated: false,
+              error: 'Please select delivery type (takeaway, delivery, or on-site) before confirming.'
+            };
+          }
+          
+          if (freshCart.delivery_type === 'delivery' && !freshCart.location_address && 
+              !freshCart.notes?.includes('Delivery Address:')) {
+            await connection.rollback();
+            logger.warn('Order confirmation failed: Delivery address missing', {
+              cartId: cart.id,
+              customerPhoneNumber
+            });
+            return {
+              orderCreated: false,
+              error: 'Please provide your delivery address before confirming.'
             };
           }
           
@@ -489,7 +527,7 @@ async function processChatbotResponse({
                 ELSE COALESCE(?, notes) 
               END,
               scheduled_for = COALESCE(?, scheduled_for),
-              delivery_type = COALESCE(?, delivery_type),
+              delivery_type = ?,
               delivery_price = COALESCE(?, delivery_price),
               location_address = COALESCE(?, location_address),
               location_latitude = COALESCE(?, location_latitude),
@@ -506,10 +544,10 @@ async function processChatbotResponse({
             orderSource,
             cart.customer_name,
             cart.notes && cart.notes !== '__cart__' ? cart.notes : null,
-            cart.scheduled_for ? new Date(cart.scheduled_for) : null,
-            cart.delivery_type || null, // Use cart delivery_type (which defaults based on business type)
-            cart.delivery_price || 0,
-            cart.location_address || null,
+            freshCart.scheduled_for ? new Date(freshCart.scheduled_for) : null,
+            freshCart.delivery_type || cart.delivery_type || null, // Use fresh delivery_type from database, fallback to cart
+            freshCart.delivery_price || cart.delivery_price || 0,
+            freshCart.location_address || cart.location_address || null,
             cart.location_latitude || null,
             cart.location_longitude || null,
             cart.location_name || null,
