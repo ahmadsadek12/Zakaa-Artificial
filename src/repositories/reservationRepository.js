@@ -401,7 +401,13 @@ async function create(reservationData) {
     `);
     
     const logger = require('../utils/logger');
-    logger.debug('Column check results', {
+    console.log('[RESERVATION DEBUG] Column check results:', JSON.stringify({
+      columnCheckResult: columnCheck,
+      columnCheckLength: columnCheck?.length,
+      columnCheckType: typeof columnCheck,
+      isArray: Array.isArray(columnCheck)
+    }));
+    logger.info('Column check results', {
       columnCheckResult: columnCheck,
       columnCheckLength: columnCheck?.length,
       columnCheckType: typeof columnCheck,
@@ -413,11 +419,12 @@ async function create(reservationData) {
       const columnNames = columnCheck.map(c => {
         if (typeof c === 'string') return c.toLowerCase();
         // Try different possible property names
-        const name = c.COLUMN_NAME || c.column_name || c.COLUMN_NAME || (c[0] && typeof c[0] === 'string' ? c[0] : '');
+        const name = c.COLUMN_NAME || c.column_name || (c[0] && typeof c[0] === 'string' ? c[0] : '');
         return name.toLowerCase();
       }).filter(Boolean);
       
-      logger.debug('Extracted column names', { columnNames });
+      console.log('[RESERVATION DEBUG] Extracted column names:', columnNames);
+      logger.info('Extracted column names', { columnNames });
       
       hasItemId = columnNames.includes('item_id');
       hasStartTime = columnNames.includes('start_time');
@@ -425,7 +432,14 @@ async function create(reservationData) {
       hasPartySize = columnNames.includes('party_size');
       hasCreatedVia = columnNames.includes('created_via');
       
-      logger.debug('Column existence flags', {
+      console.log('[RESERVATION DEBUG] Column existence flags:', {
+        hasItemId,
+        hasStartTime,
+        hasEndTime,
+        hasPartySize,
+        hasCreatedVia
+      });
+      logger.info('Column existence flags', {
         hasItemId,
         hasStartTime,
         hasEndTime,
@@ -433,7 +447,13 @@ async function create(reservationData) {
         hasCreatedVia
       });
     } else {
-      logger.debug('No columns found or empty result', {
+      console.log('[RESERVATION DEBUG] No columns found or empty result:', {
+        columnCheck,
+        hasResult: !!columnCheck,
+        isArray: Array.isArray(columnCheck),
+        length: columnCheck?.length
+      });
+      logger.info('No columns found or empty result', {
         columnCheck,
         hasResult: !!columnCheck,
         isArray: Array.isArray(columnCheck),
@@ -541,7 +561,15 @@ async function create(reservationData) {
   
   // Log column checks for debugging (remove in production if needed)
   const logger = require('../utils/logger');
-  logger.debug('Reservation column checks', {
+  console.log('[RESERVATION DEBUG] Final column checks before INSERT:', {
+    hasPartySize,
+    hasCreatedVia,
+    hasItemId,
+    hasStartTime,
+    hasEndTime,
+    insertFields: insertFields.join(', ')
+  });
+  logger.info('Reservation column checks', {
     hasPartySize,
     hasCreatedVia,
     hasItemId,
