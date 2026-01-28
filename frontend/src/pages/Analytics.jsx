@@ -873,9 +873,9 @@ export default function Analytics() {
               />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="timesOrdered" fill="#000000">
+              <Bar dataKey="timesOrdered" fill="#0ea5e9">
                 {popularItems.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill="#000000" />
+                  <Cell key={`cell-${index}`} fill="#0ea5e9" />
                 ))}
               </Bar>
             </BarChart>
@@ -916,9 +916,9 @@ export default function Analytics() {
                   return value
                 }}
               />
-              <Bar dataKey="timesDelivered" fill="#000000">
+              <Bar dataKey="timesDelivered" fill="#0ea5e9">
                 {deliveredItems.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill="#000000" />
+                  <Cell key={`cell-${index}`} fill="#0ea5e9" />
                 ))}
               </Bar>
             </BarChart>

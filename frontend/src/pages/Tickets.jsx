@@ -56,7 +56,7 @@ export default function Tickets() {
         params,
         headers: { Authorization: `Bearer ${token}` }
       })
-      setTickets(response.data.data || [])
+      setTickets(Array.isArray(response.data.data) ? response.data.data : [])
     } catch (error) {
       console.error('Error fetching tickets:', error)
     } finally {

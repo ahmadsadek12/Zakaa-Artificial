@@ -189,13 +189,13 @@ async function executeSupportFunction(functionName, args, context) {
           }
         }
         
-        // Create ticket
+        // Create ticket (don't link to session - user doesn't want chat sessions)
         const ticket = await ticketRepository.createTicket({
           businessId: business.id,
           customerId: customerId,
           relatedOrderId: orderId || null,
           relatedReservationId: reservationId || null,
-          sessionId: sessionId,
+          sessionId: null, // Don't link to chat session
           subject: subject,
           status: 'open',
           priority: priority || 'medium',
@@ -355,11 +355,11 @@ async function executeSupportFunction(functionName, args, context) {
         // For now, we'll leave it unassigned - employees can pick it up from dashboard
         const employeeId = null; // TODO: Implement employee assignment logic
         
-        // Create support ticket automatically
+        // Create support ticket automatically (don't link to session - user doesn't want chat sessions)
         const ticket = await ticketRepository.createTicket({
           businessId: business.id,
           customerId: customerId,
-          sessionId: sessionId,
+          sessionId: null, // Don't link to chat session
           subject: `Human Assistance Request: ${reason.substring(0, 50)}`,
           status: 'open',
           priority: 'high',
@@ -370,13 +370,7 @@ async function executeSupportFunction(functionName, args, context) {
           initialMessageSenderId: null
         });
         
-        // If employee found, assign to session
-        if (employeeId) {
-          await sessionManager.assignEmployee(sessionId, employeeId);
-        }
-        
-        // Log handover
-        await botActionLogger.logHandover(sessionId, employeeId, reason);
+        // Don't assign to session or log handover - user doesn't want chat sessions
         
         logger.info('Human assistance requested', {
           sessionId,
