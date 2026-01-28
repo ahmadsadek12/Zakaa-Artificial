@@ -408,36 +408,99 @@ async function processChatbotResponse({
           
           const requiresReview = confidenceScore < 0.7;
           
-           // Update order: remove cart marker (notes='__cart__'), set status='accepted'
-           // Set all customer info and delivery details
-           // Simply update by ID - no status check needed since we already validated the cart exists
-           const updateResult = await connection.query(`
-             UPDATE orders 
-             SET 
-               status = 'accepted',
-               whatsapp_user_id = COALESCE(?, whatsapp_user_id),
-               language_used = COALESCE(?, language_used),
-               order_source = ?,
-               customer_name = COALESCE(?, customer_name),
-               notes = CASE 
-                 WHEN notes = '__cart__' THEN NULL 
-                 WHEN notes LIKE '__cart__\nNOTES: %' THEN SUBSTRING(notes FROM LENGTH('__cart__\nNOTES: ') + 1)
-                 WHEN notes LIKE '__cart__\r\nNOTES: %' THEN SUBSTRING(notes FROM LENGTH('__cart__\r\nNOTES: ') + 1)
-                 ELSE COALESCE(?, notes) 
-               END,
-               scheduled_for = COALESCE(?, scheduled_for),
-               delivery_type = COALESCE(?, delivery_type),
-               delivery_price = COALESCE(?, delivery_price),
-               location_address = COALESCE(?, location_address),
-               location_latitude = COALESCE(?, location_latitude),
-               location_longitude = COALESCE(?, location_longitude),
-               location_name = COALESCE(?, location_name),
-               created_via = 'bot',
-               bot_confidence_score = ?,
-               requires_human_review = ?,
-               updated_at = CURRENT_TIMESTAMP
-             WHERE id = ?
-           `, [
+          // First verify the cart exists and is in the correct state
+          const [cartCheck] = await connection.query(`
+            SELECT id, status, notes, customer_phone_number, business_id
+            FROM orders 
+            WHERE id = ?
+          `, [cart.id]);
+          
+          if (!cartCheck || cartCheck.length === 0) {
+            await connection.rollback();
+            logger.error('Order confirmation failed: Cart does not exist', {
+              cartId: cart.id,
+              customerPhoneNumber
+            });
+            return {
+              orderCreated: false,
+              error: 'Your cart was not found. Please add items to your cart again.'
+            };
+          }
+          
+          const existingOrder = cartCheck[0];
+          
+          // Verify the cart belongs to this customer and business
+          if (existingOrder.customer_phone_number !== customerPhoneNumber || 
+              existingOrder.business_id !== business.id) {
+            await connection.rollback();
+            logger.error('Order confirmation failed: Cart ownership mismatch', {
+              cartId: cart.id,
+              cartCustomerPhone: existingOrder.customer_phone_number,
+              requestCustomerPhone: customerPhoneNumber,
+              cartBusinessId: existingOrder.business_id,
+              requestBusinessId: business.id
+            });
+            return {
+              orderCreated: false,
+              error: 'Cart ownership verification failed. Please try again.'
+            };
+          }
+          
+          // If order is already accepted, return success (idempotent)
+          if (existingOrder.status === 'accepted') {
+            await connection.rollback();
+            logger.info('Order was already confirmed', { orderId: cart.id });
+            return {
+              orderCreated: true,
+              orderId: cart.id,
+              orderNumber: cart.id.substring(0, 8).toUpperCase()
+            };
+          }
+          
+          // Only allow confirmation if status is 'cart' or 'pending'
+          if (existingOrder.status !== 'cart' && existingOrder.status !== 'pending') {
+            await connection.rollback();
+            logger.error('Order confirmation failed: Order is in invalid state', {
+              orderId: cart.id,
+              currentStatus: existingOrder.status,
+              customerPhoneNumber
+            });
+            return {
+              orderCreated: false,
+              error: `Your order is in ${existingOrder.status} status and cannot be confirmed. Please create a new order.`
+            };
+          }
+          
+          // Update order: remove cart marker (notes='__cart__'), set status='accepted'
+          // Set all customer info and delivery details
+          // Only update if status is 'cart' or 'pending' to prevent overwriting confirmed orders
+          const updateResult = await connection.query(`
+            UPDATE orders 
+            SET 
+              status = 'accepted',
+              whatsapp_user_id = COALESCE(?, whatsapp_user_id),
+              language_used = COALESCE(?, language_used),
+              order_source = ?,
+              customer_name = COALESCE(?, customer_name),
+              notes = CASE 
+                WHEN notes = '__cart__' THEN NULL 
+                WHEN notes LIKE '__cart__\nNOTES: %' THEN SUBSTRING(notes FROM LENGTH('__cart__\nNOTES: ') + 1)
+                WHEN notes LIKE '__cart__\r\nNOTES: %' THEN SUBSTRING(notes FROM LENGTH('__cart__\r\nNOTES: ') + 1)
+                ELSE COALESCE(?, notes) 
+              END,
+              scheduled_for = COALESCE(?, scheduled_for),
+              delivery_type = COALESCE(?, delivery_type),
+              delivery_price = COALESCE(?, delivery_price),
+              location_address = COALESCE(?, location_address),
+              location_latitude = COALESCE(?, location_latitude),
+              location_longitude = COALESCE(?, location_longitude),
+              location_name = COALESCE(?, location_name),
+              created_via = 'bot',
+              bot_confidence_score = ?,
+              requires_human_review = ?,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND status IN ('cart', 'pending')
+          `, [
             customerPhoneNumber,
             language || 'english',
             orderSource,
@@ -457,26 +520,38 @@ async function processChatbotResponse({
           
           // Check if update actually affected any rows
           if (updateResult[0].affectedRows === 0) {
-            // Check what the current state of the order is
-            const [currentOrder] = await connection.query(
+            // Re-check the current state of the order
+            const [currentOrderCheck] = await connection.query(
               'SELECT status, notes FROM orders WHERE id = ?',
               [cart.id]
             );
             
+            await connection.rollback();
+            
+            if (!currentOrderCheck || currentOrderCheck.length === 0) {
+              logger.error('Order confirmation failed: Order does not exist', {
+                orderId: cart.id,
+                customerPhoneNumber
+              });
+              return {
+                orderCreated: false,
+                error: 'Your cart was not found. Please add items to your cart again.'
+              };
+            }
+            
+            const currentOrder = currentOrderCheck[0];
+            
             logger.warn('Order confirmation update affected 0 rows', {
               orderId: cart.id,
-              expectedStatus: 'cart',
-              expectedNotes: '__cart__',
-              actualStatus: currentOrder[0]?.status,
-              actualNotes: currentOrder[0]?.notes,
+              expectedStatus: 'cart or pending',
+              actualStatus: currentOrder.status,
+              actualNotes: currentOrder.notes,
               cartStatus: cart.status,
               cartNotes: cart.notes
             });
             
-            await connection.rollback();
-            
             // If order is already accepted, that's actually fine - it means it was already confirmed
-            if (currentOrder[0]?.status === 'accepted') {
+            if (currentOrder.status === 'accepted') {
               logger.info('Order was already confirmed', { orderId: cart.id });
               return {
                 orderCreated: true,
@@ -485,9 +560,15 @@ async function processChatbotResponse({
               };
             }
             
+            // Order exists but is in a different state (e.g., rejected, completed)
+            logger.error('Order confirmation failed: Order is in invalid state', {
+              orderId: cart.id,
+              currentStatus: currentOrder.status,
+              customerPhoneNumber
+            });
             return {
               orderCreated: false,
-              error: 'Order could not be confirmed. The cart may have already been processed or does not exist.'
+              error: `Your order is in ${currentOrder.status} status and cannot be confirmed. Please create a new order.`
             };
           }
           
