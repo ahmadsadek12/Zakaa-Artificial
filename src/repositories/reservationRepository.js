@@ -399,21 +399,51 @@ async function create(reservationData) {
         AND TABLE_NAME = 'reservations' 
         AND COLUMN_NAME IN ('item_id', 'start_time', 'end_time', 'party_size', 'created_via')
     `);
-    if (columnCheck && columnCheck.length > 0) {
-      // Handle different result formats (array of objects or array of arrays)
+    
+    const logger = require('../utils/logger');
+    logger.debug('Column check results', {
+      columnCheckResult: columnCheck,
+      columnCheckLength: columnCheck?.length,
+      columnCheckType: typeof columnCheck,
+      isArray: Array.isArray(columnCheck)
+    });
+    
+    if (columnCheck && Array.isArray(columnCheck) && columnCheck.length > 0) {
+      // Extract column names from result objects
       const columnNames = columnCheck.map(c => {
-        if (typeof c === 'string') return c;
-        return (c.COLUMN_NAME || c.column_name || c.COLUMN_NAME || '').toLowerCase();
+        if (typeof c === 'string') return c.toLowerCase();
+        // Try different possible property names
+        const name = c.COLUMN_NAME || c.column_name || c.COLUMN_NAME || (c[0] && typeof c[0] === 'string' ? c[0] : '');
+        return name.toLowerCase();
       }).filter(Boolean);
       
-      hasItemId = columnNames.some(name => name.toLowerCase() === 'item_id');
-      hasStartTime = columnNames.some(name => name.toLowerCase() === 'start_time');
-      hasEndTime = columnNames.some(name => name.toLowerCase() === 'end_time');
-      hasPartySize = columnNames.some(name => name.toLowerCase() === 'party_size');
-      hasCreatedVia = columnNames.some(name => name.toLowerCase() === 'created_via');
+      logger.debug('Extracted column names', { columnNames });
+      
+      hasItemId = columnNames.includes('item_id');
+      hasStartTime = columnNames.includes('start_time');
+      hasEndTime = columnNames.includes('end_time');
+      hasPartySize = columnNames.includes('party_size');
+      hasCreatedVia = columnNames.includes('created_via');
+      
+      logger.debug('Column existence flags', {
+        hasItemId,
+        hasStartTime,
+        hasEndTime,
+        hasPartySize,
+        hasCreatedVia
+      });
+    } else {
+      logger.debug('No columns found or empty result', {
+        columnCheck,
+        hasResult: !!columnCheck,
+        isArray: Array.isArray(columnCheck),
+        length: columnCheck?.length
+      });
     }
   } catch (err) {
     // If check fails, assume columns don't exist
+    const logger = require('../utils/logger');
+    logger.error('Error checking columns', { error: err.message, stack: err.stack });
     hasItemId = false;
     hasStartTime = false;
     hasEndTime = false;
