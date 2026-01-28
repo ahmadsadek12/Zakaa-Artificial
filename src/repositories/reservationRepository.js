@@ -400,12 +400,17 @@ async function create(reservationData) {
         AND COLUMN_NAME IN ('item_id', 'start_time', 'end_time', 'party_size', 'created_via')
     `);
     if (columnCheck && columnCheck.length > 0) {
-      const columnNames = columnCheck.map(c => c.COLUMN_NAME || c.column_name);
-      hasItemId = columnNames.includes('item_id');
-      hasStartTime = columnNames.includes('start_time');
-      hasEndTime = columnNames.includes('end_time');
-      hasPartySize = columnNames.includes('party_size');
-      hasCreatedVia = columnNames.includes('created_via');
+      // Handle different result formats (array of objects or array of arrays)
+      const columnNames = columnCheck.map(c => {
+        if (typeof c === 'string') return c;
+        return (c.COLUMN_NAME || c.column_name || c.COLUMN_NAME || '').toLowerCase();
+      }).filter(Boolean);
+      
+      hasItemId = columnNames.some(name => name.toLowerCase() === 'item_id');
+      hasStartTime = columnNames.some(name => name.toLowerCase() === 'start_time');
+      hasEndTime = columnNames.some(name => name.toLowerCase() === 'end_time');
+      hasPartySize = columnNames.some(name => name.toLowerCase() === 'party_size');
+      hasCreatedVia = columnNames.some(name => name.toLowerCase() === 'created_via');
     }
   } catch (err) {
     // If check fails, assume columns don't exist
@@ -502,10 +507,20 @@ async function create(reservationData) {
   
   // Build and execute INSERT
   const placeholders = insertFields.map(() => '?').join(', ');
-  await queryMySQL(`
-    INSERT INTO reservations (${insertFields.join(', ')})
-    VALUES (${placeholders})
-  `, insertValues);
+  const insertSQL = `INSERT INTO reservations (${insertFields.join(', ')}) VALUES (${placeholders})`;
+  
+  // Log column checks for debugging (remove in production if needed)
+  const logger = require('../utils/logger');
+  logger.debug('Reservation column checks', {
+    hasPartySize,
+    hasCreatedVia,
+    hasItemId,
+    hasStartTime,
+    hasEndTime,
+    insertFields: insertFields.join(', ')
+  });
+  
+  await queryMySQL(insertSQL, insertValues);
   
   return await findById(reservationId);
 }
