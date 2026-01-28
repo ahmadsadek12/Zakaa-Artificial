@@ -355,6 +355,14 @@ async function executeReservationFunction(functionName, args, context) {
           }
         } else {
           // Auto-select best fit table
+          logger.debug('Finding available tables for reservation', {
+            ownerUserId,
+            reservationDate,
+            reservationTime,
+            numberOfGuests,
+            positionPreference
+          });
+          
           const availableTables = await tableRepository.findAvailableForSlot(
             ownerUserId,
             reservationDate,
@@ -363,10 +371,20 @@ async function executeReservationFunction(functionName, args, context) {
             positionPreference || null
           );
           
+          logger.debug('Available tables found', {
+            count: availableTables.length,
+            tables: availableTables.map(t => ({
+              id: t.id,
+              number: t.table_number || t.number,
+              minSeats: t.min_seats || t.seats,
+              maxSeats: t.max_seats || t.seats
+            }))
+          });
+          
           if (availableTables.length === 0) {
             return {
               success: false,
-              error: 'No available tables found for the requested date and time.'
+              error: `No available tables found for ${numberOfGuests ? numberOfGuests + ' guests on ' : ''}${reservationDate} at ${reservationTime}. Please try a different date or time.`
             };
           }
           

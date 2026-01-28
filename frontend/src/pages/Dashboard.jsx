@@ -152,7 +152,7 @@ export default function Dashboard() {
       link: '/items',
     },
     {
-      title: 'Requests Handled',
+      title: 'Messages Handled',
       value: stats.requestsHandled.toLocaleString(),
       icon: MessageSquare,
       color: 'text-cyan-600 bg-cyan-50',

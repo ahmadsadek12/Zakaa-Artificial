@@ -263,15 +263,23 @@ async function findAvailableForSlot(ownerUserId, date, time, numberOfGuests = nu
   // Use appropriate column names based on what exists
   const ownerColumn = hasOwnerUserId ? 't.owner_user_id' : 't.user_id';
   const tableNumberColumn = hasTableNumber ? 't.table_number' : 't.number';
-  const activeColumn = hasIsActive ? 't.is_active' : 't.reserved';
   const minSeatsColumn = hasMinSeats ? 't.min_seats' : 't.seats';
   const maxSeatsColumn = hasMaxSeats ? 't.max_seats' : 't.seats';
+  
+  // Build active status filter (is_active = true OR reserved = false)
+  let activeFilter = '';
+  if (hasIsActive) {
+    activeFilter = 'AND t.is_active = true';
+  } else {
+    // Old schema: reserved = false means active
+    activeFilter = 'AND (t.reserved = false OR t.reserved IS NULL)';
+  }
   
   let sql = `
     SELECT t.* 
     FROM tables t
     WHERE ${ownerColumn} = ? 
-    AND ${activeColumn} = true
+    ${activeFilter}
     AND t.id NOT IN (
       SELECT r.table_id 
       FROM reservations r 
@@ -286,8 +294,16 @@ async function findAvailableForSlot(ownerUserId, date, time, numberOfGuests = nu
   
   // Filter by guest count if provided
   if (numberOfGuests) {
-    sql += ` AND ${minSeatsColumn} <= ? AND ${maxSeatsColumn} >= ?`;
-    params.push(numberOfGuests, numberOfGuests);
+    // If using old schema (only seats), check seats >= numberOfGuests
+    // If using new schema (min_seats and max_seats), check min_seats <= numberOfGuests <= max_seats
+    if (hasMinSeats && hasMaxSeats) {
+      sql += ` AND ${minSeatsColumn} <= ? AND ${maxSeatsColumn} >= ?`;
+      params.push(numberOfGuests, numberOfGuests);
+    } else {
+      // Old schema: just check if seats >= numberOfGuests
+      sql += ` AND ${maxSeatsColumn} >= ?`;
+      params.push(numberOfGuests);
+    }
   }
   
   // Filter by position preference if provided
