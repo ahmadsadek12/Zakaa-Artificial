@@ -332,17 +332,53 @@ async function create(reservationData) {
   }
   
   // Prevent double-booking: check for existing confirmed reservation at same table/date/time
-  if (assignedTableId && reservationData.reservationDate && startTime && endTime) {
-    // Check using new start_time and end_time fields
-    const existing = await queryMySQL(`
-      SELECT id FROM reservations
-      WHERE table_id = ?
-        AND reservation_date = ?
-        AND start_time = ?
-        AND end_time = ?
-        AND status != 'cancelled'
-      LIMIT 1
-    `, [assignedTableId, reservationData.reservationDate, startTime, endTime]);
+  if (assignedTableId && reservationData.reservationDate && startTime) {
+    // Check if start_time and end_time columns exist
+    let hasStartTime = false;
+    let hasEndTime = false;
+    try {
+      const columnCheck = await queryMySQL(`
+        SELECT COLUMN_NAME 
+        FROM information_schema.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'reservations' 
+          AND COLUMN_NAME IN ('start_time', 'end_time')
+      `);
+      if (columnCheck && columnCheck.length > 0) {
+        const columnNames = columnCheck.map(c => c.COLUMN_NAME || c.column_name);
+        hasStartTime = columnNames.includes('start_time');
+        hasEndTime = columnNames.includes('end_time');
+      }
+    } catch (err) {
+      // If check fails, assume columns don't exist
+      hasStartTime = false;
+      hasEndTime = false;
+    }
+    
+    let existing = [];
+    if (hasStartTime && hasEndTime && endTime) {
+      // Use start_time and end_time if they exist
+      existing = await queryMySQL(`
+        SELECT id FROM reservations
+        WHERE table_id = ?
+          AND reservation_date = ?
+          AND start_time = ?
+          AND end_time = ?
+          AND status != 'cancelled'
+        LIMIT 1
+      `, [assignedTableId, reservationData.reservationDate, startTime, endTime]);
+    } else {
+      // Fallback: use reservation_time if start_time/end_time don't exist
+      const reservationTime = reservationData.reservationTime || startTime;
+      existing = await queryMySQL(`
+        SELECT id FROM reservations
+        WHERE table_id = ?
+          AND reservation_date = ?
+          AND reservation_time = ?
+          AND status != 'cancelled'
+        LIMIT 1
+      `, [assignedTableId, reservationData.reservationDate, reservationTime]);
+    }
     
     if (existing && existing.length > 0) {
       throw new Error('Table is already reserved at this date and time');
