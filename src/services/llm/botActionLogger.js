@@ -36,12 +36,20 @@ async function logAction(sessionId, actionType, payload = {}) {
  */
 async function getSessionActions(sessionId, limit = 100) {
   try {
+    // LIMIT cannot be a parameter in prepared statements, must use string interpolation
+    const limitValue = parseInt(limit, 10);
+    if (isNaN(limitValue) || limitValue < 1) {
+      limit = 100;
+    } else {
+      limit = limitValue;
+    }
+    
     return await queryMySQL(`
       SELECT * FROM bot_actions
       WHERE session_id = ?
       ORDER BY created_at DESC
-      LIMIT ?
-    `, [sessionId, limit]);
+      LIMIT ${limit}
+    `, [sessionId]);
   } catch (error) {
     logger.error('Error getting session actions:', error);
     return [];
