@@ -265,9 +265,10 @@ async function getBusinessTickets(businessId, filters = {}) {
     
     query += ' ORDER BY created_at DESC';
     
-    if (filters.limit) {
-      query += ' LIMIT ?';
-      params.push(filters.limit);
+    // LIMIT cannot be a parameter in prepared statements, must use string interpolation
+    if (filters.limit && !isNaN(filters.limit) && filters.limit > 0) {
+      const limitValue = parseInt(filters.limit, 10);
+      query += ` LIMIT ${limitValue}`;
     }
     
     return await queryMySQL(query, params);

@@ -41,8 +41,13 @@ router.get('/', asyncHandler(async (req, res) => {
       priority: req.query.priority || null,
       unassigned: req.query.unassigned === 'true',
       customerId: req.query.customerId || null,
-      limit: req.query.limit ? parseInt(req.query.limit) : 50
+      limit: req.query.limit ? parseInt(req.query.limit, 10) : 50
     };
+    
+    // Ensure limit is a valid number
+    if (isNaN(filters.limit) || filters.limit < 1) {
+      filters.limit = 50;
+    }
     
     // Employees can only see assigned tickets
     if (employeeId) {
