@@ -19,7 +19,7 @@ import {
   Table,
   MessageSquare,
   MessageCircle,
-  MessageCircleDashed
+  Phone
 } from 'lucide-react'
 import { useState } from 'react'
 import { getTerminology, getNavTerminology } from '../utils/terminology'
