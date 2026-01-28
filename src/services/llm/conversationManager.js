@@ -386,237 +386,70 @@ async function processChatbotResponse({
           };
         }
         
-        // Update order with all required fields and remove cart marker
+        // SIMPLE: Just update status from 'cart' to 'accepted'
         const { getMySQLConnection } = require('../../config/database');
         const connection = await getMySQLConnection();
         
         try {
           await connection.beginTransaction();
           
-          // Determine order source (check if customerPhoneNumber is telegram: format)
+          // Determine order source
           const orderSource = customerPhoneNumber.startsWith('telegram:') ? 'telegram' : 'whatsapp';
           
-          // Calculate bot confidence score (simple heuristic)
-          // Higher confidence if: delivery type set, address provided (if delivery), scheduled time set (if needed)
-          let confidenceScore = 0.5; // Base confidence
-          if (cart.delivery_type) confidenceScore += 0.2;
-          if (cart.delivery_type === 'delivery' && (cart.location_address || cart.notes?.includes('Delivery Address:'))) {
-            confidenceScore += 0.2;
-          }
-          if (cart.scheduled_for || !cart.scheduled_for) confidenceScore += 0.1; // Either scheduled or immediate is fine
-          confidenceScore = Math.min(confidenceScore, 1.0); // Cap at 1.0
-          
-          const requiresReview = confidenceScore < 0.7;
-          
-          // Refresh cart from database to ensure we have the latest state
-          const [cartCheck] = await connection.query(`
-            SELECT id, status, notes, customer_phone_number, business_id, delivery_type, 
-                   location_address, scheduled_for, delivery_price
-            FROM orders 
-            WHERE id = ?
-          `, [cart.id]);
-          
-          if (!cartCheck || cartCheck.length === 0) {
-            await connection.rollback();
-            logger.error('Order confirmation failed: Cart does not exist', {
-              cartId: cart.id,
-              customerPhoneNumber
-            });
-            return {
-              orderCreated: false,
-              error: 'Your cart was not found. Please add items to your cart again.'
-            };
-          }
-          
-          const existingOrder = cartCheck[0];
-          
-          // Verify the cart belongs to this customer and business
-          if (existingOrder.customer_phone_number !== customerPhoneNumber || 
-              existingOrder.business_id !== business.id) {
-            await connection.rollback();
-            logger.error('Order confirmation failed: Cart ownership mismatch', {
-              cartId: cart.id,
-              cartCustomerPhone: existingOrder.customer_phone_number,
-              requestCustomerPhone: customerPhoneNumber,
-              cartBusinessId: existingOrder.business_id,
-              requestBusinessId: business.id
-            });
-            return {
-              orderCreated: false,
-              error: 'Cart ownership verification failed. Please try again.'
-            };
-          }
-          
-          // Use fresh cart data from database instead of potentially stale cart object
-          const freshCart = {
-            ...cart,
-            status: existingOrder.status,
-            notes: existingOrder.notes,
-            delivery_type: existingOrder.delivery_type || cart.delivery_type,
-            location_address: existingOrder.location_address || cart.location_address,
-            scheduled_for: existingOrder.scheduled_for || cart.scheduled_for,
-            delivery_price: existingOrder.delivery_price || cart.delivery_price
-          };
-          
-          // Re-validate delivery type and address with fresh data
-          if (!freshCart.delivery_type) {
-            await connection.rollback();
-            logger.warn('Order confirmation failed: Delivery type not set', {
-              cartId: cart.id,
-              customerPhoneNumber
-            });
-            return {
-              orderCreated: false,
-              error: 'Please select delivery type (takeaway, delivery, or on-site) before confirming.'
-            };
-          }
-          
-          if (freshCart.delivery_type === 'delivery' && !freshCart.location_address && 
-              !freshCart.notes?.includes('Delivery Address:')) {
-            await connection.rollback();
-            logger.warn('Order confirmation failed: Delivery address missing', {
-              cartId: cart.id,
-              customerPhoneNumber
-            });
-            return {
-              orderCreated: false,
-              error: 'Please provide your delivery address before confirming.'
-            };
-          }
-          
-          // If order is already accepted, return success (idempotent)
-          if (existingOrder.status === 'accepted') {
-            await connection.rollback();
-            logger.info('Order was already confirmed', { orderId: cart.id });
-            return {
-              orderCreated: true,
-              orderId: cart.id,
-              orderNumber: cart.id.substring(0, 8).toUpperCase()
-            };
-          }
-          
-          // Only allow confirmation if status is 'cart' or 'pending'
-          if (existingOrder.status !== 'cart' && existingOrder.status !== 'pending') {
-            await connection.rollback();
-            logger.error('Order confirmation failed: Order is in invalid state', {
-              orderId: cart.id,
-              currentStatus: existingOrder.status,
-              customerPhoneNumber
-            });
-            return {
-              orderCreated: false,
-              error: `Your order is in ${existingOrder.status} status and cannot be confirmed. Please create a new order.`
-            };
-          }
-          
-          // Update order: remove cart marker (notes='__cart__'), set status='accepted'
-          // Set all customer info and delivery details
-          // Only update if status is 'cart' or 'pending' to prevent overwriting confirmed orders
+          // SIMPLE UPDATE: Just change status from 'cart' to 'accepted'
           const updateResult = await connection.query(`
             UPDATE orders 
             SET 
               status = 'accepted',
               whatsapp_user_id = COALESCE(?, whatsapp_user_id),
               language_used = COALESCE(?, language_used),
-              order_source = ?,
+              order_source = COALESCE(?, order_source),
               customer_name = COALESCE(?, customer_name),
               notes = CASE 
                 WHEN notes = '__cart__' THEN NULL 
                 WHEN notes LIKE '__cart__\nNOTES: %' THEN SUBSTRING(notes FROM LENGTH('__cart__\nNOTES: ') + 1)
                 WHEN notes LIKE '__cart__\r\nNOTES: %' THEN SUBSTRING(notes FROM LENGTH('__cart__\r\nNOTES: ') + 1)
-                ELSE COALESCE(?, notes) 
+                ELSE notes 
               END,
               scheduled_for = COALESCE(?, scheduled_for),
-              delivery_type = ?,
+              delivery_type = COALESCE(?, delivery_type),
               delivery_price = COALESCE(?, delivery_price),
               location_address = COALESCE(?, location_address),
               location_latitude = COALESCE(?, location_latitude),
               location_longitude = COALESCE(?, location_longitude),
               location_name = COALESCE(?, location_name),
-              created_via = 'bot',
-              bot_confidence_score = ?,
-              requires_human_review = ?,
+              created_via = COALESCE(?, created_via),
               updated_at = CURRENT_TIMESTAMP
-            WHERE id = ? AND status IN ('cart', 'pending')
+            WHERE id = ?
           `, [
             customerPhoneNumber,
             language || 'english',
             orderSource,
-            cart.customer_name,
-            cart.notes && cart.notes !== '__cart__' ? cart.notes : null,
-            freshCart.scheduled_for ? new Date(freshCart.scheduled_for) : null,
-            freshCart.delivery_type || cart.delivery_type || null, // Use fresh delivery_type from database, fallback to cart
-            freshCart.delivery_price || cart.delivery_price || 0,
-            freshCart.location_address || cart.location_address || null,
+            cart.customer_name || null,
+            cart.scheduled_for ? new Date(cart.scheduled_for) : null,
+            cart.delivery_type || null,
+            cart.delivery_price || null,
+            cart.location_address || null,
             cart.location_latitude || null,
             cart.location_longitude || null,
             cart.location_name || null,
-            confidenceScore,
-            requiresReview,
+            'bot',
             cart.id
           ]);
           
-          // Check if update actually affected any rows
           if (updateResult[0].affectedRows === 0) {
-            // Re-check the current state of the order
-            const [currentOrderCheck] = await connection.query(
-              'SELECT status, notes FROM orders WHERE id = ?',
-              [cart.id]
-            );
-            
             await connection.rollback();
-            
-            if (!currentOrderCheck || currentOrderCheck.length === 0) {
-              logger.error('Order confirmation failed: Order does not exist', {
-                orderId: cart.id,
-                customerPhoneNumber
-              });
-              return {
-                orderCreated: false,
-                error: 'Your cart was not found. Please add items to your cart again.'
-              };
-            }
-            
-            const currentOrder = currentOrderCheck[0];
-            
-            logger.warn('Order confirmation update affected 0 rows', {
+            logger.error('Order confirmation failed: No rows updated', {
               orderId: cart.id,
-              expectedStatus: 'cart or pending',
-              actualStatus: currentOrder.status,
-              actualNotes: currentOrder.notes,
-              cartStatus: cart.status,
-              cartNotes: cart.notes
-            });
-            
-            // If order is already accepted, that's actually fine - it means it was already confirmed
-            if (currentOrder.status === 'accepted') {
-              logger.info('Order was already confirmed', { orderId: cart.id });
-              return {
-                orderCreated: true,
-                orderId: cart.id,
-                orderNumber: cart.id.substring(0, 8).toUpperCase()
-              };
-            }
-            
-            // Order exists but is in a different state (e.g., rejected, completed)
-            logger.error('Order confirmation failed: Order is in invalid state', {
-              orderId: cart.id,
-              currentStatus: currentOrder.status,
               customerPhoneNumber
             });
             return {
               orderCreated: false,
-              error: `Your order is in ${currentOrder.status} status and cannot be confirmed. Please create a new order.`
+              error: 'Order could not be confirmed. Please try again.'
             };
           }
           
-          logger.info('Order confirmation update successful', {
-            orderId: cart.id,
-            affectedRows: updateResult[0].affectedRows
-          });
-          
-          // Create initial status history entry (order is now accepted)
-          const { generateUUID } = require('../../utils/uuid');
+          // Create status history entry
           await connection.query(`
             INSERT INTO order_status_history (id, order_id, status, changed_by, changed_at)
             VALUES (?, ?, 'accepted', 'customer', CURRENT_TIMESTAMP)
@@ -625,10 +458,8 @@ async function processChatbotResponse({
           
           await connection.commit();
           
-          logger.info(`Cart confirmed as order`, { 
-            orderId: cart.id, 
-            deliveryType: cart.delivery_type,
-            deliveryPrice: cart.delivery_price 
+          logger.info('Order confirmed successfully', { 
+            orderId: cart.id
           });
           
           return {
