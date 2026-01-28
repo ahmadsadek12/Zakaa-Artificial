@@ -681,13 +681,29 @@ async function handleMessage({ business, branch, customerPhoneNumber, message, m
     logger.error('Error in chatbot service:', {
       error: error.message,
       stack: error.stack,
-      customerPhoneNumber
+      customerPhoneNumber,
+      errorCode: error.code,
+      errorStatus: error.status,
+      errorName: error.name
     });
     
     // Provide more helpful error message based on error type
     let errorMessage = 'Sorry, I encountered an error. Please try again later.';
     
-    if (error.message && error.message.includes('API key')) {
+    // Database errors
+    if (error.code === 'ER_NO_SUCH_TABLE' || error.message?.includes("doesn't exist") || error.message?.includes("Table") && error.message?.includes("doesn't exist")) {
+      errorMessage = 'Sorry, the system is being updated. Please try again in a moment.';
+      logger.error('Database table missing - migration may be needed', {
+        error: error.message,
+        code: error.code
+      });
+    } else if (error.code === 'ER_BAD_FIELD_ERROR' || error.message?.includes('Unknown column')) {
+      errorMessage = 'Sorry, the system is being updated. Please try again in a moment.';
+      logger.error('Database schema mismatch - migration may be needed', {
+        error: error.message,
+        code: error.code
+      });
+    } else if (error.message && error.message.includes('API key')) {
       errorMessage = 'Sorry, the AI service is not properly configured. Please contact support.';
     } else if (error.message && (error.message.includes('quota') || error.message.includes('Quota') || error.message.includes('exceeded') && error.message.includes('quota'))) {
       errorMessage = 'OpenAI API quota exceeded. The account has no credits or billing is not set up. Please check account billing at https://platform.openai.com/account/billing';
