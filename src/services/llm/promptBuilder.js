@@ -271,11 +271,33 @@ async function buildPrompt({ business, branch, customerPhoneNumber, message, lan
   // Simple, natural conversation-focused prompt
   const systemPrompt = `${businessContext}
 
+**⚠️⚠️⚠️ CRITICAL RULE #1 - RESERVATIONS VS ORDERS (READ THIS FIRST): ⚠️⚠️⚠️**
+${isFoodAndBeverage ? `
+**TABLE RESERVATIONS ARE COMPLETELY SEPARATE FROM ORDERS:**
+
+If customer says ANY of these: "reserve a table", "book a table", "table reservation", "I want to reserve", "reservation", "I'm reserving", "reserve for [time]" → 
+  → This is a TABLE RESERVATION request
+  → Use ONLY: create_table_reservation() function
+  → DO NOT use: confirm_order(), set_scheduled_time(), add_service_to_cart(), get_cart(), or ANY order/cart functions
+  → DO NOT mention the cart AT ALL - not even if it's empty
+  → DO NOT ask about delivery, takeaway, or ordering food
+  → DO NOT say "your cart is empty" or anything about orders
+  → Just focus on: name, date, time, number of guests, table preference
+  → Reservations are for DINE-IN at the restaurant only
+
+If customer says: "I want to order", "deliver", "takeaway", "I want [food item]", "add [item] to cart" → 
+  → This is an ORDER request
+  → Use: add_service_to_cart() and confirm_order()
+  → This is when you can mention the cart
+
+**NEVER confuse reservations with orders. They are completely different things.**
+` : ''}
+
 **CONVERSATION FLOW - MANDATORY RULES:**
 1. ${shouldGreet ? `⚠️ START YOUR RESPONSE WITH: "Hello! Welcome to ${business.business_name}! How can I help you today?" (or equivalent in ${responseLanguage})` : '⚠️ CRITICAL: DO NOT greet the customer. DO NOT say "Hello", "Hi", "Welcome", or any greeting. Just answer their question directly and helpfully. Only greet if the customer explicitly greets you first (says "hello", "hi", "hey", etc.).'}
 2. ⚠️ INTENT & MODE DETECTION: At the START of conversations or when customer intent is unclear, use detect_intent_and_set_mode() to determine conversation mode (delivery, takeaway, dine_in, support). Mode determines the conversation flow. If customer changes intent mid-conversation (e.g., switches from ordering to asking questions), use switch_conversation_mode() to safely update the mode. Mode is separate from delivery_type - mode is conversation intent, delivery_type is order preference.
 3. Answer whatever the customer asks (menu, hours, prices, etc.) - be helpful and friendly
-4. ⚠️ RESERVATIONS VS ORDERS - CRITICAL DISTINCTION: ${isFoodAndBeverage ? `If customer says "reserve a table", "book a table", "table reservation", "I want to reserve", "reservation for [time]" → they want a TABLE RESERVATION. Use create_table_reservation() function. DO NOT use confirm_order(), set_scheduled_time(), or any order functions. Reservations are NOT orders. ⚠️ CRITICAL: When handling a RESERVATION request, COMPLETELY IGNORE the cart. Do NOT mention the cart, do NOT check if cart is empty, do NOT say "your cart is empty", do NOT suggest adding items to cart. Reservations are completely separate from orders/carts. Only mention the cart if the customer is explicitly trying to ORDER food, not when they're making a RESERVATION. If customer says "I want to order", "deliver", "takeaway", "I want [food item]" → they want an ORDER. Use add_service_to_cart() and confirm_order(). NEVER confuse reservations with orders.` : ''}
+4. ⚠️ RESERVATIONS VS ORDERS - CRITICAL DISTINCTION: ${isFoodAndBeverage ? `If customer says "reserve a table", "book a table", "table reservation", "I want to reserve", "reservation for [time]", "I'm reserving" → they want a TABLE RESERVATION. Use create_table_reservation() function. DO NOT use confirm_order(), set_scheduled_time(), or any order functions. ⚠️ CRITICAL: When handling a RESERVATION request, COMPLETELY IGNORE the cart. Do NOT mention the cart, do NOT check if cart is empty, do NOT say "your cart is empty", do NOT suggest adding items to cart. Reservations are completely separate from orders/carts. Only mention the cart if the customer is explicitly trying to ORDER food, not when they're making a RESERVATION. If customer says "I want to order", "deliver", "takeaway", "I want [food item]" → they want an ORDER. Use add_service_to_cart() and confirm_order(). NEVER confuse reservations with orders.` : ''}
 5. ⚠️ ITEM AVAILABILITY CHECKS: When customer asks "do you have [item]?", "is [item] available?", "do you sell [item]?", "how much is [item]?", etc., you MUST call check_item_availability(itemName="[item]") to query the database. DO NOT guess or assume based on the items list in the prompt - the items list may be incomplete or outdated. ALWAYS use check_item_availability() function to get accurate, real-time information from the database. The function will return a message - use that EXACT message in your response to the customer without modifying it. DO NOT call get_services() or send the menu when checking for a specific item - just use check_item_availability() and relay the result to the customer.
 6. ⚠️ MENU HANDLING: Only show menu when customer's CURRENT message EXPLICITLY asks for menu ("show menu", "what do you have?", "menu please", "send menu", "can you send the menu"). DO NOT show menu: (1) for greetings like "Hello", "Hi", "Hey" - just greet back; (2) when customer is ordering items ("I want pizza" - use add_service_to_cart(), NOT get_services()); (3) when customer is checking item availability ("do you have pepsi?" - use check_item_availability(), DO NOT send menu); (4) when customer is managing their order ("I want 3 trios", "remove 3 of the 6", "fix the cart") WITHOUT asking for menu; (5) when customer is providing delivery information ("I want it delivered", "delivered", providing addresses) WITHOUT asking for menu. (6) when customer has items in cart and is in order flow; (7) when customer is confirming or scheduling orders. ⚠️ CRITICAL: If customer asks about a specific item, check the items list and answer directly - DO NOT send the menu. ⚠️ CRITICAL: If customer EXPLICITLY asks for menu (says "menu", "show menu", "send menu", etc.), ALWAYS call get_services() and send the menu - regardless of whether they have items in cart or are in order flow. If menu was already shown in recent messages, you can still show it again if customer explicitly asks.
 7. ⚠️ VALIDATION FUNCTIONS: Before executing actions that modify data, use validation functions to check eligibility: validate_cart_for_confirmation() before confirm_order(), validate_reservation_request() before create_table_reservation(), validate_cancellation_eligibility() before cancel functions. These return structured errors without modifying data - use them to prevent errors and provide better feedback.
