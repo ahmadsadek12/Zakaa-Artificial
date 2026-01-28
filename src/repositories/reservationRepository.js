@@ -390,13 +390,14 @@ async function create(reservationData) {
   let hasStartTime = false;
   let hasEndTime = false;
   let hasPartySize = false;
+  let hasCreatedVia = false;
   try {
     const columnCheck = await queryMySQL(`
       SELECT COLUMN_NAME 
       FROM information_schema.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
         AND TABLE_NAME = 'reservations' 
-        AND COLUMN_NAME IN ('item_id', 'start_time', 'end_time', 'party_size')
+        AND COLUMN_NAME IN ('item_id', 'start_time', 'end_time', 'party_size', 'created_via')
     `);
     if (columnCheck && columnCheck.length > 0) {
       const columnNames = columnCheck.map(c => c.COLUMN_NAME || c.column_name);
@@ -404,6 +405,7 @@ async function create(reservationData) {
       hasStartTime = columnNames.includes('start_time');
       hasEndTime = columnNames.includes('end_time');
       hasPartySize = columnNames.includes('party_size');
+      hasCreatedVia = columnNames.includes('created_via');
     }
   } catch (err) {
     // If check fails, assume columns don't exist
@@ -411,6 +413,7 @@ async function create(reservationData) {
     hasStartTime = false;
     hasEndTime = false;
     hasPartySize = false;
+    hasCreatedVia = false;
   }
   
   // Build INSERT statement based on available columns
@@ -421,7 +424,7 @@ async function create(reservationData) {
     'notes', 'status',
     'reservation_kind', 'reservation_type', 'source', 'platform',
     'min_seats_snapshot', 'max_seats_snapshot', 'position_snapshot',
-    'created_via', 'bot_confidence_score', 'requires_human_review'
+    'bot_confidence_score', 'requires_human_review'
   ];
   const insertValues = [
     reservationId,
@@ -443,7 +446,6 @@ async function create(reservationData) {
     minSeatsSnapshot,
     maxSeatsSnapshot,
     positionSnapshot,
-    reservationData.createdVia || 'bot',
     reservationData.botConfidenceScore || null,
     reservationData.requiresHumanReview || false
   ];
@@ -489,6 +491,13 @@ async function create(reservationData) {
   if (hasStartAt) {
     insertFields.push('start_at');
     insertValues.push(startAt || null);
+  }
+  
+  // Add created_via if it exists (insert before bot_confidence_score)
+  if (hasCreatedVia) {
+    const botConfidenceIndex = insertFields.indexOf('bot_confidence_score');
+    insertFields.splice(botConfidenceIndex, 0, 'created_via');
+    insertValues.splice(botConfidenceIndex, 0, reservationData.createdVia || 'bot');
   }
   
   // Build and execute INSERT
