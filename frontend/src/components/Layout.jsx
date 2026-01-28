@@ -60,7 +60,7 @@ export default function Layout({ children }) {
     { path: '/table-reservations', icon: Table, label: 'Table Reservations' },
     { path: '/tickets', icon: MessageSquare, label: 'Support Tickets' },
     { path: '/chat-sessions', icon: MessageCircle, label: 'Chat Sessions' },
-    { path: '/whatsapp-messages', icon: MessageCircleDashed, label: 'WhatsApp Messages' },
+    { path: '/whatsapp-messages', icon: Phone, label: 'WhatsApp Messages' },
     { path: '/settings', icon: Settings, label: 'Settings' },
   ]
 
