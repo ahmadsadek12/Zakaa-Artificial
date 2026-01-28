@@ -392,90 +392,46 @@ async function create(reservationData) {
   let hasEndTime = false;
   let hasPartySize = false;
   let hasCreatedVia = false;
+  let hasBotConfidenceScore = false;
+  let hasRequiresHumanReview = false;
   
-  // Force check each column individually to be absolutely sure
+  // Helper function to check if a column exists
+  const checkColumnExists = async (columnName) => {
+    try {
+      const result = await queryMySQL(`
+        SELECT COLUMN_NAME 
+        FROM information_schema.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'reservations' 
+          AND COLUMN_NAME = ?
+        LIMIT 1
+      `, [columnName]);
+      return result && Array.isArray(result) && result.length > 0;
+    } catch (e) {
+      return false;
+    }
+  };
+  
+  // Check all optional columns
   try {
-    // Check party_size
-    try {
-      const partySizeCheck = await queryMySQL(`
-        SELECT COLUMN_NAME 
-        FROM information_schema.COLUMNS 
-        WHERE TABLE_SCHEMA = DATABASE() 
-          AND TABLE_NAME = 'reservations' 
-          AND COLUMN_NAME = 'party_size'
-        LIMIT 1
-      `);
-      hasPartySize = partySizeCheck && Array.isArray(partySizeCheck) && partySizeCheck.length > 0;
-    } catch (e) {
-      hasPartySize = false;
-    }
-    
-    // Check created_via
-    try {
-      const createdViaCheck = await queryMySQL(`
-        SELECT COLUMN_NAME 
-        FROM information_schema.COLUMNS 
-        WHERE TABLE_SCHEMA = DATABASE() 
-          AND TABLE_NAME = 'reservations' 
-          AND COLUMN_NAME = 'created_via'
-        LIMIT 1
-      `);
-      hasCreatedVia = createdViaCheck && Array.isArray(createdViaCheck) && createdViaCheck.length > 0;
-    } catch (e) {
-      hasCreatedVia = false;
-    }
-    
-    // Check item_id
-    try {
-      const itemIdCheck = await queryMySQL(`
-        SELECT COLUMN_NAME 
-        FROM information_schema.COLUMNS 
-        WHERE TABLE_SCHEMA = DATABASE() 
-          AND TABLE_NAME = 'reservations' 
-          AND COLUMN_NAME = 'item_id'
-        LIMIT 1
-      `);
-      hasItemId = itemIdCheck && Array.isArray(itemIdCheck) && itemIdCheck.length > 0;
-    } catch (e) {
-      hasItemId = false;
-    }
-    
-    // Check start_time
-    try {
-      const startTimeCheck = await queryMySQL(`
-        SELECT COLUMN_NAME 
-        FROM information_schema.COLUMNS 
-        WHERE TABLE_SCHEMA = DATABASE() 
-          AND TABLE_NAME = 'reservations' 
-          AND COLUMN_NAME = 'start_time'
-        LIMIT 1
-      `);
-      hasStartTime = startTimeCheck && Array.isArray(startTimeCheck) && startTimeCheck.length > 0;
-    } catch (e) {
-      hasStartTime = false;
-    }
-    
-    // Check end_time
-    try {
-      const endTimeCheck = await queryMySQL(`
-        SELECT COLUMN_NAME 
-        FROM information_schema.COLUMNS 
-        WHERE TABLE_SCHEMA = DATABASE() 
-          AND TABLE_NAME = 'reservations' 
-          AND COLUMN_NAME = 'end_time'
-        LIMIT 1
-      `);
-      hasEndTime = endTimeCheck && Array.isArray(endTimeCheck) && endTimeCheck.length > 0;
-    } catch (e) {
-      hasEndTime = false;
-    }
+    [hasItemId, hasStartTime, hasEndTime, hasPartySize, hasCreatedVia, hasBotConfidenceScore, hasRequiresHumanReview] = await Promise.all([
+      checkColumnExists('item_id'),
+      checkColumnExists('start_time'),
+      checkColumnExists('end_time'),
+      checkColumnExists('party_size'),
+      checkColumnExists('created_via'),
+      checkColumnExists('bot_confidence_score'),
+      checkColumnExists('requires_human_review')
+    ]);
     
     console.log('[RESERVATION] Column existence check:', {
       hasPartySize,
       hasCreatedVia,
       hasItemId,
       hasStartTime,
-      hasEndTime
+      hasEndTime,
+      hasBotConfidenceScore,
+      hasRequiresHumanReview
     });
   } catch (err) {
     // If any check fails, assume columns don't exist (default to false)
@@ -485,6 +441,8 @@ async function create(reservationData) {
     hasEndTime = false;
     hasPartySize = false;
     hasCreatedVia = false;
+    hasBotConfidenceScore = false;
+    hasRequiresHumanReview = false;
   }
   
   // Build INSERT statement based on available columns
@@ -494,8 +452,7 @@ async function create(reservationData) {
     'reservation_date', 'reservation_time', 'number_of_guests',
     'notes', 'status',
     'reservation_kind', 'reservation_type', 'source', 'platform',
-    'min_seats_snapshot', 'max_seats_snapshot', 'position_snapshot',
-    'bot_confidence_score', 'requires_human_review'
+    'min_seats_snapshot', 'max_seats_snapshot', 'position_snapshot'
   ];
   const insertValues = [
     reservationId,
@@ -516,9 +473,7 @@ async function create(reservationData) {
     platform,
     minSeatsSnapshot,
     maxSeatsSnapshot,
-    positionSnapshot,
-    reservationData.botConfidenceScore || null,
-    reservationData.requiresHumanReview || false
+    positionSnapshot
   ];
   
   // Add optional columns if they exist
@@ -564,11 +519,27 @@ async function create(reservationData) {
     insertValues.push(startAt || null);
   }
   
-  // Add created_via if it exists (insert before bot_confidence_score)
+  // Add optional columns if they exist
   if (hasCreatedVia) {
+    // Insert created_via before bot_confidence_score if it exists, otherwise at the end
     const botConfidenceIndex = insertFields.indexOf('bot_confidence_score');
-    insertFields.splice(botConfidenceIndex, 0, 'created_via');
-    insertValues.splice(botConfidenceIndex, 0, reservationData.createdVia || 'bot');
+    if (botConfidenceIndex >= 0) {
+      insertFields.splice(botConfidenceIndex, 0, 'created_via');
+      insertValues.splice(botConfidenceIndex, 0, reservationData.createdVia || 'bot');
+    } else {
+      insertFields.push('created_via');
+      insertValues.push(reservationData.createdVia || 'bot');
+    }
+  }
+  
+  if (hasBotConfidenceScore) {
+    insertFields.push('bot_confidence_score');
+    insertValues.push(reservationData.botConfidenceScore || null);
+  }
+  
+  if (hasRequiresHumanReview) {
+    insertFields.push('requires_human_review');
+    insertValues.push(reservationData.requiresHumanReview || false);
   }
   
   // Build and execute INSERT
@@ -577,7 +548,15 @@ async function create(reservationData) {
   
   // Log final state before INSERT
   console.log('[RESERVATION] Final INSERT fields:', insertFields.join(', '));
-  console.log('[RESERVATION] Column flags:', { hasPartySize, hasCreatedVia, hasItemId, hasStartTime, hasEndTime });
+  console.log('[RESERVATION] Column flags:', { 
+    hasPartySize, 
+    hasCreatedVia, 
+    hasItemId, 
+    hasStartTime, 
+    hasEndTime,
+    hasBotConfidenceScore,
+    hasRequiresHumanReview
+  });
   
   await queryMySQL(insertSQL, insertValues);
   
