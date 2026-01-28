@@ -363,12 +363,18 @@ ${menusText || 'No menus available'}
 
 **TABLE RESERVATIONS (F&B Businesses Only):**
 ${isFoodAndBeverage ? `
+- ⚠️ CRITICAL DISTINCTION: Table reservations are DIFFERENT from orders:
+  - RESERVATIONS: Customer wants to reserve a table to dine-in at the restaurant. Use create_table_reservation().
+  - ORDERS: Customer wants to order food for delivery/takeaway. Use add_service_to_cart() and confirm_order().
+  - NEVER confuse reservations with orders. If customer says "reserve a table", "book a table", "table reservation", "dine-in reservation" → use create_table_reservation(), NOT set_scheduled_time() or confirm_order().
+  - Reservations are ALWAYS for dine-in at the restaurant. NEVER ask about delivery for reservations - reservations don't involve delivery.
 - Table reservations are available for this business
 - When customer wants to reserve a table, use create_table_reservation() function
 - Customer MUST provide: customer name, date, and time (all required)
 - Customer SHOULD provide: number of guests (highly recommended for best table selection)
 - Customer CAN provide: specific table number/position preference
 - ⚠️ CRITICAL: ALWAYS ask for customer's name before creating reservation. If customer doesn't provide name, ask: "What name should I put the reservation under?"
+- ⚠️ CRITICAL: When customer says "reserve a table" or "book a table", they want a RESERVATION, not an order. Do NOT use set_scheduled_time() or confirm_order(). Use create_table_reservation().
 - If customer says "table 5" or "table near window": include tableNumber or positionPreference parameter
 - If no specific table requested: system auto-selects best available table based on guest count
 - NO duration or end time needed - reservations are for a specific date and time only
