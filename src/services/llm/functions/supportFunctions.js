@@ -113,13 +113,39 @@ async function executeSupportFunction(functionName, args, context) {
   }
   
   const sessionId = session.id;
-  const customerId = session.customer_id;
+  let customerId = session.customer_id;
   
+  // Auto-create customer if missing
   if (!customerId) {
-    return {
-      success: false,
-      error: 'Customer ID not found in session. Cannot create support ticket.'
-    };
+    try {
+      const customerRepository = require('../../../repositories/customerRepository');
+      const platform = customerPhoneNumber.startsWith('telegram:') ? 'telegram' : 
+                       customerPhoneNumber.startsWith('instagram:') ? 'instagram' :
+                       customerPhoneNumber.startsWith('facebook:') ? 'facebook' : 'whatsapp';
+      customerId = await customerRepository.findOrCreateCustomerByPhone(
+        business.id,
+        customerPhoneNumber,
+        platform
+      );
+      
+      // Update session with customer_id
+      await queryMySQL(
+        'UPDATE chat_sessions SET customer_id = ? WHERE id = ?',
+        [customerId, sessionId]
+      );
+      
+      logger.info('Auto-created customer for support function', {
+        customerId,
+        sessionId,
+        customerPhoneNumber
+      });
+    } catch (error) {
+      logger.error('Error auto-creating customer for support function:', error);
+      return {
+        success: false,
+        error: 'Failed to create customer record. Please try again.'
+      };
+    }
   }
   
   switch (functionName) {

@@ -435,7 +435,7 @@ async function processChatbotResponse({
               bot_confidence_score = ?,
               requires_human_review = ?,
               updated_at = CURRENT_TIMESTAMP
-            WHERE id = ? AND status = 'cart' AND (notes = '__cart__' OR notes LIKE '__cart__%')
+            WHERE id = ? AND (status = 'cart' OR notes = '__cart__' OR notes LIKE '__cart__%')
           `, [
             customerPhoneNumber,
             language || 'english',
