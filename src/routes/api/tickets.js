@@ -5,9 +5,12 @@ const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const ticketRepository = require('../../repositories/ticketRepository');
+const customerRepository = require('../../repositories/customerRepository');
 const { tenantIsolation } = require('../../middleware/tenant');
 const { authenticateToken } = require('../../middleware/auth');
 const { asyncHandler } = require('../../middleware/errorHandler');
+const { queryMySQL } = require('../../config/database');
+const telegramMessageSender = require('../../services/telegram/telegramMessageSender');
 const logger = require('../../utils/logger');
 
 // All routes require authentication and tenant isolation
@@ -168,6 +171,82 @@ router.post('/:id/messages', [
     senderId: req.user.id,
     message: message
   });
+  
+  // Send message to customer via Telegram if customer exists
+  if (ticket.customer_id) {
+    try {
+      // Get customer phone number
+      const customer = await customerRepository.findById(ticket.customer_id);
+      
+      if (customer && customer.contact_phone_number) {
+        // Try to find the platform from chat_sessions
+        const sessions = await queryMySQL(`
+          SELECT platform 
+          FROM chat_sessions 
+          WHERE customer_id = ? AND business_id = ?
+          ORDER BY updated_at DESC
+          LIMIT 1
+        `, [ticket.customer_id, businessId]);
+        
+        let customerPhoneNumber = customer.contact_phone_number;
+        let platform = 'telegram'; // Default to telegram
+        
+        if (sessions.length > 0) {
+          platform = sessions[0].platform || 'telegram';
+        }
+        
+        // Try to find the full phone number format (with platform prefix) from orders
+        const orders = await queryMySQL(`
+          SELECT customer_phone_number, order_source
+          FROM orders
+          WHERE customer_phone_number LIKE ? AND business_id = ?
+          ORDER BY created_at DESC
+          LIMIT 1
+        `, [`%${customer.contact_phone_number}%`, businessId]);
+        
+        if (orders.length > 0) {
+          customerPhoneNumber = orders[0].customer_phone_number;
+          platform = orders[0].order_source === 'telegram' ? 'telegram' : 'whatsapp';
+        } else if (platform === 'telegram') {
+          // Default: assume telegram format if platform is telegram
+          customerPhoneNumber = `telegram:${customer.contact_phone_number}`;
+        }
+        
+        // Get business to get telegram bot token
+        const businesses = await queryMySQL(
+          'SELECT telegram_bot_token FROM users WHERE id = ?',
+          [businessId]
+        );
+        
+        if (businesses.length > 0 && businesses[0].telegram_bot_token && platform === 'telegram') {
+          // Extract Telegram chat ID
+          const chatId = customerPhoneNumber.startsWith('telegram:')
+            ? customerPhoneNumber.replace('telegram:', '')
+            : customerPhoneNumber;
+          
+          await telegramMessageSender.sendMessage({
+            chatId: parseInt(chatId),
+            message: message,
+            botToken: businesses[0].telegram_bot_token
+          });
+          
+          logger.info('Ticket message sent to customer via Telegram', {
+            ticketId,
+            customerId: ticket.customer_id,
+            chatId,
+            employeeId: req.user.id
+          });
+        }
+      }
+    } catch (error) {
+      // Log error but don't fail the request - message is already saved
+      logger.error('Error sending ticket message to customer:', {
+        ticketId,
+        customerId: ticket.customer_id,
+        error: error.message
+      });
+    }
+  }
   
   logger.info('Employee added message to ticket', {
     ticketId,
