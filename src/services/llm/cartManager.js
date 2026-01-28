@@ -484,19 +484,30 @@ async function addItemToCart(businessId, branchId, customerPhoneNumber, item) {
     if (!isRentalBooking) {
       const [existingItems] = await connection.query(`
         SELECT * FROM order_items 
-        WHERE order_id = ? AND item_id = ? AND booking_date IS NULL
+        WHERE order_id = ? AND item_id = ? AND (booking_date IS NULL OR booking_date = '')
       `, [cart.id, item.itemId]);
       
       if (existingItems.length > 0) {
-        // Update quantity
-        const existingItem = existingItems[0];
-        const newQuantity = existingItem.quantity + (item.quantity || 1);
+        // Update quantity - sum all existing quantities first (in case of duplicates)
+        const totalExistingQuantity = existingItems.reduce((sum, ei) => sum + (parseInt(ei.quantity) || 0), 0);
+        const newQuantity = totalExistingQuantity + (item.quantity || 1);
         
+        // Update the first item with the new total quantity
+        const existingItem = existingItems[0];
         await connection.query(`
           UPDATE order_items 
-          SET quantity = ?
+          SET quantity = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
         `, [newQuantity, existingItem.id]);
+        
+        // Delete any duplicate items (if there are multiple rows for the same item)
+        if (existingItems.length > 1) {
+          const duplicateIds = existingItems.slice(1).map(ei => ei.id);
+          await connection.query(`
+            DELETE FROM order_items 
+            WHERE id IN (?)
+          `, [duplicateIds]);
+        }
         
         // Recalculate totals
         const [items] = await connection.query(`
