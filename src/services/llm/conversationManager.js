@@ -417,7 +417,6 @@ async function processChatbotResponse({
               location_address = COALESCE(?, location_address),
               location_latitude = COALESCE(?, location_latitude),
               location_longitude = COALESCE(?, location_longitude),
-              location_name = COALESCE(?, location_name),
               created_via = COALESCE(?, created_via),
               updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
@@ -432,7 +431,6 @@ async function processChatbotResponse({
             cart.location_address || null,
             cart.location_latitude || null,
             cart.location_longitude || null,
-            cart.location_name || null,
             'bot',
             cart.id
           ]);
