@@ -1039,24 +1039,28 @@ export default function Calendar() {
                       className={`p-4 rounded-lg border-2 ${
                         item.type === 'reservation' ? 'border-blue-200 bg-blue-50' : 'border-orange-200 bg-orange-50'
                       } hover:shadow-md transition-shadow cursor-pointer`}
-                      onClick={() => {
+                      onClick={async () => {
                         if (item.type === 'reservation' && reservation) {
                           const dateTime = new Date(`${reservation.reservation_date}T${reservation.reservation_time}`)
-                          setSelectedEvent({
+                          const event = {
                             id: reservation.id,
                             start: dateTime,
                             resource: { type: 'reservation', ...reservation },
                             color: '#3b82f6'
-                          })
+                          }
+                          setSelectedEvent(event)
                           setShowEventModal(true)
                         } else if (item.type === 'order' && order) {
-                          setSelectedEvent({
+                          const event = {
                             id: order.id,
                             start: new Date(order.scheduled_for),
                             resource: { type: 'order', ...order },
                             color: '#f97316'
-                          })
+                          }
+                          setSelectedEvent(event)
                           setShowEventModal(true)
+                          // Fetch order details when clicking from day modal
+                          await handleSelectEvent(event)
                         }
                       }}
                     >
@@ -1129,15 +1133,18 @@ export default function Calendar() {
                     <div
                       key={`${item.type}-${item.id}`}
                       className="p-4 rounded-lg border-2 border-orange-200 bg-orange-50 hover:shadow-md transition-shadow cursor-pointer"
-                      onClick={() => {
+                      onClick={async () => {
                         if (order) {
-                          setSelectedEvent({
+                          const event = {
                             id: order.id,
                             start: new Date(order.scheduled_for),
                             resource: { type: 'order', ...order },
                             color: '#f97316'
-                          })
+                          }
+                          setSelectedEvent(event)
                           setShowEventModal(true)
+                          // Fetch order details when clicking from day modal
+                          await handleSelectEvent(event)
                         }
                       }}
                     >
